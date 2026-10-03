@@ -1,0 +1,24 @@
+[
+  {
+    "name": "WG",
+    "id": "group.a0RVUHdhT295V3JUOHZNSjVtQi9zOEdjRndWdjhHeGUyakYzZTltSXVPMD0=",
+    "internal_id": "kDUPwaOoyWrT8vMJ5mB/s8GcFwVv8Gxe2jF3e9mIuO0=",
+    "members": ["+4915100000001", "+4915100000002"],
+    "blocked": false,
+    "pending_invites": [],
+    "pending_requests": [],
+    "invite_link": "",
+    "admins": ["+4915100000002"]
+  },
+  {
+    "name": "Sonntagsessen",
+    "id": "group.WlVmSUhvSFlTV2V5NzQ0V0lFNE5RTkFOUmFIUkd1TFFmT0xXNUNXT1BKOD0=",
+    "internal_id": "ZUfIHoHYSWey744WIE4NQNANRaHRGuLQfOLW5CWOPJ8=",
+    "members": ["+4915100000001", "+4915100000002", "+4915100000003"],
+    "blocked": false,
+    "pending_invites": [],
+    "pending_requests": [],
+    "invite_link": "https://signal.group/#CjQKIExample",
+    "admins": ["+4915100000002"]
+  }
+]
