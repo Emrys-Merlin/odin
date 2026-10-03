@@ -1,5 +1,5 @@
 import sys
 
-from odib.cli import main
+from odin.cli import main
 
 sys.exit(main())

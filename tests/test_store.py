@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from odib.store import (
+from odin.store import (
     SCHEMA_VERSION,
     SETUP_LOCK_TTL,
     Action,
@@ -137,7 +137,7 @@ def test_reactions_ordered_chronologically_across_offsets(store: Store) -> None:
 
 
 def test_data_survives_reopen(tmp_path: Path) -> None:
-    path = tmp_path / "odib.sqlite"
+    path = tmp_path / "odin.sqlite"
     with Store(path) as store:
         store.record_action(WEEK, Action.FLAT_ASK, TUE)
         msg = store.track_message(WEEK, MessageKind.FLAT_POLL, "flat-group", BOT, 1_000)
@@ -150,14 +150,14 @@ def test_data_survives_reopen(tmp_path: Path) -> None:
 
 
 def test_schema_version_is_set(tmp_path: Path) -> None:
-    path = tmp_path / "odib.sqlite"
+    path = tmp_path / "odin.sqlite"
     Store(path).close()
     with sqlite3.connect(path) as conn:
         assert conn.execute("PRAGMA user_version").fetchone() == (SCHEMA_VERSION,)
 
 
 def test_newer_schema_is_refused(tmp_path: Path) -> None:
-    path = tmp_path / "odib.sqlite"
+    path = tmp_path / "odin.sqlite"
     conn = sqlite3.connect(path)
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
     conn.close()
@@ -166,9 +166,9 @@ def test_newer_schema_is_refused(tmp_path: Path) -> None:
 
 
 def test_upgrade_keeps_old_actions_as_sent(tmp_path: Path) -> None:
-    from odib.store import _MIGRATIONS
+    from odin.store import _MIGRATIONS
 
-    path = tmp_path / "odib.db"
+    path = tmp_path / "odin.db"
     conn = sqlite3.connect(path)
     conn.executescript(f"{_MIGRATIONS[0]}; PRAGMA user_version = 1;")
     conn.execute(
@@ -193,7 +193,7 @@ def test_settings(store: Store) -> None:
 
 
 def test_settings_are_shared_between_connections(tmp_path: Path) -> None:
-    path = tmp_path / "odib.db"
+    path = tmp_path / "odin.db"
     with Store(path) as setup, Store(path) as bot:
         setup.set_setting("dinner_group_id", "group.d=")
         assert bot.get_setting("dinner_group_id") == "group.d="
@@ -236,7 +236,7 @@ def test_stale_setup_lock_is_taken_over(store: Store) -> None:
 
 
 def test_setup_lock_across_connections(tmp_path: Path) -> None:
-    path = tmp_path / "odib.db"
+    path = tmp_path / "odin.db"
     with Store(path) as setup, Store(path) as bot:
         token = setup.acquire_setup_lock(TUE)
         assert token is not None
@@ -247,9 +247,9 @@ def test_setup_lock_across_connections(tmp_path: Path) -> None:
 
 
 def test_upgrade_from_version_2_adds_settings(tmp_path: Path) -> None:
-    from odib.store import _MIGRATIONS
+    from odin.store import _MIGRATIONS
 
-    path = tmp_path / "odib.db"
+    path = tmp_path / "odin.db"
     conn = sqlite3.connect(path)
     conn.executescript(f"{_MIGRATIONS[0]}; {_MIGRATIONS[1]}; PRAGMA user_version = 2;")
     conn.close()

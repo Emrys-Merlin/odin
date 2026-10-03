@@ -7,11 +7,11 @@ from typing import Any
 
 import pytest
 
-from odib.config import Config, parse_config
-from odib.engine import Account, Step, dinner_week, reconcile
-from odib.reactions import handle_reaction
-from odib.signal import FakeSignalClient, ReactionEvent
-from odib.store import Action, MessageKind, Outcome, Store
+from odin.config import Config, parse_config
+from odin.engine import Account, Step, dinner_week, reconcile
+from odin.reactions import handle_reaction
+from odin.signal import FakeSignalClient, ReactionEvent
+from odin.store import Action, MessageKind, Outcome, Store
 
 TEMPLATES = {
     "flat_ask": "ASK {emoji} bis {deadline}",
@@ -266,7 +266,7 @@ def test_nudge_disabled(store: Store) -> None:
 
 
 def test_restart_midweek_does_not_resend(tmp_path: Path) -> None:
-    path = tmp_path / "odib.db"
+    path = tmp_path / "odin.db"
     with Store(path) as store:
         first = Bot(store)
         first.run(local(5, 0), local(7, 13))

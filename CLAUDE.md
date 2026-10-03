@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-ODIN (repo `odib`) is a Signal bot for our weekly open Sunday dinner. Goals, the weekly cycle and
+ODIN (repo `odin`) is a Signal bot for our weekly open Sunday dinner. Goals, the weekly cycle and
 the architecture are in `docs/GOALS.md` — read it before starting an issue.
 
 ## Workflow
@@ -46,7 +46,7 @@ The prek hook is installed in cloud sessions by `scripts/session-start.sh`.
 - Message texts live in the config as templates, not in code. Dinner-group texts are bilingual
   (German, then English).
 - No secrets in the repo. The phone number comes from an env var; the group IDs are stored in the
-  state DB by `odib setup` and can be overridden by env vars.
+  state DB by `odin setup` and can be overridden by env vars.
 
 ## Environment
 

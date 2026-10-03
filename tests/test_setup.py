@@ -6,11 +6,11 @@ from pathlib import Path
 import httpx
 import pytest
 
-from odib.app import DINNER_GROUP_KEY, FLAT_GROUP_KEY, serve
-from odib.cli import main
-from odib.clock import FixedClock
-from odib.config import Env, load_config, load_env
-from odib.setup import (
+from odin.app import DINNER_GROUP_KEY, FLAT_GROUP_KEY, serve
+from odin.cli import main
+from odin.clock import FixedClock
+from odin.config import Env, load_config, load_env
+from odin.setup import (
     CODE_REQUESTED_KEY,
     HELLO_KEY,
     OPERATOR_KEY,
@@ -24,7 +24,7 @@ from odib.setup import (
     run_setup,
     setup_status,
 )
-from odib.signal import (
+from odin.signal import (
     AlreadyRegistered,
     CaptchaRequired,
     DirectMessage,
@@ -36,8 +36,8 @@ from odib.signal import (
     VoiceRequired,
     WrongCode,
 )
-from odib.store import Store
-from odib.terminal import ScriptedTerminal
+from odin.store import Store
+from odin.terminal import ScriptedTerminal
 
 EXAMPLE = Path(__file__).parent.parent / "config.example.toml"
 CONFIG = load_config(EXAMPLE)
@@ -48,8 +48,8 @@ TIM = "+4915100000009"
 ENV_VARS = {
     "SIGNAL_NUMBER": NUMBER,
     "SIGNAL_API_URL": "http://signal:8080",
-    "ODIB_CONFIG": str(EXAMPLE),
-    "ODIB_DB": "/data/odib.db",
+    "ODIN_CONFIG": str(EXAMPLE),
+    "ODIN_DB": "/data/odin.db",
 }
 ENV = load_env(ENV_VARS)
 
@@ -74,7 +74,7 @@ START = local(6, 18, 5)  # Tuesday, the flat ask is due
 
 @pytest.fixture(autouse=True)
 def fixed_pin(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("odib.setup.generate_pin", lambda: PIN)
+    monkeypatch.setattr("odin.setup.generate_pin", lambda: PIN)
 
 
 @pytest.fixture
@@ -224,7 +224,7 @@ def test_resume_after_each_step(store: Store, clock: FixedClock) -> None:
     # Stopped at the code prompt (Ctrl-D): the code was requested and is remembered.
     code, terminal = run(admin, store, clock, [CAPTCHA])
     assert code == 1
-    assert "Run `odib setup` again to continue" in terminal.text
+    assert "Run `odin setup` again to continue" in terminal.text
     assert store.get_setting(CODE_REQUESTED_KEY) == START.isoformat()
 
     # Resumed: the code that already arrived can be entered without a new captcha.
@@ -615,7 +615,7 @@ def test_a_fresh_lock_is_refused(store: Store, clock: FixedClock) -> None:
     terminal = ScriptedTerminal([])
     code = asyncio.run(run_setup(admin, store, CONFIG, ENV, terminal, clock))
     assert code == 1
-    assert "Another `odib setup` is running" in terminal.text
+    assert "Another `odin setup` is running" in terminal.text
     assert admin.calls == []
     assert store.setup_lock_held(clock.now())  # the other holder's lock stays
 
@@ -678,7 +678,7 @@ def test_status_of_a_fresh_setup() -> None:
     assert "✗ PIN set: no" in text
     assert "✗ Hello: no reply from the operator yet" in text
     assert "✗ Flat group: not chosen" in text
-    assert "Not set up yet — run: odib setup" in text
+    assert "Not set up yet — run: odin setup" in text
     only_reads = {"about", "list_accounts"}
     assert {call.method for call in admin.calls} <= only_reads
 
@@ -717,10 +717,10 @@ def test_status_shows_a_pending_code_and_an_unreachable_api(store: Store) -> Non
     assert "✗ Signal API: not reachable at http://signal:8080 (Connection refused)" in text
 
 
-# --- odib run picks up the finished setup --------------------------------------------------------
+# --- odin run picks up the finished setup --------------------------------------------------------
 
 
-def test_odib_run_starts_once_the_wizard_finishes(store: Store, clock: FixedClock) -> None:
+def test_odin_run_starts_once_the_wizard_finishes(store: Store, clock: FixedClock) -> None:
     admin = admin_with()
     terminal = ScriptedTerminal([CAPTCHA, "123-456", "pq23", TIM, *PICK, "n"])
 

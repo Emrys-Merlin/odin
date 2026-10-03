@@ -8,9 +8,9 @@ from typing import Any
 import httpx
 import websockets
 
-from odib.signal.errors import raise_for_api_error
-from odib.signal.models import ApiInfo, DirectMessage, Event, Group
-from odib.signal.parsing import (
+from odin.signal.errors import raise_for_api_error
+from odin.signal.models import ApiInfo, DirectMessage, Event, Group
+from odin.signal.parsing import (
     parse_about,
     parse_accounts,
     parse_direct_message,

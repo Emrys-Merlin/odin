@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from odib.signal import (
+from odin.signal import (
     AdminCall,
     AlreadyRegistered,
     ApiInfo,

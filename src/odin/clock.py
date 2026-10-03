@@ -11,7 +11,7 @@ class Clock(Protocol):
         ...
 
     async def sleep(self, delay: timedelta) -> None:
-        """Wait for ``delay`` (countdowns and polling in ``odib setup``)."""
+        """Wait for ``delay`` (countdowns and polling in ``odin setup``)."""
         ...
 
 

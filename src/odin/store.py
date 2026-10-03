@@ -281,7 +281,7 @@ class Store:
     def delete_setting(self, key: str) -> None:
         self._conn.execute("DELETE FROM settings WHERE key = ?", (key,))
 
-    # Setup lock: held by `odib setup` while it runs, so `odib run` stays out of its way. It is
+    # Setup lock: held by `odin setup` while it runs, so `odin run` stays out of its way. It is
     # a settings row "<token> <heartbeat>"; the holder refreshes the heartbeat, and a lock whose
     # heartbeat is older than SETUP_LOCK_TTL is stale, so a killed holder cannot block forever.
 

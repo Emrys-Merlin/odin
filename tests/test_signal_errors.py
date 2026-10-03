@@ -4,7 +4,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from odib.signal import (
+from odin.signal import (
     AlreadyRegistered,
     CaptchaRequired,
     NotRegistered,
@@ -15,7 +15,7 @@ from odib.signal import (
     VoiceRequired,
     WrongCode,
 )
-from odib.signal.errors import error_from_response, raise_for_api_error
+from odin.signal.errors import error_from_response, raise_for_api_error
 
 FIXTURES = Path(__file__).parent / "fixtures" / "signal"
 CASES = {case["case"]: case for case in json.loads((FIXTURES / "errors.json").read_text())}

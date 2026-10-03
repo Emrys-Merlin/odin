@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from odib.signal import (
+from odin.signal import (
     ApiInfo,
     DirectMessage,
     ReactionEvent,
@@ -11,7 +11,7 @@ from odib.signal import (
     parse_direct_message,
     parse_event,
 )
-from odib.signal.parsing import parse_about, parse_accounts, parse_groups, parse_send_timestamp
+from odin.signal.parsing import parse_about, parse_accounts, parse_groups, parse_send_timestamp
 
 FIXTURES = Path(__file__).parent / "fixtures" / "signal"
 FLAT_GROUP_ID = "group.a0RVUHdhT295V3JUOHZNSjVtQi9zOEdjRndWdjhHeGUyakYzZTltSXVPMD0="

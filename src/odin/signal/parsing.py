@@ -4,7 +4,7 @@ import base64
 import json
 from typing import Any
 
-from odib.signal.models import ApiInfo, DirectMessage, Event, Group, ReactionEvent
+from odin.signal.models import ApiInfo, DirectMessage, Event, Group, ReactionEvent
 
 
 def group_id_from_internal(internal_id: str) -> str:

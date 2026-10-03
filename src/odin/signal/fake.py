@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import cast
 
-from odib.signal.models import ApiInfo, DirectMessage, Event, Group
+from odin.signal.models import ApiInfo, DirectMessage, Event, Group
 
 
 @dataclass(frozen=True, slots=True)
