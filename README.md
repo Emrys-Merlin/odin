@@ -19,3 +19,10 @@ the SQLite database).
 `ghcr.io/emrys-merlin/odib` with tags `latest` and the commit SHA on every push to `main`. The
 image presets `ODIB_CONFIG=/config/config.toml` and `ODIB_DB=/data/odib.db`; mount `/config` and
 `/data` as volumes and pass the other env vars at run time.
+
+## Runbooks
+
+One-time and operational tasks that need the real bot are in [docs/runbooks](docs/runbooks):
+
+- [signal-registration.md](docs/runbooks/signal-registration.md) — register ODIN's Signal number,
+  set the PIN and profile, join the groups, get the group IDs.
