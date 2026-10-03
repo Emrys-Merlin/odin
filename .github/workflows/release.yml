@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  IMAGE: ghcr.io/emrys-merlin/odib
+  IMAGE: ghcr.io/emrys-merlin/odin
 
 jobs:
   labels:
@@ -92,7 +92,7 @@ jobs:
         run: |
           podman run --rm "$IMAGE:$GITHUB_SHA" --help
           actual="$(podman run --rm "$IMAGE:$GITHUB_SHA" --version)"
-          echo "odib --version: $actual"
+          echo "odin --version: $actual"
           [ "$actual" = "$VERSION" ] || { echo "expected $VERSION" >&2; exit 1; }
 
       - name: Tag
