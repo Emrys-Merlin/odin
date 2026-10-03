@@ -1,0 +1,78 @@
+# ODIN config. Copy to config.toml and point ODIB_CONFIG at it.
+#
+# Deployment values (phone number, group IDs, API URL, paths) are NOT in here; they come from
+# env vars: SIGNAL_NUMBER, FLAT_GROUP_ID, DINNER_GROUP_ID, SIGNAL_API_URL (default
+# http://localhost:8080), ODIB_CONFIG, ODIB_DB.
+#
+# Every value below is the default, except the templates, which have no defaults.
+
+timezone = "Europe/Berlin"
+
+# The reaction that counts: flatmates confirming dinner, guests saying they come.
+emoji = "👍"
+
+# How late a missed action (bot was down) may still be performed: "until_dinner" (until dinner
+# starts) or a number of minutes after its scheduled time.
+catch_up_grace = "until_dinner"
+
+# Weekly cycle. weekday: mon … sun (or monday … sunday); time: "HH:MM", in `timezone`.
+# All points belong to the week that ends with `dinner` and must follow this order.
+[schedule]
+# Ask the flat group whether dinner takes place.
+flat_ask = { weekday = "tue", time = "18:00" }
+# Remind the flat group if nobody has confirmed yet. Set enabled = false to turn it off.
+nudge = { weekday = "wed", time = "12:00", enabled = true }
+# Confirmations close; the dinner group gets the announcement or the cancellation.
+flat_deadline = { weekday = "wed", time = "18:00" }
+# Guests are asked to react by then (we order food then); later reactions are fine.
+rsvp_by = { weekday = "fri", time = "14:00" }
+# Tell the flat group how many guests reacted.
+tally = { weekday = "fri", time = "14:00" }
+# Optional: come early and help cook.
+cook = { weekday = "sun", time = "17:00" }
+dinner = { weekday = "sun", time = "18:00" }
+
+# Message texts. Placeholders (times as HH:MM):
+#   {emoji} {deadline} {rsvp_by} {cook_time} {dinner_time}   — in every template
+#   {count}                                                  — tally only
+# Unknown placeholders are rejected at startup. Write {{ and }} for literal braces.
+# Weekday names are part of the text: update them when you change the schedule.
+# Flat-group texts are German; dinner-group texts are German, blank line, English.
+[templates]
+flat_ask = """
+Findet am Sonntag das offene Abendessen statt? 🍽️
+Wer da ist und das Abendessen ausrichtet, reagiert bitte bis Mittwoch {deadline} mit {emoji} \
+auf diese Nachricht. Ein {emoji} reicht – ohne {emoji} sage ich das Abendessen am Mittwoch \
+um {deadline} ab.
+"""
+
+nudge = """
+Bisher hat noch niemand mit {emoji} bestätigt, dass das Abendessen am Sonntag stattfindet. \
+Wenn bis heute {deadline} kein {emoji} auf meine Frage von gestern kommt, sage ich es ab.
+"""
+
+cancellation = """
+Diesen Sonntag findet leider kein offenes Abendessen statt. Bis zum nächsten Mal!
+
+Unfortunately, there is no open dinner this Sunday. See you next time!
+"""
+
+announcement = """
+Diesen Sonntag gibt es offenes Abendessen! 🍽️
+Essen gibt es um {dinner_time}. Wer mag, kann schon um {cook_time} kommen und beim Kochen \
+helfen – das ist völlig freiwillig und überhaupt keine Voraussetzung.
+Wenn du kommst, reagiere bitte mit {emoji} auf diese Nachricht, am besten bis Freitag \
+{rsvp_by} – dann bestellen wir das Essen. Bringst du jemanden mit? Dann schreib das bitte \
+als Antwort auf diese Nachricht.
+
+Open dinner this Sunday! 🍽️
+Dinner is at {dinner_time}. If you like, come at {cook_time} and help cook – that is entirely \
+optional and absolutely no requirement.
+If you are coming, please react with {emoji} to this message, ideally by Friday {rsvp_by} – \
+that is when we order the food. Bringing someone? Please say so in a reply to this message.
+"""
+
+tally = """
+Bisher haben {count} Personen mit {emoji} auf die Ankündigung reagiert. Plus-Ones stehen \
+gegebenenfalls in den Antworten darauf.
+"""
