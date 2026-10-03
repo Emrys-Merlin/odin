@@ -1,353 +1,279 @@
-# Runbook: register ODIN's Signal number and join the groups
+# Runbook: set up ODIN's Signal account with `odib setup`
 
-One-time setup, done by Tim. At the end you have:
+One-time setup, done by Tim. At the end:
 
-- a podman volume **`odib-signal-cli`** holding ODIN's Signal account (keys!),
-- the account registered as a **primary** device with profile name **Odin 🍽️** and a
-  registration lock PIN,
-- ODIN in the flat group and the dinner group,
-- the values for `SIGNAL_NUMBER`, `FLAT_GROUP_ID` and `DINNER_GROUP_ID`.
+- ODIN's number is registered as a **primary** Signal device, with a registration lock PIN and
+  the profile name from the config (**Odin 🍽️**),
+- ODIN is a full member of the flat group and the dinner group,
+- the two group IDs are stored in ODIN's database — nothing to copy into env files.
 
-Allow 30 minutes. You need: the SIM card for ODIN's number in a phone (to receive the code), your
-own phone with Signal, a desktop browser, and your password manager.
+Allow 20 minutes.
+
+## Prerequisites
+
+- The **SIM card for ODIN's number** in a phone, to receive the verification code (SMS or call).
+- **Your own phone with Signal**, which is in both groups.
+- A **desktop browser**, for the captcha.
+- Your **password manager**, for the PIN.
+- The **deployment is running** (deploy runbook `docs/runbooks/deploy.md`, #10): the pod with
+  the Signal API and the `odib` container. `odib.env` only needs `SIGNAL_NUMBER` (E.164: `+49…`,
+  no spaces). Until setup is done, `odib run` waits and logs
+  `ODIN is not set up yet (…) — run: podman exec -it odib odib setup`; that is expected, not a
+  crash.
 
 ## Background
 
 - ODIN talks to Signal through
-  [`bbernhard/signal-cli-rest-api`](https://github.com/bbernhard/signal-cli-rest-api), a REST
-  wrapper around [signal-cli](https://github.com/AsamK/signal-cli). Registration uses the same
-  container and the same data volume as the deployment (#10), just started by hand.
+  [`bbernhard/signal-cli-rest-api`](https://github.com/bbernhard/signal-cli-rest-api) (json-rpc
+  mode), a REST wrapper around [signal-cli](https://github.com/AsamK/signal-cli). `odib setup`
+  drives that API for you; no curl, no setup container.
 - Everything that makes ODIN *be* ODIN — identity keys, account password, group memberships —
-  lives in the container's signal-cli data directory, `/home/.local/share/signal-cli`, which we
-  put on the named volume `odib-signal-cli`. **Losing this volume means re-registering, which
-  needs the SIM.**
-- We register a regular SIM number. The SIM provider may recycle the number one day if it is
-  unused, so the account must not depend on it: a **registration lock PIN** stops anyone else from
-  registering the number while ODIN is active, and the **volume backup** means we never need to
-  register again. See [Residual risk](#residual-risk-and-the-sim).
+  lives in the Signal API container's data volume. **Losing that volume means registering again,
+  which needs the SIM.** See [Backing up the volume](#backing-up-the-volume--mandatory).
+- We register a regular SIM number. The provider may recycle it one day, so the account must not
+  depend on it: the **registration lock PIN** stops anyone else from registering the number while
+  ODIN is active, and the **volume backup** means we never need to register again. See
+  [Residual risk](#residual-risk-and-the-sim).
 
-Verified against signal-cli-rest-api **0.101** (signal-cli 0.14.8), the `latest` image as of
-2026-10. API references:
+## The one command
 
-- Endpoint examples: [doc/EXAMPLES.md](https://github.com/bbernhard/signal-cli-rest-api/blob/master/doc/EXAMPLES.md)
-- Full API (Swagger): <https://bbernhard.github.io/signal-cli-rest-api/>
-- Handlers and request bodies: [src/api/api.go](https://github.com/bbernhard/signal-cli-rest-api/blob/master/src/api/api.go)
-- signal-cli commands behind them (`register`, `verify`, `setPin`, `updateProfile`):
-  [signal-cli man page](https://github.com/AsamK/signal-cli/blob/master/man/signal-cli.1.adoc)
-
-## 0. Where to run this
-
-Run it **on the deployment VM as the `odib` user**, so the volume ends up where the deployment
-(#10, [deploy.md](deploy.md)) expects it. You need from the deploy runbook: the Debian VM, podman,
-and the `odib` user with lingering enabled. Log in as `odib` with a real login session (rootless
-podman needs one; plain `sudo -u odib` is not enough):
+As the `odib` user on the VM:
 
 ```bash
-ssh odib@<vm>
-# or, from another account on the VM (needs the systemd-container package):
-sudo machinectl shell odib@
+podman exec -it odib odib setup
 ```
 
-Install the two helper tools used below (as an admin user, once):
+The wizard goes through steps 0–9 and prints `── Step n/9 · …` for each. **You can stop it at any
+point (Ctrl-C) and run the same command again** — every step first checks the real state and is
+skipped when it is done, so it continues where it stopped. While the wizard runs, `odib run`
+pauses (it sends nothing and ignores reactions); it resumes by itself within 30 s after the
+wizard ends.
 
-```bash
-sudo apt install -y curl jq
-```
+Only one wizard can run at a time. If a second one says *Another `odib setup` is running*, finish
+the first; the lock of a killed wizard expires within 2 minutes.
 
-> Registering on another machine (e.g. your laptop) also works: follow this runbook there, then
-> move the volume with [Moving the volume to the VM](#moving-the-volume-to-the-vm).
+## What each step asks
 
-**Never run two signal-cli instances on the same account data at the same time.** Stop the
-deployment pod (if it already exists) before step 1:
-`systemctl --user stop odib-pod.service`.
+### Step 0 · Preflight
 
-## 1. Start the Signal API container
+Checks that the Signal API is reachable and in json-rpc mode, and whether the number is
+registered. If it is, steps 1–3 are skipped.
 
-As `odib`:
+- *Cannot reach the Signal API* — the Signal API container is not running or still starting
+  (it takes 10–30 s). Check `systemctl --user status odib-pod` and its logs (see
+  [Troubleshooting](#troubleshooting)).
+- *runs in '…' mode; ODIN needs MODE=json-rpc* — fix the Signal API container's environment.
 
-```bash
-podman volume create odib-signal-cli
+### Step 1 · Captcha
 
-podman run -d --name signal-api-setup \
-  -p 127.0.0.1:8080:8080 \
-  -e MODE=json-rpc \
-  -v odib-signal-cli:/home/.local/share/signal-cli \
-  docker.io/bbernhard/signal-cli-rest-api:latest
-```
-
-- `-p 127.0.0.1:8080:8080` makes the API reachable from this machine only.
-- `MODE=json-rpc` is the mode the deployment uses (a long-running signal-cli daemon).
-- The image runs as its own unprivileged user; on first use podman copies the image's (empty)
-  data directory with its ownership into the new volume, so no `chown` is needed.
-
-Set up the shell variables and a small helper. **Keep this shell open for the whole runbook**;
-if you open a new one, run this block again.
-
-```bash
-export SIGNAL_NUMBER='+49…'   # ODIN's number, E.164: +, country code, no leading 0, no spaces
-export API=http://127.0.0.1:8080
-
-# POST/PUT/GET JSON and always show the HTTP status
-api() { curl -sS -w '\nHTTP %{http_code}\n' -H 'Content-Type: application/json' "$@"; }
-```
-
-Wait until the API is up (the daemon takes 10–30 s to start), then check it:
-
-```bash
-until curl -sf "$API/v1/health"; do sleep 2; done; echo ready
-api "$API/v1/about"
-```
-
-`/v1/about` prints JSON with `"mode":"json-rpc"` and the version. If it never becomes ready:
-`podman logs signal-api-setup`.
-
-## 2. Get a captcha token
-
-Signal requires a captcha for registration. The token is valid only for **a minute or two**, so
-have step 3 ready to paste before you start.
+Signal wants a captcha for every registration.
 
 1. Open <https://signalcaptchas.org/registration/generate.html> in a desktop browser and solve
-   the captcha.
-2. The page then shows an **"Open Signal"** link. Right-click it → *Copy link*. (Alternatively:
-   open the browser's developer console; a line says that navigation to
-   `signalcaptcha://signal-hcaptcha…` was prevented.)
-3. The token is everything **after** `signalcaptcha://` — it starts with
-   `signal-hcaptcha` (or similar) and is long. Set it:
+   it.
+2. The page shows an **"Open Signal"** link. Right-click it → *Copy link*. (Alternatively: the
+   browser's developer console has a line saying navigation to `signalcaptcha://signal-…` was
+   prevented.)
+3. Paste it at **`Captcha link:`** — with or without the `signalcaptcha://` prefix.
 
-```bash
-export CAPTCHA='signal-hcaptcha.…'   # without the signalcaptcha:// prefix
-```
+The token is only valid for a minute or two, so paste it right away. If Signal does not accept
+it (*invalid or expired*), the wizard asks for a new one.
 
-Source: [EXAMPLES.md → "Register a number (with captcha)"](https://github.com/bbernhard/signal-cli-rest-api/blob/master/doc/EXAMPLES.md),
-[signal-cli wiki: Registration with captcha](https://github.com/AsamK/signal-cli/wiki/Registration-with-captcha).
+### Step 2 · Register (SMS or call)
 
-## 3. Register (SMS or voice)
+The wizard asks Signal to send a code by **SMS**. Messages you may see:
 
-`POST /v1/register/{number}` with body `{"captcha": …, "use_voice": …}`.
+- *Signal cannot send an SMS to this number; it will call instead.* — it counts down 60 s, then
+  asks for a **fresh captcha** and requests a **voice call**. The call reads the code out.
+- *Signal wants a minute between the SMS request and the call.* — same: countdown, fresh
+  captcha.
+- **Rate limit** — *Signal's rate limit was reached (too many registration attempts …)*. The
+  wizard stops and says when the next attempt is possible (or "wait a few hours"). Run it again
+  after that; nothing else to do.
 
-**Via SMS** (the normal case for a SIM):
+On success: *✓ Signal is sending a verification code by SMS/call to the SIM's phone.*
 
-```bash
-jq -n --arg c "$CAPTCHA" '{captcha: $c}' | api -X POST -d @- "$API/v1/register/$SIGNAL_NUMBER"
-```
+### Step 3 · Code
 
-**Via voice call** (if no SMS arrives, or the number cannot receive SMS):
+Enter the 6-digit code at **`Code, e.g. 123-456`** — with or without the dash or a space.
 
-```bash
-jq -n --arg c "$CAPTCHA" '{captcha: $c, use_voice: true}' | api -X POST -d @- "$API/v1/register/$SIGNAL_NUMBER"
-```
+- Code wrong → Signal rejects it; type it again.
+- No code arrived → type **`new`**: back to step 1 with a new captcha.
+- If you stopped the wizard after requesting a code, the next run says *A verification code was
+  requested at …* and asks for it; press **Enter** (empty) to request a new one instead.
+- **Registration lock** — *This number is still protected by the registration lock (PIN) of a
+  previous Signal account.* A previous owner of the SIM number set a PIN. The lock expires
+  7 days after that account was last active (Signal may say how many hours are left). There is
+  nothing to do but wait and run `odib setup` again.
 
-Expected: `HTTP 201` and an empty body. Signal then sends a 6-digit code by SMS, or calls and
-reads it out.
+On success: *✓ +49… is registered.*
 
-| Response | Meaning / fix |
-|----------|---------------|
-| `Captcha required for verification` / `Invalid captcha` | Token expired or was copied wrongly. Go back to step 2 and be quick. |
-| `Couldn't use SMS verification … try again with {"use_voice": true}` | Signal wants a voice call. Wait **60 s**, get a fresh captcha, run the voice variant. |
-| Voice call is refused right after an SMS attempt | Signal only allows voice after an SMS attempt and a wait; wait 60 s and retry with a fresh captcha. |
-| `429` / `Rate limit exceeded` | Too many attempts. Wait (minutes to hours) and retry. |
+### Step 4 · PIN
 
-## 4. Verify the code
+The wizard generates a 16-character PIN (lower-case letters and digits without look-alikes) and
+shows it **once**:
 
-`POST /v1/register/{number}/verify/{code}`. Type the code **without** the dash:
+1. Create an entry **"ODIN Signal registration lock PIN"** in the password manager, with ODIN's
+   number, and paste the PIN there. This is the only copy — Signal cannot recover it.
+2. Type its **last 4 characters** to confirm you saved it.
 
-```bash
-export CODE=123456
-api -X POST "$API/v1/register/$SIGNAL_NUMBER/verify/$CODE"
-```
-
-Expected: `HTTP 201`. Check that the account exists:
-
-```bash
-api "$API/v1/accounts"
-```
-
-prints `["+49…"]` with ODIN's number.
-
-If verify fails with a message about a **registration lock / PIN**, the number still has a lock
-set by a previous owner of the SIM. It expires 7 days after that account was last active; there
-is nothing else to do but wait and register again from step 2.
-
-## 5. Set the registration lock PIN
-
-`POST /v1/accounts/{number}/pin` with body `{"pin": …}` (signal-cli `setPin`: "Set a
-registration lock pin, to prevent others from registering your account's phone number").
-
-1. Create a new entry **"ODIN Signal registration lock PIN"** in your password manager. Generate a
-   PIN there (at least 6 digits; longer and alphanumeric is fine), and save the entry together
-   with ODIN's number. This is the only copy — Signal cannot recover it.
-2. Set it. `read -rs` keeps the PIN out of the shell history and off the screen; paste it and
-   press Enter:
-
-```bash
-read -rs PIN
-jq -n --arg p "$PIN" '{pin: $p}' | api -X POST -d @- "$API/v1/accounts/$SIGNAL_NUMBER/pin"
-unset PIN
-```
-
-Expected: `HTTP 201`.
+Lost it before confirming? Ctrl-C and run `odib setup` again — you get a new PIN.
 
 From now on, registering ODIN's number anywhere else requires this PIN, as long as ODIN has been
-active within the last 7 days. ODIN itself never needs the PIN again unless we have to register
-from scratch (then: step 4 with body `{"pin": "<PIN>"}`, see `VerifyNumberSettings` in
-[api.go](https://github.com/bbernhard/signal-cli-rest-api/blob/master/src/api/api.go)).
+active within the last 7 days. ODIN itself never needs the PIN for day-to-day operation.
 
-## 6. Set the profile name
+Want to choose the PIN yourself (at least 4 characters, entered twice, not shown)? Use
+`odib setup --pin` — also to replace a PIN that is already set.
 
-`PUT /v1/profiles/{number}` with body `{"name": …, "base64_avatar": …}`.
+### Step 5 · Profile
+
+Sets the profile name (and picture, if `avatar` is set) from the `[profile]` section of
+`config.toml`. Runs on every wizard run, so a changed name or picture is applied by just running
+`odib setup` again. Nothing to answer.
+
+### Step 6 · Hello
+
+Signal only lets someone add ODIN to a group as a **full member** if ODIN already has their
+*profile key*, which it gets when they message it. Without this step ODIN would show up in the
+groups as **"invited"** instead of as a member. So:
+
+1. At **`Your own Signal number`**, enter your number in international format (`+4917…`). On a
+   re-run your number from last time is the default; press Enter to keep it.
+2. ODIN sends you the `hello` text from the config. On your phone: open the **message request**
+   from Odin 🍽️, tap **Accept**, and **reply** with anything (e.g. 👋).
+3. The wizard waits for the reply and says *✓ Got your reply.*
+
+Optional: save ODIN as a contact on your phone — makes adding it to groups easier.
+
+If you have hidden your number in Signal, your reply arrives without it; the wizard says so and
+takes it as yours.
+
+### Step 7 · Groups
+
+On your phone, in the **flat group** and the **dinner group**: group settings → *Add members* →
+Odin 🍽️ → add. (If a group only lets admins add members, an admin has to do it. ODIN does not
+need to be an admin.)
+
+The wizard lists the groups ODIN sees and updates the list by itself, e.g.
+
+```text
+Groups ODIN sees:
+  1. Sonntagsessen — member
+  2. WG — member
+```
+
+- **"INVITED, not a member"** — ODIN does not have the profile key of whoever added it. That
+  person accepts ODIN's message request and replies to it (step 6 does this for you; another
+  admin would have to message ODIN themselves). If ODIN stays invited, remove it from the group
+  and add it again.
+- Once ODIN is a member of two groups, the wizard asks *Are both groups listed as member?*
+  Enter (or `y`) to choose, `n` to keep waiting.
+- Then type the **number of the flat group**, then the **number of the dinner group**. They must
+  be different groups, and ODIN must be a member of both.
+
+The chosen IDs are stored in ODIN's database; `odib run` reads them from there. (If
+`FLAT_GROUP_ID` and `DINNER_GROUP_ID` are both set in `odib.env`, there is nothing to choose and
+the step is skipped — see [Group IDs](#group-ids).)
+
+### Step 8 · Test
+
+*Post a test message to the flat group now? [y/N]* — `y` posts the `flat_test` text from the
+config to the flat group, so you can see on your phone that ODIN can write there. Enter (or `n`)
+skips it. Either way the step counts as answered.
+
+### Step 9 · Done
+
+Shows the number, your number and both group IDs with where they come from (`database` or
+`env var`), and reminds you to back up the volume. A running `odib run` notices within 30 s and starts — no
+restart needed.
+
+## Checking the setup: `odib setup --status`
 
 ```bash
-jq -n '{name: "Odin 🍽️"}' | api -X PUT -d @- "$API/v1/profiles/$SIGNAL_NUMBER"
+podman exec odib odib setup --status
 ```
 
-Expected: `HTTP 204`.
+Shows each step with ✓ / ✗ and changes nothing: Signal API reachable, number registered, PIN set,
+profile applied, hello answered, both groups chosen — and whether ODIN is still a **member** of
+each (✗ *ODIN is not in this group* or *only invited* if someone removed it). Exit code 0 when
+fully set up, 1 otherwise, so it also works as a **health check** later, e.g. after restoring a
+backup or when ODIN has gone quiet.
 
-Optional avatar (a square PNG or JPEG, a few hundred KB at most), sent together with the name:
+## Options
 
-```bash
-jq -n --rawfile a <(base64 -w0 odin.png) '{name: "Odin 🍽️", base64_avatar: $a}' \
-  | api -X PUT -d @- "$API/v1/profiles/$SIGNAL_NUMBER"
-```
+| Command | Use it to |
+|---------|-----------|
+| `odib setup` | Set up, or continue an interrupted setup. Re-running a finished setup only re-applies the profile. |
+| `odib setup --status` | Check what is done (see above). Cannot be combined with the other options. |
+| `odib setup --pin` | Enter your own PIN instead of a generated one; also replaces a PIN that is set. |
+| `odib setup --redo pin` | Set a new generated PIN. |
+| `odib setup --redo hello` | Do the hello again, e.g. with another operator number. |
+| `odib setup --redo groups` | Choose the flat and dinner group again, e.g. after a group was replaced. |
+| `odib setup --redo test` | Ask about the test message again. |
+| `odib setup --reregister` | Register the number again although it is registered (asks you to type `reregister`). See below — usually this cannot work. |
 
-## 7. Say hello to Tim
+`--redo` can be given several times (`--redo hello --redo groups`). All commands use
+`podman exec -it odib …`.
 
-Signal only lets you add someone to a group as a full member if you already know their *profile
-key*, which they share by messaging you. Without this step ODIN would show up in the groups as
-"invited" instead of as a member. So ODIN sends you a direct message first:
+## What the wizard cannot do
 
-```bash
-export TIM_NUMBER='+49…'   # your own Signal number
+- **Force a new registration.** signal-cli-rest-api does not pass signal-cli's `reregister`
+  flag, so registering an account that is still in the volume fails with *Signal says the
+  account is already registered*. `--reregister` therefore only gets as far as that message.
+  Really starting over means removing ODIN's account data from the Signal volume first, which
+  throws away its keys — make an extra backup copy before (see below), and do not do this while
+  the registration lock might still hold: see the next point.
+- **Register with a registration lock PIN.** The wizard never sends ODIN's PIN while verifying.
+  If ODIN's account was lost (no backup) and you register again within 7 days of its last
+  activity, step 3 ends with the registration-lock message even though you know the PIN. Either
+  wait the 7 days, or verify by hand from the `odib` container, after step 2 sent the code
+  (`<code>` without dash, `<PIN>` from the password manager):
 
-jq -n --arg n "$SIGNAL_NUMBER" --arg r "$TIM_NUMBER" \
-  '{number: $n, recipients: [$r], message: "Hallo, ich bin Odin 🍽️ – hello, I am Odin."}' \
-  | api -X POST -d @- "$API/v2/send"
-```
+  ```bash
+  podman exec -it odib python -c '
+  import os, sys, httpx
+  api = os.environ.get("SIGNAL_API_URL", "http://localhost:8080")
+  r = httpx.post(f"{api}/v1/register/{os.environ["SIGNAL_NUMBER"]}/verify/{sys.argv[1]}",
+                 json={"pin": sys.argv[2]})
+  print(r.status_code, r.text)' '<code>' '<PIN>'
+  ```
 
-Expected: `HTTP 201` and `{"timestamp":"…"}`.
+  `201` means registered; run `odib setup` again for the remaining steps.
 
-On your phone:
+## Group IDs
 
-1. Open the message request from **Odin 🍽️** and tap **Accept**.
-2. Save ODIN as a contact (ODIN's number, name "Odin 🍽️") — optional, but makes adding it easier.
-3. Reply anything (e.g. "👋") so ODIN also learns your profile key.
-
-## 8. Add ODIN to both groups
-
-On your phone, in the **flat group** and then in the **dinner group**: group settings → *Add
-members* → Odin 🍽️ → add.
-
-ODIN must be a full member, not just "invited": in the member list, ODIN appears under the
-members, not under *Pending / invited*. If it is only invited, remove the invitation, make sure
-step 7 is done (you accepted ODIN's message), and add ODIN again.
-
-Group admins: ODIN does not need to be an admin. If a group only lets admins add members, an
-admin has to do this step.
-
-## 9. List the group IDs
-
-`GET /v1/groups/{number}` lists the groups ODIN is in. (`odib list-groups` prints the names and
-`id`s too, with `SIGNAL_NUMBER` and `SIGNAL_API_URL` set; the other env vars are not needed.)
-
-```bash
-curl -sS "$API/v1/groups/$SIGNAL_NUMBER" | jq '.[] | {name, member, id}'
-```
-
-Example output:
-
-```json
-{
-  "name": "WG",
-  "member": true,
-  "id": "group.a0RVUHdhT295V3JUOHZNSjVtQi9zOEdjRndWdjhHeGUyakYzZTltSXVPMD0="
-}
-```
-
-- Both groups must be listed with `"member": true`. If a group is missing, wait a few seconds
-  and run the command again (ODIN learns about the group from an incoming update); if it stays
-  missing or `"member": false`, redo step 8 for it.
-- Use the **`id`** field, *including* the `group.` prefix. It is the form the REST API sends to.
-  (The `internal_id` field is the raw ID that appears in incoming messages; ODIN derives it
-  itself.)
-
-Optional end-to-end check — ODIN posts in the flat group (skip it if you do not want the noise):
-
-```bash
-export FLAT_GROUP_ID='group.…'
-jq -n --arg n "$SIGNAL_NUMBER" --arg g "$FLAT_GROUP_ID" \
-  '{number: $n, recipients: [$g], message: "Hallo, ich bin Odin 🍽️ und organisiere ab jetzt das Sonntagsessen."}' \
-  | api -X POST -d @- "$API/v2/send"
-```
-
-## 10. Record the values
-
-| Value | Example | Goes to |
-|-------|---------|---------|
-| ODIN's number | `+4915…` | `SIGNAL_NUMBER` in the deployment env file (`odib.env`, see [deploy.md](deploy.md)), and the password manager entry |
-| `id` of the flat group | `group.a0RV…` | `FLAT_GROUP_ID` in `odib.env` |
-| `id` of the dinner group | `group.WlVm…` | `DINNER_GROUP_ID` in `odib.env` |
-| Registration lock PIN | — | Password manager only (step 5). Never in the repo or in `odib.env`. |
-| Volume `odib-signal-cli` | — | Stays on the VM, mounted by the deployment's Signal API container. Backed up with the VM. |
-
-None of these go into the repo. The group IDs are not secret, but they and the number are
-deployment-specific.
-
-## 11. Stop the setup container
-
-```bash
-podman rm -f signal-api-setup
-```
-
-This removes the container only; the account stays on the volume `odib-signal-cli`:
-
-```bash
-podman volume ls        # odib-signal-cli is still listed
-```
-
-From here on, only the deployment (#10) uses the volume. Do **not** register the number again
-while the deployment holds the account — a new registration replaces ODIN's keys and the volume
-becomes useless.
+- **Normally:** the wizard stores both IDs in ODIN's database (`ODIB_DB`, on the `/data` volume).
+  Nothing goes into `odib.env` or the repo. `odib check-config` and `odib setup --status` show
+  them and their source.
+- **Override:** `FLAT_GROUP_ID` / `DINNER_GROUP_ID` in `odib.env` take precedence over the
+  database while they are set (use the `id` form including the `group.` prefix). Only for special
+  cases, e.g. testing against another group; the wizard reminds you when one is set.
+- **Debugging:** `podman exec odib odib list-groups` prints the groups ODIN is in, with their IDs.
 
 ## Backing up the volume — mandatory
 
-The volume holds ODIN's private keys. Find where it is on disk:
+The Signal API container's data volume holds ODIN's private keys. Find where it is on disk (the
+volume name is in the deployment's Quadlet units; `podman volume ls` lists it):
 
 ```bash
-podman volume inspect odib-signal-cli --format '{{.Mountpoint}}'
-# /home/odib/.local/share/containers/storage/volumes/odib-signal-cli/_data
+podman volume inspect <signal-volume> --format '{{.Mountpoint}}'
 ```
 
-- **Primary backup:** the VM is part of the Proxmox backup job (set up in [deploy.md](deploy.md),
-  #10). Check that the job includes the VM and that a backup has run *after* this registration.
+- **Primary backup:** the VM is part of the Proxmox backup job (set up in the deploy
+  runbook, #10). Check that the job includes the VM and that a backup has run *after* the setup.
 - **Optional extra copy** (e.g. before risky changes). The tarball contains the account keys —
   store it like a password (encrypted), never in the repo:
 
   ```bash
-  podman volume export odib-signal-cli --output odib-signal-cli-$(date +%F).tar
+  podman volume export <signal-volume> --output odib-signal-cli-$(date +%F).tar
   ```
 
 Restoring an old backup is fine: Signal does not invalidate the keys over time. Messages received
-while the backup was offline are lost; that does not matter for ODIN.
+while the backup was offline are lost; that does not matter for ODIN. After a restore, check with
+`odib setup --status`.
 
-## Moving the volume to the VM
-
-Only needed if you registered on another machine. On that machine:
-
-```bash
-podman rm -f signal-api-setup
-podman volume export odib-signal-cli --output odib-signal-cli.tar
-scp odib-signal-cli.tar odib@<vm>:
-```
-
-On the VM as `odib`:
-
-```bash
-podman volume create odib-signal-cli
-podman volume import odib-signal-cli odib-signal-cli.tar
-rm odib-signal-cli.tar
-```
-
-Then delete the volume and the tarball on the other machine (`podman volume rm odib-signal-cli`),
-so the account is never used from two places.
+**Never run two signal-cli instances on the same account data at the same time**, and never
+register the number on another machine while the deployment holds the account — a new
+registration replaces ODIN's keys and the volume becomes useless.
 
 ## Residual risk and the SIM
 
@@ -368,18 +294,38 @@ so the account is never used from two places.
 
 ## Troubleshooting
 
-- **Anything fails:** `podman logs signal-api-setup` shows signal-cli's own error messages.
-- **`HTTP 400` with `User … is not registered`** on steps 5–9: step 4 did not succeed; check
-  `api "$API/v1/accounts"`.
-- **Sending fails with a rate-limit / "proof required" error:** Signal wants a captcha for
-  sending. Get a token as in step 2, but from
-  <https://signalcaptchas.org/challenge/generate.html>, then submit it with the `challenge_token`
-  from the error message. Here the captcha is passed **with** its `signalcaptcha://` prefix:
+- **Anything fails in the Signal API:** its logs show signal-cli's own error messages. Find the
+  container with `podman ps` (the Signal API container of the `odib` pod), then
+  `podman logs <container>`, or `journalctl --user -u signal-api` for its Quadlet unit.
+- **The wizard stops with *The Signal API call failed: …*:** the message is signal-cli's. Fix the
+  cause (often: API restarting, network) and run `odib setup` again — it continues where it
+  stopped.
+- **Sending fails with a rate-limit / "proof required" error** (in the bot's logs or in step 6/8):
+  Signal wants a captcha for sending. Get a token as in step 1, but from
+  <https://signalcaptchas.org/challenge/generate.html>, and submit it together with the
+  `challenge_token` from the error message. Here the captcha is passed **with** its
+  `signalcaptcha://` prefix. The Signal API is only reachable inside the pod, so run it from the
+  `odib` container:
 
   ```bash
-  jq -n --arg t '<challenge_token>' --arg c 'signalcaptcha://signal-hcaptcha.…' \
-    '{challenge_token: $t, captcha: $c}' \
-    | api -X POST -d @- "$API/v1/accounts/$SIGNAL_NUMBER/rate-limit-challenge"
+  podman exec -it odib python -c '
+  import os, sys, httpx
+  api = os.environ.get("SIGNAL_API_URL", "http://localhost:8080")
+  r = httpx.post(f"{api}/v1/accounts/{os.environ["SIGNAL_NUMBER"]}/rate-limit-challenge",
+                 json={"challenge_token": sys.argv[1], "captcha": sys.argv[2]})
+  print(r.status_code, r.text)' '<challenge_token>' 'signalcaptcha://signal-hcaptcha.…'
   ```
-- **You cannot find ODIN on your phone by number:** use step 7 — once ODIN has messaged you, it
-  appears in your chat list and can be added from there.
+
+- **You cannot find ODIN on your phone by number:** after step 6, ODIN is in your chat list and
+  can be added to groups from there.
+
+## References
+
+Verified against signal-cli-rest-api **0.101** (signal-cli 0.14.8).
+
+- Endpoint examples: [doc/EXAMPLES.md](https://github.com/bbernhard/signal-cli-rest-api/blob/master/doc/EXAMPLES.md)
+- Full API (Swagger): <https://bbernhard.github.io/signal-cli-rest-api/>
+- Handlers and request bodies: [src/api/api.go](https://github.com/bbernhard/signal-cli-rest-api/blob/master/src/api/api.go)
+- [signal-cli wiki: Registration with captcha](https://github.com/AsamK/signal-cli/wiki/Registration-with-captcha)
+- signal-cli commands behind the API (`register`, `verify`, `setPin`, `updateProfile`):
+  [signal-cli man page](https://github.com/AsamK/signal-cli/blob/master/man/signal-cli.1.adoc)
