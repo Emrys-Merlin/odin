@@ -69,10 +69,14 @@ class RestSignalClient:
     async def set_pin(self, pin: str) -> None:
         await self._request("POST", f"/v1/accounts/{self.number}/pin", json={"pin": pin})
 
-    async def update_profile(self, name: str, avatar: bytes | None = None) -> None:
+    async def update_profile(
+        self, name: str, avatar: bytes | None = None, about: str | None = None
+    ) -> None:
         body = {"name": name}
         if avatar is not None:
             body["base64_avatar"] = base64.b64encode(avatar).decode()
+        if about is not None:
+            body["about"] = about
         await self._request("PUT", f"/v1/profiles/{self.number}", json=body)
 
     async def send_direct_message(self, recipient: str, text: str) -> int:

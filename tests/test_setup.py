@@ -179,7 +179,7 @@ def test_fresh_setup_end_to_end(store: Store, clock: FixedClock) -> None:
     assert calls(admin, "register") == [{"captcha": TOKEN, "use_voice": False}]
     assert calls(admin, "verify") == [{"code": "123456", "pin": None}]
     assert admin.pin == PIN
-    assert admin.profile == ("Odin 🍽️", None)
+    assert admin.profile == ("Odin 🍽️", None, None)
     [hello] = admin.sent_direct
     assert hello.recipient == TIM
     assert hello.text.startswith("Hallo, hier ist Odin 🍽️!")
@@ -493,8 +493,28 @@ def test_profile_with_avatar_relative_to_the_config(
     admin = registered_up_to_groups(store)
     terminal = ScriptedTerminal([])
     asyncio.run(run_setup(admin, store, config, ENV, terminal, clock))
-    assert admin.profile == ("Odin 🍽️", b"\x89PNG fake")
+    assert admin.profile == ("Odin 🍽️", b"\x89PNG fake", None)
     assert "with the picture odin.png" in terminal.text
+
+
+@pytest.mark.parametrize(
+    ("line", "about", "shown"),
+    [
+        ('about = "Sonntagsessen"', "Sonntagsessen", "About text set to “Sonntagsessen”."),
+        ('about = ""', "", "About text cleared."),
+    ],
+)
+def test_profile_with_about(
+    line: str, about: str, shown: str, tmp_path: Path, store: Store, clock: FixedClock
+) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(EXAMPLE.read_text().replace('# about = "', f'{line}\n# about = "', 1))
+    config = load_config(config_file)
+    admin = registered_up_to_groups(store)
+    terminal = ScriptedTerminal([])
+    asyncio.run(run_setup(admin, store, config, ENV, terminal, clock))
+    assert admin.profile == ("Odin 🍽️", None, about)
+    assert shown in terminal.text
 
 
 def test_hello_waits_for_the_operators_reply(store: Store, clock: FixedClock) -> None:

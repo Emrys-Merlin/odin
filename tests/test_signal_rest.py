@@ -189,6 +189,13 @@ def test_update_profile_without_avatar() -> None:
     assert recorder.body_sent == {"name": "Odin 🍽️"}
 
 
+@pytest.mark.parametrize("about", ["Sonntagsessen", ""])
+def test_update_profile_with_about(about: str) -> None:
+    recorder = Recorder(204)
+    asyncio.run(make_client(recorder).update_profile("Odin 🍽️", about=about))
+    assert recorder.body_sent == {"name": "Odin 🍽️", "about": about}
+
+
 def test_send_direct_message() -> None:
     recorder = Recorder(201, fixture_json("send_response.json"))
     timestamp = asyncio.run(make_client(recorder).send_direct_message("+4915100000002", "Hallo"))

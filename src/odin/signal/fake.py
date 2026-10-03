@@ -96,7 +96,7 @@ class FakeSignalAdmin(FakeSignalClient):
         self.api_info = api_info or ApiInfo(mode="json-rpc", version="0.0-fake")
         self.calls: list[AdminCall] = []
         self.sent_direct: list[SentDirectMessage] = []
-        self.profile: tuple[str, bytes | None] | None = None
+        self.profile: tuple[str, bytes | None, str | None] | None = None
         self.pin: str | None = None
         self._outcomes: dict[str, deque[object]] = defaultdict(deque)
         self._direct_queue: asyncio.Queue[DirectMessage | None] = asyncio.Queue()
@@ -132,11 +132,13 @@ class FakeSignalAdmin(FakeSignalClient):
 
         self._call("set_pin", succeed, pin=pin)
 
-    async def update_profile(self, name: str, avatar: bytes | None = None) -> None:
+    async def update_profile(
+        self, name: str, avatar: bytes | None = None, about: str | None = None
+    ) -> None:
         def succeed() -> None:
-            self.profile = (name, avatar)
+            self.profile = (name, avatar, about)
 
-        self._call("update_profile", succeed, name=name, avatar=avatar)
+        self._call("update_profile", succeed, name=name, avatar=avatar, about=about)
 
     async def send_direct_message(self, recipient: str, text: str) -> int:
         def succeed() -> int:
