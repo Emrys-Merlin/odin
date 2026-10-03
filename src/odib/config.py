@@ -29,11 +29,14 @@ _E164 = re.compile(r"\+[1-9]\d{6,14}")
 
 @dataclass(frozen=True)
 class Env:
-    """Deployment-specific values from environment variables."""
+    """Deployment-specific values from environment variables.
+
+    The group IDs are optional overrides; normally `odib setup` stores them in the database.
+    """
 
     signal_number: str
-    flat_group_id: str
-    dinner_group_id: str
+    flat_group_id: str | None
+    dinner_group_id: str | None
     signal_api_url: str
     config_path: Path
     db_path: Path
@@ -54,6 +57,10 @@ def _required(environ: Mapping[str, str], name: str) -> str:
     return value
 
 
+def _optional(environ: Mapping[str, str], name: str) -> str | None:
+    return environ.get(name, "").strip() or None
+
+
 def load_signal_env(environ: Mapping[str, str]) -> SignalEnv:
     signal_number = _required(environ, "SIGNAL_NUMBER")
     if not _E164.fullmatch(signal_number):
@@ -71,8 +78,8 @@ def load_env(environ: Mapping[str, str]) -> Env:
     signal = load_signal_env(environ)
     return Env(
         signal_number=signal.signal_number,
-        flat_group_id=_required(environ, "FLAT_GROUP_ID"),
-        dinner_group_id=_required(environ, "DINNER_GROUP_ID"),
+        flat_group_id=_optional(environ, "FLAT_GROUP_ID"),
+        dinner_group_id=_optional(environ, "DINNER_GROUP_ID"),
         signal_api_url=signal.signal_api_url,
         config_path=Path(_required(environ, "ODIB_CONFIG")),
         db_path=Path(_required(environ, "ODIB_DB")),

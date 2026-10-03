@@ -1,10 +1,14 @@
-"""Wiring: the running bot is the reaction consumer and a periodic reconcile tick, side by side."""
+"""Wiring: the running bot is the reaction consumer and a periodic reconcile tick, side by side.
+
+`serve` supervises it: the bot only runs while ODIN is set up and `odib setup` is not running.
+"""
 
 import asyncio
 import contextlib
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 
 from odib.clock import Clock
 from odib.config import Config, Env, WeeklyTime
@@ -16,18 +20,169 @@ from odib.store import Store
 logger = logging.getLogger(__name__)
 
 TICK_INTERVAL = timedelta(seconds=60)
+# How often `serve` checks whether ODIN is set up, or whether the setup changed.
+SETUP_CHECK_INTERVAL = timedelta(seconds=30)
+SETUP_HINT = "run: podman exec -it odib odib setup"
+SETUP_RUNNING = "odib setup is running"
+
+# Settings keys under which `odib setup` stores the chosen groups.
+FLAT_GROUP_KEY = "flat_group_id"
+DINNER_GROUP_KEY = "dinner_group_id"
 
 
-def resolve_account(env: Env) -> Account:
+class Source(StrEnum):
+    """Where a group ID came from."""
+
+    ENV = "env var"
+    DB = "database"
+    UNSET = "not set"
+
+
+@dataclass(frozen=True)
+class GroupSetting:
+    id: str | None
+    source: Source
+
+
+@dataclass(frozen=True)
+class Resolution:
+    """The bot's number and its groups, with where each group ID came from."""
+
+    number: str
+    flat: GroupSetting
+    dinner: GroupSetting
+
+    @property
+    def account(self) -> Account | None:
+        """The account to run with; None while a group ID is missing (not set up)."""
+        if self.flat.id is None or self.dinner.id is None:
+            return None
+        return Account(
+            number=self.number, flat_group_id=self.flat.id, dinner_group_id=self.dinner.id
+        )
+
+    @property
+    def missing(self) -> str:
+        """Why the account is not complete, e.g. "no flat group chosen"; empty if it is."""
+        roles = [
+            role
+            for role, group in (("flat", self.flat), ("dinner", self.dinner))
+            if group.id is None
+        ]
+        return f"no {' and no '.join(roles)} group chosen" if roles else ""
+
+
+def resolve_account(env: Env, store: Store | None) -> Resolution:
     """The bot's number and the groups it sends to.
 
     The one place that decides where the group IDs come from; everything else asks here.
+    Each group ID: the env var if set, else the value `odib setup` stored in the database, else
+    not set. Without a store (no database yet) only the env vars count.
     """
-    return Account(
+
+    def group(env_value: str | None, key: str) -> GroupSetting:
+        if env_value is not None:
+            return GroupSetting(env_value, Source.ENV)
+        stored = store.get_setting(key) if store is not None else None
+        if stored is not None:
+            return GroupSetting(stored, Source.DB)
+        return GroupSetting(None, Source.UNSET)
+
+    return Resolution(
         number=env.signal_number,
-        flat_group_id=env.flat_group_id,
-        dinner_group_id=env.dinner_group_id,
+        flat=group(env.flat_group_id, FLAT_GROUP_KEY),
+        dinner=group(env.dinner_group_id, DINNER_GROUP_KEY),
     )
+
+
+def readiness(env: Env, store: Store, now: datetime) -> tuple[Account | None, str]:
+    """The account to run with, or None and why not. Reads only the database, no Signal."""
+    if store.setup_lock_held(now):
+        return None, SETUP_RUNNING
+    resolution = resolve_account(env, store)
+    return resolution.account, resolution.missing
+
+
+async def serve(
+    config: Config,
+    store: Store,
+    client: SignalClient,
+    env: Env,
+    clock: Clock,
+    stop: asyncio.Event,
+    check_interval: timedelta = SETUP_CHECK_INTERVAL,
+    tick_interval: timedelta = TICK_INTERVAL,
+) -> None:
+    """Run the bot whenever ODIN is set up, until `stop` is set.
+
+    While it is not set up, or while `odib setup` holds the setup lock, the bot waits and checks
+    again every `check_interval`. While it runs, the same check stops it (after the tick in
+    progress) when the lock is taken or the group choice changes; then it starts over with the
+    new state. So finishing `odib setup` takes effect without a restart.
+    """
+    stopped = asyncio.create_task(stop.wait())
+    waiting_for = ""
+    try:
+        while not stop.is_set():
+            account, reason = readiness(env, store, clock.now())
+            if account is None:
+                if reason != waiting_for:
+                    if reason == SETUP_RUNNING:
+                        logger.info("odib setup is running; waiting until it has finished")
+                    else:
+                        logger.warning("ODIN is not set up yet (%s) — %s", reason, SETUP_HINT)
+                    waiting_for = reason
+                await asyncio.wait({stopped}, timeout=check_interval.total_seconds())
+                continue
+            waiting_for = ""
+            _log_sources(env, store)
+            await _supervise(
+                config, store, client, env, account, clock, stopped, check_interval, tick_interval
+            )
+    finally:
+        stopped.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await stopped
+
+
+async def _supervise(
+    config: Config,
+    store: Store,
+    client: SignalClient,
+    env: Env,
+    account: Account,
+    clock: Clock,
+    stopped: asyncio.Task[object],
+    check_interval: timedelta,
+    tick_interval: timedelta,
+) -> None:
+    """Run the bot with `account` until shutdown or until the setup state changes."""
+    bot_stop = asyncio.Event()
+    bot = asyncio.create_task(
+        run_bot(config, store, client, account, clock, bot_stop, tick_interval)
+    )
+    try:
+        while not bot.done():
+            await asyncio.wait(
+                {bot, stopped},
+                timeout=check_interval.total_seconds(),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if stopped.done() or bot.done():
+                break
+            current, reason = readiness(env, store, clock.now())
+            if current != account:
+                logger.info("setup changed (%s); pausing the bot", reason or "new groups")
+                break
+    finally:
+        bot_stop.set()
+        await bot  # finishes the tick in progress; re-raises a failure of the bot
+
+
+def _log_sources(env: Env, store: Store) -> None:
+    resolution = resolve_account(env, store)
+    for role, group in (("flat", resolution.flat), ("dinner", resolution.dinner)):
+        logger.info("%s group %s (from %s)", role, group.id, group.source)
 
 
 async def run_bot(

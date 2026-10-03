@@ -4,7 +4,8 @@ Everything is keyed by the dinner week, identified by the date of its Sunday. Th
 
 - the **actions** performed per week (so nothing is ever sent twice),
 - the **tracked messages** whose reactions matter (flat poll, dinner announcement),
-- the current **reactions** on those messages.
+- the current **reactions** on those messages,
+- **settings** chosen at setup time (e.g. the group IDs) and the **setup lock**.
 
 A Signal message is identified by its author and its (millisecond) Signal timestamp, which is also
 how incoming reactions refer to their target message.
@@ -12,11 +13,12 @@ how incoming reactions refer to their target message.
 
 from __future__ import annotations
 
+import secrets
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import Self
@@ -94,9 +96,19 @@ _MIGRATIONS: tuple[str, ...] = (
     """
     ALTER TABLE actions ADD COLUMN outcome TEXT NOT NULL DEFAULT 'sent';
     """,
+    """
+    CREATE TABLE settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+    """,
 )
 
 SCHEMA_VERSION = len(_MIGRATIONS)
+
+_SETUP_LOCK = "setup_lock"
+# A setup lock whose heartbeat is older than this is stale: its holder is gone.
+SETUP_LOCK_TTL = timedelta(minutes=2)
 
 
 def _utc(moment: datetime) -> str:
@@ -252,6 +264,68 @@ class Store:
             (message.author, message.timestamp),
         ).fetchall()
         return [Reaction(r, e, datetime.fromisoformat(t)) for r, e, t in rows]
+
+    # Settings
+
+    def get_setting(self, key: str) -> str | None:
+        row = self._conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return None if row is None else row[0]
+
+    def set_setting(self, key: str, value: str) -> None:
+        self._conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?)"
+            " ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
+
+    def delete_setting(self, key: str) -> None:
+        self._conn.execute("DELETE FROM settings WHERE key = ?", (key,))
+
+    # Setup lock: held by `odib setup` while it runs, so `odib run` stays out of its way. It is
+    # a settings row "<token> <heartbeat>"; the holder refreshes the heartbeat, and a lock whose
+    # heartbeat is older than SETUP_LOCK_TTL is stale, so a killed holder cannot block forever.
+
+    def acquire_setup_lock(self, now: datetime) -> str | None:
+        """Take the setup lock. Returns the holder's token, or None if it is held elsewhere."""
+        token = secrets.token_hex(8)
+        # IMMEDIATE takes the write lock up front, so two processes cannot both see it free.
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            if self._setup_lock_fresh(now):
+                return None
+            self.set_setting(_SETUP_LOCK, f"{token} {_utc(now)}")
+        finally:
+            self._conn.execute("COMMIT")
+        return token
+
+    def refresh_setup_lock(self, token: str, now: datetime) -> bool:
+        """Renew the heartbeat. Returns False if `token` no longer holds the lock."""
+        cursor = self._conn.execute(
+            "UPDATE settings SET value = ? WHERE key = ? AND value LIKE ?",
+            (f"{token} {_utc(now)}", _SETUP_LOCK, f"{token} %"),
+        )
+        return cursor.rowcount == 1
+
+    def release_setup_lock(self, token: str) -> None:
+        """Release the lock if `token` holds it; a lock taken over by someone else stays."""
+        self._conn.execute(
+            "DELETE FROM settings WHERE key = ? AND value LIKE ?", (_SETUP_LOCK, f"{token} %")
+        )
+
+    def setup_lock_held(self, now: datetime) -> bool:
+        """Whether someone holds a fresh setup lock at `now`."""
+        return self._setup_lock_fresh(now)
+
+    def _setup_lock_fresh(self, now: datetime) -> bool:
+        value = self.get_setting(_SETUP_LOCK)
+        if value is None:
+            return False
+        _, _, heartbeat = value.partition(" ")
+        try:
+            beat = datetime.fromisoformat(heartbeat)
+        except ValueError:
+            return False  # unreadable: treat as stale
+        return datetime.fromisoformat(_utc(now)) - beat < SETUP_LOCK_TTL
 
 
 def _message(row: tuple[str, str, str, str, int]) -> TrackedMessage:

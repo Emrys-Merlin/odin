@@ -44,7 +44,8 @@ The prek hook is installed in cloud sessions by `scripts/session-start.sh`.
   Every sent action is recorded so nothing is sent twice.
 - Message texts live in the config as templates, not in code. Dinner-group texts are bilingual
   (German, then English).
-- No secrets in the repo. Phone number and group IDs come from env vars.
+- No secrets in the repo. The phone number comes from an env var; the group IDs are stored in the
+  state DB by `odib setup` and can be overridden by env vars.
 
 ## Environment
 

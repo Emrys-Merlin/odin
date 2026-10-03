@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 import httpx
 
 import odib
-from odib.app import resolve_account, run_bot, upcoming_actions
+from odib.app import SETUP_HINT, Source, resolve_account, serve, upcoming_actions
 from odib.clock import Clock, SystemClock
 from odib.config import ConfigError, Settings, load_settings, load_signal_env
 from odib.signal import RestSignalClient
@@ -54,16 +54,20 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="odib",
         description="Odin 🍽️ — a Signal bot for the weekly open Sunday dinner.",
-        epilog="Configured by env vars: SIGNAL_NUMBER, FLAT_GROUP_ID, DINNER_GROUP_ID, "
-        "SIGNAL_API_URL, ODIB_CONFIG, ODIB_DB, ODIB_LOG_LEVEL.",
+        epilog="Configured by env vars: SIGNAL_NUMBER, SIGNAL_API_URL, ODIB_CONFIG, ODIB_DB, "
+        "ODIB_LOG_LEVEL. The group IDs are stored in the database by odib setup; "
+        "FLAT_GROUP_ID and DINNER_GROUP_ID optionally override them.",
     )
     parser.add_argument("--version", action="version", version=odib.__version__)
     commands = parser.add_subparsers(dest="command", required=True, metavar="command")
-    commands.add_parser("run", help="run the bot until SIGTERM or SIGINT")
+    commands.add_parser(
+        "run",
+        help="run the bot until SIGTERM or SIGINT; waits while ODIN is not set up",
+    )
     commands.add_parser(
         "list-groups",
-        help="print the Signal groups the bot is in, with their IDs "
-        "(needed once during setup to fill FLAT_GROUP_ID / DINNER_GROUP_ID); "
+        help="print the Signal groups the bot is in, with their IDs (for debugging, or for "
+        "the FLAT_GROUP_ID / DINNER_GROUP_ID overrides); "
         "needs only SIGNAL_NUMBER and SIGNAL_API_URL",
     )
     commands.add_parser(
@@ -89,7 +93,6 @@ def _setup_logging(environ: Mapping[str, str]) -> None:
 
 async def _run(settings: Settings, clock: Clock) -> None:
     env = settings.env
-    account = resolve_account(env)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
@@ -99,7 +102,7 @@ async def _run(settings: Settings, clock: Clock) -> None:
     try:
         with Store(env.db_path) as store:
             logger.info("Odin 🍽️ starting (Signal API %s)", env.signal_api_url)
-            await run_bot(settings.config, store, client, account, clock, stop)
+            await serve(settings.config, store, client, env, clock, stop)
     finally:
         await client.aclose()
 
@@ -119,14 +122,23 @@ async def _list_groups(environ: Mapping[str, str]) -> None:
 
 def _check_config(settings: Settings, clock: Clock) -> None:
     config = settings.config
-    account = resolve_account(settings.env)
-    print(f"Config OK: {settings.env.config_path}")
-    print(f"Number:       {account.number}")
-    print(f"Flat group:   {account.flat_group_id}")
-    print(f"Dinner group: {account.dinner_group_id}")
-    print(f"Database:     {settings.env.db_path}")
+    env = settings.env
+    # Read the stored group IDs if the database exists; never create it here.
+    if env.db_path.exists():
+        with Store(env.db_path) as store:
+            resolution = resolve_account(env, store)
+    else:
+        resolution = resolve_account(env, None)
+    print(f"Config OK: {env.config_path}")
+    print(f"Number:       {resolution.number}")
+    for label, group in (("Flat group:  ", resolution.flat), ("Dinner group:", resolution.dinner)):
+        value = f"{group.id} (from {group.source})" if group.source is not Source.UNSET else "-"
+        print(f"{label} {value}")
+    print(f"Database:     {env.db_path}")
     print(f"Timezone:     {config.timezone.key}")
     print(f"Emoji:        {config.emoji}")
+    if resolution.account is None:
+        print(f"Not set up yet ({resolution.missing}) — {SETUP_HINT}")
     print()
     print("Next scheduled actions:")
     for action in upcoming_actions(config, clock.now()):

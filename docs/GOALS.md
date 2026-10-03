@@ -68,7 +68,9 @@ anyone who wants to help cook (explicitly optional — helping is absolutely no 
   **fake client** implements the same interface for tests.
 - Time is injected (clock interface), so the weekly cycle is tested by time travel, fully offline.
 - **Config:** TOML file mounted into the container (schedule, emoji, templates). **Env vars** for
-  deployment-specific values: `SIGNAL_NUMBER`, `FLAT_GROUP_ID`, `DINNER_GROUP_ID`, signal API URL.
+  deployment-specific values: `SIGNAL_NUMBER`, signal API URL. The group IDs are chosen in
+  `odib setup` and stored in the SQLite state DB; `FLAT_GROUP_ID` / `DINNER_GROUP_ID` env vars
+  override them when set. Until ODIN is set up, `odib run` waits instead of failing.
 - **Quality gates:** ruff (lint + format), ty (types), pytest. ruff and ty run as **prek** hooks;
   CI runs `prek run --all-files` and pytest on every PR.
 
@@ -93,7 +95,7 @@ anyone who wants to help cook (explicitly optional — helping is absolutely no 
 | Name | What | Where it comes from |
 |------|------|---------------------|
 | `SIGNAL_NUMBER` | Bot phone number, E.164 (`+49…`) | Tim |
-| `FLAT_GROUP_ID`, `DINNER_GROUP_ID` | Base64 Signal group IDs | Listed by the bot/API after ODIN is added to both groups |
+| group IDs (flat, dinner) | Base64 Signal group IDs | Picked in `odib setup` after ODIN is added to both groups; stored in the state DB. Optional override: `FLAT_GROUP_ID`, `DINNER_GROUP_ID` env vars |
 | signal-cli data volume | Account keys | Created at registration |
 | captcha token | One-time, for registration | signalcaptchas.org |
 
