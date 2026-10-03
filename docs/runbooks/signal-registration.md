@@ -100,10 +100,17 @@ Enter the 6-digit code at **`Code, e.g. 123-456`** — with or without the dash 
 - No code arrived → type **`new`**: back to step 1 with a new captcha.
 - If you stopped the wizard after requesting a code, the next run says *A verification code was
   requested at …* and asks for it; press **Enter** (empty) to request a new one instead.
-- **Registration lock** — *This number is still protected by the registration lock (PIN) of a
-  previous Signal account.* A previous owner of the SIM number set a PIN. The lock expires
-  7 days after that account was last active (Signal may say how many hours are left). There is
-  nothing to do but wait and run `odin setup` again.
+- **Registration lock** — Signal says the number is locked with a PIN, and the wizard asks for
+  **`ODIN's PIN`** (not shown while typing). Whose lock is it?
+  - **ODIN's own** — ODIN's account was lost (the Signal volume is gone and there is no backup)
+    and you register again within 7 days of its last activity. Enter the PIN from the password
+    manager entry *"ODIN Signal registration lock PIN"*. A wrong PIN is rejected (Signal says how
+    many tries are left); type it again. The account keeps that PIN, so step 4 does not set a
+    new one.
+  - **A previous owner's** — someone who had the SIM number before set a PIN. Press **Enter**:
+    the wizard stops with *This number is still protected by the registration lock (PIN) of a
+    previous Signal account.* The lock expires 7 days after that account was last active
+    (Signal may say how many hours are left). Wait and run `odin setup` again.
 
 On success: *✓ +49… is registered.*
 
@@ -220,24 +227,8 @@ backup or when ODIN has gone quiet.
   account is already registered*. The wizard therefore skips registration for a registered
   number and has no option to force it.
   Really starting over means removing ODIN's account data from the Signal volume first, which
-  throws away its keys — make an extra backup copy before (see below), and do not do this while
-  the registration lock might still hold: see the next point.
-- **Register with a registration lock PIN.** The wizard never sends ODIN's PIN while verifying.
-  If ODIN's account was lost (no backup) and you register again within 7 days of its last
-  activity, step 3 ends with the registration-lock message even though you know the PIN. Either
-  wait the 7 days, or verify by hand from the `odin` container, after step 2 sent the code
-  (`<code>` without dash, `<PIN>` from the password manager):
-
-  ```bash
-  podman exec -it odin python -c '
-  import os, sys, httpx
-  api = os.environ.get("SIGNAL_API_URL", "http://localhost:8080")
-  r = httpx.post(f"{api}/v1/register/{os.environ["SIGNAL_NUMBER"]}/verify/{sys.argv[1]}",
-                 json={"pin": sys.argv[2]})
-  print(r.status_code, r.text)' '<code>' '<PIN>'
-  ```
-
-  `201` means registered; run `odin setup` again for the remaining steps.
+  throws away its keys — make an extra backup copy before (see below). Registering again within
+  7 days of ODIN's last activity needs ODIN's PIN in step 3.
 
 ## Group IDs
 

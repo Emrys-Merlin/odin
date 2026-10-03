@@ -35,6 +35,7 @@ from odin.signal import (
     VoiceNotYetAllowed,
     VoiceRequired,
     WrongCode,
+    WrongPin,
 )
 from odin.store import Store
 from odin.terminal import ScriptedTerminal
@@ -378,21 +379,68 @@ def test_new_code_starts_over(store: Store, clock: FixedClock) -> None:
     assert NUMBER in admin.accounts
 
 
-def test_registration_lock_exits_with_an_explanation(store: Store, clock: FixedClock) -> None:
+LOCKED = RegistrationLocked(
+    400, "Verification failed! This number is locked with a pin. Hours remaining until reset: 167"
+)
+
+
+def test_registration_lock_without_a_pin_exits_with_an_explanation(
+    store: Store, clock: FixedClock
+) -> None:
     admin = admin_with()
-    admin.script(
-        "verify",
-        RegistrationLocked(
-            400,
-            "Verification failed! This number is locked with a pin. "
-            "Hours remaining until reset: 167",
-        ),
-    )
-    code, terminal = run(admin, store, clock, [CAPTCHA, "123456"])
+    admin.script("verify", LOCKED)
+    code, terminal = run(admin, store, clock, [CAPTCHA, "123456", ""])
     assert code == 1
+    assert terminal.secrets_asked == 1
+    assert "Either it is ODIN's own lock" in terminal.text
     assert "expires 7 days after that account was last active (167 hours remaining" in (
         terminal.text
     )
+    assert NUMBER not in admin.accounts
+    assert store.get_setting(PIN_SET_KEY) is None
+
+
+def test_registration_lock_is_unlocked_with_odins_pin(store: Store, clock: FixedClock) -> None:
+    admin = admin_with()
+    admin.script("verify", LOCKED)
+    code, terminal = run(admin, store, clock, [CAPTCHA, "123-456", "odins-pin"])
+    assert code == 1  # stops at the hello
+    assert calls(admin, "verify") == [
+        {"code": "123456", "pin": None},
+        {"code": "123456", "pin": "odins-pin"},
+    ]
+    assert NUMBER in admin.accounts
+    assert store.get_setting(PIN_SET_KEY) == START.isoformat()
+    assert calls(admin, "set_pin") == []  # step 4 keeps the PIN the account has
+    assert "✓ The PIN was set at" in terminal.text
+
+
+def test_registration_lock_wrong_pin_is_asked_again(store: Store, clock: FixedClock) -> None:
+    admin = admin_with()
+    admin.script(
+        "verify",
+        LOCKED,
+        WrongPin(400, "Verification failed! Invalid pin, tries remaining: 4"),
+    )
+    code, terminal = run(admin, store, clock, [CAPTCHA, "123456", "typo", "odins-pin"])
+    assert code == 1  # stops at the hello
+    assert "Signal rejected the PIN (4 tries remaining, says Signal)" in terminal.text
+    assert [c["pin"] for c in calls(admin, "verify")] == [None, "typo", "odins-pin"]
+    assert terminal.secrets_asked == 2
+    assert NUMBER in admin.accounts
+    assert store.get_setting(PIN_SET_KEY) is not None
+
+
+def test_registration_lock_wrong_pin_then_stop(store: Store, clock: FixedClock) -> None:
+    admin = admin_with()
+    admin.script(
+        "verify",
+        LOCKED,
+        WrongPin(400, "Verification failed! Invalid pin, tries remaining: 4"),
+    )
+    code, terminal = run(admin, store, clock, [CAPTCHA, "123456", "typo", ""])
+    assert code == 1
+    assert "Run `odin setup` again after that." in terminal.text
     assert NUMBER not in admin.accounts
 
 

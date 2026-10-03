@@ -39,6 +39,7 @@ from odin.signal import (
     VoiceNotYetAllowed,
     VoiceRequired,
     WrongCode,
+    WrongPin,
 )
 from odin.store import SETUP_LOCK_TTL, Store
 from odin.terminal import Terminal
@@ -347,6 +348,7 @@ class _Wizard:
                 continue
             try:
                 await self.admin.verify(code)
+                pin_used = False
             except WrongCode as e:
                 self.t.print(
                     f"Signal rejected the code ({e.message}). Check it and type it again, or "
@@ -354,20 +356,48 @@ class _Wizard:
                 )
                 continue
             except RegistrationLocked as e:
-                hours = e.hours_remaining
-                remaining = f" ({hours} hours remaining, says Signal)" if hours is not None else ""
+                await self.unlock(code, e)
+                pin_used = True
+            break
+        # A new registration means a new account: what was set up for the old one is void.
+        # Unlocked with ODIN's PIN, the account has that PIN already; step 4 keeps it.
+        with self.store.transaction():
+            for key in (CODE_REQUESTED_KEY, PIN_SET_KEY, PROFILE_KEY, HELLO_KEY):
+                self.store.delete_setting(key)
+            if pin_used:
+                self.store.set_setting(PIN_SET_KEY, self.clock.now().isoformat())
+        self.t.print(f"✓ {self.env.signal_number} is registered.")
+        return True
+
+    async def unlock(self, code: str, locked: RegistrationLocked) -> None:
+        """Verify ``code`` again with the PIN of the registration lock, if the operator has it."""
+        hours = locked.hours_remaining
+        remaining = f" ({hours} hours remaining, says Signal)" if hours is not None else ""
+        self.t.print(
+            "This number is protected by a registration lock (PIN). Either it is ODIN's own "
+            "lock — ODIN's account was lost and is being registered again — and its PIN is in "
+            "the password manager, or it is the lock of a previous Signal account on this "
+            "number, whose PIN you do not have."
+        )
+        while True:
+            pin = await self.t.secret("ODIN's PIN (press Enter if you do not have it): ")
+            if not pin:
                 raise SetupExit(
                     "This number is still protected by the registration lock (PIN) of a "
                     "previous Signal account. The lock expires 7 days after that account was "
                     f"last active{remaining}. Run `odin setup` again after that."
                 ) from None
-            break
-        # A new registration means a new account: what was set up for the old one is void.
-        with self.store.transaction():
-            for key in (CODE_REQUESTED_KEY, PIN_SET_KEY, PROFILE_KEY, HELLO_KEY):
-                self.store.delete_setting(key)
-        self.t.print(f"✓ {self.env.signal_number} is registered.")
-        return True
+            try:
+                await self.admin.verify(code, pin)
+            except WrongPin as e:
+                tries = e.tries_remaining
+                left = f" ({tries} tries remaining, says Signal)" if tries is not None else ""
+                self.t.print(
+                    f"Signal rejected the PIN{left}. Check the password manager and type it "
+                    "again, or press Enter to stop."
+                )
+                continue
+            return
 
     async def countdown(self, total: timedelta) -> None:
         left = total

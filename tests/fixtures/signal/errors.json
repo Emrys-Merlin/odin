@@ -7,6 +7,7 @@
   {"case": "rate_limited_next_attempt", "status": 400, "body": {"error": "Rate limit reached\nNext attempt may be tried at 2026-10-03T20:15:00Z (Couldn't parse JSON for more details)"}},
   {"case": "rate_limited_429", "status": 429, "body": {"error": "Too Many Requests"}},
   {"case": "registration_locked", "status": 400, "body": {"error": "Verification failed! This number is locked with a pin. Hours remaining until reset: 167\nUse '--pin PIN_CODE' to specify the registration lock PIN"}},
+  {"case": "wrong_pin", "status": 400, "body": {"error": "Verification failed! Invalid pin, tries remaining: 4"}},
   {"case": "wrong_code", "status": 400, "body": {"error": "Verify error: Invalid verification code"}},
   {"case": "already_registered", "status": 400, "body": {"error": "Account is already registered"}},
   {"case": "not_registered_jsonrpc", "status": 400, "body": {"error": "Specified account does not exist"}},
