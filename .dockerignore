@@ -1,0 +1,11 @@
+# Keep the build context small; the Containerfile only needs pyproject.toml, uv.lock, README.md,
+# LICENSE and src/.
+.git
+.venv
+**/__pycache__
+.pytest_cache
+.ruff_cache
+*.db
+*.sqlite
+*.sqlite3
+.env

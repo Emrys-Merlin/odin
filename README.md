@@ -12,3 +12,10 @@ Behaviour (schedule, emoji, message texts) lives in a TOML file; see
 come from env vars: `SIGNAL_NUMBER`, `FLAT_GROUP_ID`, `DINNER_GROUP_ID`, `SIGNAL_API_URL`
 (default `http://localhost:8080`), `ODIB_CONFIG` (path to the TOML file) and `ODIB_DB` (path to
 the SQLite database).
+
+## Container image
+
+`podman build -f Containerfile -t odib .` (docker works too). CI publishes
+`ghcr.io/emrys-merlin/odib` with tags `latest` and the commit SHA on every push to `main`. The
+image presets `ODIB_CONFIG=/config/config.toml` and `ODIB_DB=/data/odib.db`; mount `/config` and
+`/data` as volumes and pass the other env vars at run time.
