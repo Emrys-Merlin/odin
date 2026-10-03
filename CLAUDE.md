@@ -6,7 +6,8 @@ the architecture are in `docs/GOALS.md` — read it before starting an issue.
 ## Workflow
 
 - Work is tracked in GitHub issues (`gh issue view <n>`). Work on exactly one issue per session.
-- Branch from `main` (`<issue-number>-<slug>`), open a PR with `Closes #<n>`. Never push to `main`.
+- Branch from `main`; any branch name is fine (cloud sessions use `claude/<slug>`). Open a PR with
+  `Closes #<n>`. Never push to `main`.
 - Things found outside the issue's scope: note them in the PR description or open a new issue —
   do not fix them in the same PR.
 - If an issue's description turns out wrong or incomplete, say so in the PR rather than silently
