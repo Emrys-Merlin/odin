@@ -39,14 +39,23 @@ class Env:
     db_path: Path
 
 
-def load_env(environ: Mapping[str, str]) -> Env:
-    def required(name: str) -> str:
-        value = environ.get(name, "").strip()
-        if not value:
-            raise ConfigError(f"environment variable {name} is not set")
-        return value
+@dataclass(frozen=True)
+class SignalEnv:
+    """The env vars needed to talk to the Signal API, and nothing else."""
 
-    signal_number = required("SIGNAL_NUMBER")
+    signal_number: str
+    signal_api_url: str
+
+
+def _required(environ: Mapping[str, str], name: str) -> str:
+    value = environ.get(name, "").strip()
+    if not value:
+        raise ConfigError(f"environment variable {name} is not set")
+    return value
+
+
+def load_signal_env(environ: Mapping[str, str]) -> SignalEnv:
+    signal_number = _required(environ, "SIGNAL_NUMBER")
     if not _E164.fullmatch(signal_number):
         raise ConfigError(f"SIGNAL_NUMBER must be in E.164 format (+49…), got {signal_number!r}")
 
@@ -55,13 +64,18 @@ def load_env(environ: Mapping[str, str]) -> Env:
     if url.scheme not in ("http", "https") or not url.netloc:
         raise ConfigError(f"SIGNAL_API_URL must be an http(s) URL, got {signal_api_url!r}")
 
+    return SignalEnv(signal_number=signal_number, signal_api_url=signal_api_url.rstrip("/"))
+
+
+def load_env(environ: Mapping[str, str]) -> Env:
+    signal = load_signal_env(environ)
     return Env(
-        signal_number=signal_number,
-        flat_group_id=required("FLAT_GROUP_ID"),
-        dinner_group_id=required("DINNER_GROUP_ID"),
-        signal_api_url=signal_api_url.rstrip("/"),
-        config_path=Path(required("ODIB_CONFIG")),
-        db_path=Path(required("ODIB_DB")),
+        signal_number=signal.signal_number,
+        flat_group_id=_required(environ, "FLAT_GROUP_ID"),
+        dinner_group_id=_required(environ, "DINNER_GROUP_ID"),
+        signal_api_url=signal.signal_api_url,
+        config_path=Path(_required(environ, "ODIB_CONFIG")),
+        db_path=Path(_required(environ, "ODIB_DB")),
     )
 
 

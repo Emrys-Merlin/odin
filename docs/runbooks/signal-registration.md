@@ -245,8 +245,8 @@ admin has to do this step.
 
 ## 9. List the group IDs
 
-`GET /v1/groups/{number}` lists the groups ODIN is in. (Once #7 is merged, `odib list-groups`
-prints the same.)
+`GET /v1/groups/{number}` lists the groups ODIN is in. (`odib list-groups` prints the names and
+`id`s too, with `SIGNAL_NUMBER` and `SIGNAL_API_URL` set; the other env vars are not needed.)
 
 ```bash
 curl -sS "$API/v1/groups/$SIGNAL_NUMBER" | jq '.[] | {name, member, id}'

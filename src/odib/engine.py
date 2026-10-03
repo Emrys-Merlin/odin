@@ -25,7 +25,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
-from odib.config import Config, Env, WeeklyTime
+from odib.config import Config, WeeklyTime
 from odib.reactions import count_confirmations
 from odib.signal import SignalClient
 from odib.store import Action, MessageKind, Outcome, Store
@@ -40,10 +40,6 @@ class Account:
     number: str
     flat_group_id: str
     dinner_group_id: str
-
-    @classmethod
-    def from_env(cls, env: Env) -> Account:
-        return cls(env.signal_number, env.flat_group_id, env.dinner_group_id)
 
 
 @dataclass(frozen=True)
