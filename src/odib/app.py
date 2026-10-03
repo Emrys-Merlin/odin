@@ -14,7 +14,7 @@ from odib.clock import Clock
 from odib.config import Config, Env, WeeklyTime
 from odib.engine import Account, dinner_week, reconcile
 from odib.reactions import consume_reactions
-from odib.signal import SignalClient
+from odib.signal import SignalAdmin, SignalClient
 from odib.store import Store
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,8 @@ TICK_INTERVAL = timedelta(seconds=60)
 SETUP_CHECK_INTERVAL = timedelta(seconds=30)
 SETUP_HINT = "run: podman exec -it odib odib setup"
 SETUP_RUNNING = "odib setup is running"
+NOT_REGISTERED = "SIGNAL_NUMBER is not registered with the Signal API"
+API_UNREACHABLE = "the Signal API is not reachable"
 
 # Settings keys under which `odib setup` stores the chosen groups.
 FLAT_GROUP_KEY = "flat_group_id"
@@ -112,23 +114,32 @@ async def serve(
     stop: asyncio.Event,
     check_interval: timedelta = SETUP_CHECK_INTERVAL,
     tick_interval: timedelta = TICK_INTERVAL,
+    admin: SignalAdmin | None = None,
 ) -> None:
     """Run the bot whenever ODIN is set up, until `stop` is set.
 
     While it is not set up, or while `odib setup` holds the setup lock, the bot waits and checks
-    again every `check_interval`. While it runs, the same check stops it (after the tick in
-    progress) when the lock is taken or the group choice changes; then it starts over with the
-    new state. So finishing `odib setup` takes effect without a restart.
+    again every `check_interval`. With `admin`, being set up also means that the number is
+    registered with the Signal API (asked before each start; an unreachable API is waited for
+    the same way). While the bot runs, the database check stops it (after the tick in progress)
+    when the lock is taken or the group choice changes; then it starts over with the new state.
+    So finishing `odib setup` takes effect without a restart.
     """
     stopped = asyncio.create_task(stop.wait())
     waiting_for = ""
     try:
         while not stop.is_set():
             account, reason = readiness(env, store, clock.now())
+            if account is not None and admin is not None:
+                reason = await _registration_problem(admin, env.signal_number)
+                if reason:
+                    account = None
             if account is None:
                 if reason != waiting_for:
                     if reason == SETUP_RUNNING:
                         logger.info("odib setup is running; waiting until it has finished")
+                    elif reason == API_UNREACHABLE:
+                        logger.warning("%s; waiting until it is", API_UNREACHABLE)
                     else:
                         logger.warning("ODIN is not set up yet (%s) — %s", reason, SETUP_HINT)
                     waiting_for = reason
@@ -143,6 +154,16 @@ async def serve(
         stopped.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await stopped
+
+
+async def _registration_problem(admin: SignalAdmin, number: str) -> str:
+    """Why `number` cannot be used with the Signal API right now; empty if it can."""
+    try:
+        accounts = await admin.list_accounts()
+    except Exception as e:  # whatever it is, the API is not usable yet; keep waiting
+        logger.debug("listing the Signal API's accounts failed: %r", e)
+        return API_UNREACHABLE
+    return "" if number in accounts else NOT_REGISTERED
 
 
 async def _supervise(
