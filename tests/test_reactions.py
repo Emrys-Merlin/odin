@@ -17,6 +17,8 @@ TEMPLATES = {
     "cancellation": "Abgesagt.\n\nCancelled.",
     "announcement": "Kochen {cook_time}, Essen {dinner_time}, {emoji} bis {rsvp_by}",
     "tally": "{count} mal {emoji}",
+    "hello": "Hallo",
+    "flat_test": "Test",
 }
 CONFIG: Config = parse_config({"templates": TEMPLATES})
 BERLIN = CONFIG.timezone

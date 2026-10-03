@@ -27,6 +27,11 @@ DEFAULT_SIGNAL_API_URL = "http://localhost:8080"
 _E164 = re.compile(r"\+[1-9]\d{6,14}")
 
 
+def is_e164(number: str) -> bool:
+    """Whether ``number`` is a phone number in E.164 format (``+49…``)."""
+    return _E164.fullmatch(number) is not None
+
+
 @dataclass(frozen=True)
 class Env:
     """Deployment-specific values from environment variables.
@@ -63,7 +68,7 @@ def _optional(environ: Mapping[str, str], name: str) -> str | None:
 
 def load_signal_env(environ: Mapping[str, str]) -> SignalEnv:
     signal_number = _required(environ, "SIGNAL_NUMBER")
-    if not _E164.fullmatch(signal_number):
+    if not is_e164(signal_number):
         raise ConfigError(f"SIGNAL_NUMBER must be in E.164 format (+49…), got {signal_number!r}")
 
     signal_api_url = environ.get("SIGNAL_API_URL", "").strip() or DEFAULT_SIGNAL_API_URL
@@ -232,6 +237,8 @@ TEMPLATE_PLACEHOLDERS: dict[str, frozenset[str]] = {
     "cancellation": COMMON_PLACEHOLDERS,  # dinner group, bilingual
     "announcement": COMMON_PLACEHOLDERS,  # dinner group, bilingual
     "tally": COMMON_PLACEHOLDERS | {"count"},  # flat group, German
+    "hello": COMMON_PLACEHOLDERS,  # direct message to the operator during `odib setup`
+    "flat_test": COMMON_PLACEHOLDERS,  # flat group, optional test at the end of `odib setup`
 }
 
 
@@ -278,6 +285,8 @@ class Templates:
     cancellation: Template
     announcement: Template
     tally: Template
+    hello: Template
+    flat_test: Template
 
 
 def _parse_templates(raw: object) -> Templates:
@@ -291,6 +300,36 @@ def _parse_templates(raw: object) -> Templates:
             raise ConfigError(f"{where}: missing or empty message text")
         parsed[name] = Template.parse(text.strip(), allowed, where)
     return Templates(**parsed)
+
+
+# --- Profile ------------------------------------------------------------------------------------
+
+DEFAULT_PROFILE_NAME = "Odin 🍽️"
+
+
+@dataclass(frozen=True)
+class Profile:
+    """ODIN's Signal profile, applied by `odib setup`."""
+
+    name: str
+    avatar: Path | None  # an image file; relative paths are resolved against the config's dir
+
+
+def _parse_profile(raw: object, base_dir: Path) -> Profile:
+    table = _table(raw, "profile")
+    _reject_unknown(table, {"name", "avatar"}, "profile")
+    name = table.get("name", DEFAULT_PROFILE_NAME)
+    if not isinstance(name, str) or not name.strip():
+        raise ConfigError(f"profile.name: must be a non-empty string, got {name!r}")
+    avatar = table.get("avatar")
+    if avatar is None:
+        return Profile(name=name.strip(), avatar=None)
+    if not isinstance(avatar, str) or not avatar.strip():
+        raise ConfigError(f"profile.avatar: must be a file path, got {avatar!r}")
+    path = base_dir / avatar.strip()
+    if not path.is_file():
+        raise ConfigError(f"profile.avatar: no such file {path}")
+    return Profile(name=name.strip(), avatar=path)
 
 
 # --- Config -------------------------------------------------------------------------------------
@@ -310,6 +349,7 @@ class Config:
     catch_up_grace: dt.timedelta | None
     schedule: Schedule
     templates: Templates
+    profile: Profile
 
     def when(self, point: WeeklyTime, week: dt.date) -> dt.datetime:
         """When `point` happens in the dinner week whose dinner falls on `week`.
@@ -334,9 +374,13 @@ class Config:
         }
 
 
-def parse_config(data: Mapping[str, Any]) -> Config:
+def parse_config(data: Mapping[str, Any], base_dir: Path | None = None) -> Config:
+    """Validate a parsed config file. Relative paths in it resolve against ``base_dir``
+    (the config file's directory; default: the working directory)."""
     _reject_unknown(
-        data, {"timezone", "emoji", "catch_up_grace", "schedule", "templates"}, "config"
+        data,
+        {"timezone", "emoji", "catch_up_grace", "schedule", "templates", "profile"},
+        "config",
     )
 
     tz_name = data.get("timezone", DEFAULT_TIMEZONE)
@@ -369,6 +413,7 @@ def parse_config(data: Mapping[str, Any]) -> Config:
         catch_up_grace=catch_up_grace,
         schedule=_parse_schedule(data.get("schedule")),
         templates=_parse_templates(data.get("templates")),
+        profile=_parse_profile(data.get("profile"), base_dir or Path()),
     )
 
 
@@ -380,7 +425,7 @@ def load_config(path: Path) -> Config:
         raise ConfigError(f"cannot read config file {path}: {e}") from None
     except tomllib.TOMLDecodeError as e:
         raise ConfigError(f"invalid TOML in {path}: {e}") from None
-    return parse_config(data)
+    return parse_config(data, base_dir=path.parent)
 
 
 # --- Settings -----------------------------------------------------------------------------------

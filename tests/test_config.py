@@ -22,6 +22,8 @@ TEMPLATES = {
     "cancellation": "Abgesagt.\n\nCancelled.",
     "announcement": "Kochen {cook_time}, Essen {dinner_time}, {emoji} bis {rsvp_by}",
     "tally": "{count} mal {emoji}",
+    "hello": "Hallo, bitte antworte.",
+    "flat_test": "Test, {emoji}",
 }
 
 ENV = {
@@ -306,6 +308,32 @@ def test_load_settings(tmp_path: Path) -> None:
     settings = load_settings({**ENV, "ODIB_CONFIG": str(path)})
     assert settings.env.config_path == path
     assert settings.config.emoji == "👍"
+
+
+# --- profile ------------------------------------------------------------------------------------
+
+
+def test_profile_defaults() -> None:
+    profile = parse_config(config()).profile
+    assert (profile.name, profile.avatar) == ("Odin 🍽️", None)
+
+
+def test_profile_avatar_resolves_against_the_config_dir(tmp_path: Path) -> None:
+    (tmp_path / "odin.png").write_bytes(b"png")
+    path = tmp_path / "config.toml"
+    path.write_text(EXAMPLE.read_text().replace('# avatar = "odin.png"', 'avatar = "odin.png"'))
+    assert load_config(path).profile.avatar == tmp_path / "odin.png"
+
+
+def test_profile_avatar_must_exist(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match=r"profile\.avatar: no such file"):
+        parse_config(config(profile={"avatar": "missing.png"}), base_dir=tmp_path)
+
+
+@pytest.mark.parametrize("profile", [{"name": ""}, {"name": 3}, {"nick": "Odin"}, {"avatar": 1}])
+def test_invalid_profile(profile: dict[str, Any]) -> None:
+    with pytest.raises(ConfigError, match="profile"):
+        parse_config(config(profile=profile))
 
 
 # --- when ---------------------------------------------------------------------------------------

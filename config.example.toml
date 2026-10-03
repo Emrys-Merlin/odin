@@ -33,12 +33,20 @@ tally = { weekday = "fri", time = "14:00" }
 cook = { weekday = "sun", time = "17:00" }
 dinner = { weekday = "sun", time = "18:00" }
 
+# ODIN's Signal profile, applied by `odib setup`.
+[profile]
+name = "Odin 🍽️"
+# Optional profile picture (PNG or JPEG). A relative path is resolved against this file's
+# directory, e.g. avatar = "odin.png" next to config.toml.
+# avatar = "odin.png"
+
 # Message texts. Placeholders (times as HH:MM):
 #   {emoji} {deadline} {rsvp_by} {cook_time} {dinner_time}   — in every template
 #   {count}                                                  — tally only
 # Unknown placeholders are rejected at startup. Write {{ and }} for literal braces.
 # Weekday names are part of the text: update them when you change the schedule.
 # Flat-group texts are German; dinner-group texts are German, blank line, English.
+# hello and flat_test are only sent by `odib setup`.
 [templates]
 flat_ask = """
 Findet am Sonntag das offene Abendessen statt? 🍽️
@@ -76,4 +84,17 @@ that is when we order the food. Bringing someone? Please say so in a reply to th
 tally = """
 Bisher haben {count} Personen mit {emoji} auf die Ankündigung reagiert. Plus-Ones stehen \
 gegebenenfalls in den Antworten darauf.
+"""
+
+# Direct message to the operator during `odib setup`. They reply to it, so that ODIN gets their
+# profile key (without it, ODIN ends up only "invited" to groups the operator adds it to).
+hello = """
+Hallo, hier ist Odin 🍽️! Bitte antworte kurz auf diese Nachricht, damit die Einrichtung \
+weitergehen kann.
+"""
+
+# Optional test message to the flat group at the end of `odib setup`.
+flat_test = """
+Hallo, ich bin Odin 🍽️! Ab jetzt frage ich jeden Dienstag, ob am Sonntag das offene \
+Abendessen stattfindet. Bestätigt wird mit {emoji}.
 """

@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Callable, Iterator
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -20,7 +21,7 @@ from odib.cli import main
 from odib.clock import FixedClock
 from odib.config import load_config, load_env
 from odib.engine import Account
-from odib.signal import FakeSignalClient, ReactionEvent
+from odib.signal import FakeSignalAdmin, FakeSignalClient, ReactionEvent
 from odib.store import Action, MessageKind, Store
 
 EXAMPLE = Path(__file__).parent.parent / "config.example.toml"
@@ -217,7 +218,7 @@ def test_the_bot_fails_when_the_event_stream_ends(store: Store) -> None:
 
 # --- serve: run only while set up -----------------------------------------------------------------
 
-FAST = {"check_interval": timedelta(0), "tick_interval": timedelta(0)}
+FAST: dict[str, Any] = {"check_interval": timedelta(0), "tick_interval": timedelta(0)}
 
 
 def test_serve_waits_until_set_up_and_then_starts_without_restart(
@@ -304,6 +305,35 @@ def test_serve_picks_up_a_new_group_choice(store: Store) -> None:
 
     asyncio.run(scenario())
     assert client.sent[0].group_id == "group.new-flat="
+
+
+def test_serve_waits_until_the_number_is_registered(
+    store: Store, caplog: pytest.LogCaptureFixture
+) -> None:
+    env = load_env(ENV)
+    admin = FakeSignalAdmin(number=ACCOUNT.number)
+    admin.script("list_accounts", ConnectionError("signal-cli-rest-api is starting"))
+    clock = FixedClock(local(6, 18, 5))  # the flat ask is due
+
+    async def scenario() -> None:
+        stop = asyncio.Event()
+        task = asyncio.create_task(
+            serve(CONFIG, store, admin, env, clock, stop, **FAST, admin=admin)
+        )
+        await until(lambda: "SIGNAL_NUMBER is not registered" in caplog.text)
+        assert admin.sent == []
+        admin.accounts.append(ACCOUNT.number)  # what odib setup will do
+        await until(lambda: len(admin.sent) == 1)
+        stop.set()
+        await task
+
+    with caplog.at_level("INFO", logger="odib"):
+        asyncio.run(scenario())
+    assert "the Signal API is not reachable; waiting until it is" in caplog.text
+    assert (
+        "ODIN is not set up yet (SIGNAL_NUMBER is not registered with the Signal API)"
+        " — run: podman exec -it odib odib setup"
+    ) in caplog.text
 
 
 def test_serve_stops_while_waiting(store: Store) -> None:
