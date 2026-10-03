@@ -5,11 +5,11 @@ from typing import Any
 
 import pytest
 
-from odib.clock import FixedClock
-from odib.config import Config, parse_config
-from odib.reactions import consume_reactions, count_confirmations, same_emoji
-from odib.signal import FakeSignalClient, ReactionEvent
-from odib.store import MessageKind, Store, TrackedMessage
+from odin.clock import FixedClock
+from odin.config import Config, parse_config
+from odin.reactions import consume_reactions, count_confirmations, same_emoji
+from odin.signal import FakeSignalClient, ReactionEvent
+from odin.store import MessageKind, Store, TrackedMessage
 
 TEMPLATES = {
     "flat_ask": "Abendessen? {emoji} bis {deadline}",

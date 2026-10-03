@@ -1,4 +1,4 @@
-# Runbook: set up ODIN's Signal account with `odib setup`
+# Runbook: set up ODIN's Signal account with `odin setup`
 
 One-time setup, done by Tim. At the end:
 
@@ -16,16 +16,16 @@ Allow 20 minutes.
 - A **desktop browser**, for the captcha.
 - Your **password manager**, for the PIN.
 - The **deployment is running** (deploy runbook `docs/runbooks/deploy.md`, #10): the pod with
-  the Signal API and the `odib` container. `odib.env` only needs `SIGNAL_NUMBER` (E.164: `+49…`,
-  no spaces). Until setup is done, `odib run` waits and logs
-  `ODIN is not set up yet (…) — run: podman exec -it odib odib setup`; that is expected, not a
+  the Signal API and the `odin` container. `odin.env` only needs `SIGNAL_NUMBER` (E.164: `+49…`,
+  no spaces). Until setup is done, `odin run` waits and logs
+  `ODIN is not set up yet (…) — run: podman exec -it odin odin setup`; that is expected, not a
   crash.
 
 ## Background
 
 - ODIN talks to Signal through
   [`bbernhard/signal-cli-rest-api`](https://github.com/bbernhard/signal-cli-rest-api) (json-rpc
-  mode), a REST wrapper around [signal-cli](https://github.com/AsamK/signal-cli). `odib setup`
+  mode), a REST wrapper around [signal-cli](https://github.com/AsamK/signal-cli). `odin setup`
   drives that API for you; no curl, no setup container.
 - Everything that makes ODIN *be* ODIN — identity keys, account password, group memberships —
   lives in the Signal API container's data volume. **Losing that volume means registering again,
@@ -37,19 +37,19 @@ Allow 20 minutes.
 
 ## The one command
 
-As the `odib` user on the VM:
+As the `odin` user on the VM:
 
 ```bash
-podman exec -it odib odib setup
+podman exec -it odin odin setup
 ```
 
 The wizard goes through steps 0–9 and prints `── Step n/9 · …` for each. **You can stop it at any
 point (Ctrl-C) and run the same command again** — every step first checks the real state and is
-skipped when it is done, so it continues where it stopped. While the wizard runs, `odib run`
+skipped when it is done, so it continues where it stopped. While the wizard runs, `odin run`
 pauses (it sends nothing and ignores reactions); it resumes by itself within 30 s after the
 wizard ends.
 
-Only one wizard can run at a time. If a second one says *Another `odib setup` is running*, finish
+Only one wizard can run at a time. If a second one says *Another `odin setup` is running*, finish
 the first; the lock of a killed wizard expires within 2 minutes.
 
 ## What each step asks
@@ -60,7 +60,7 @@ Checks that the Signal API is reachable and in json-rpc mode, and whether the nu
 registered. If it is, steps 1–3 are skipped.
 
 - *Cannot reach the Signal API* — the Signal API container is not running or still starting
-  (it takes 10–30 s). Check `systemctl --user status odib-pod` and its logs (see
+  (it takes 10–30 s). Check `systemctl --user status odin-pod` and its logs (see
   [Troubleshooting](#troubleshooting)).
 - *runs in '…' mode; ODIN needs MODE=json-rpc* — fix the Signal API container's environment.
 
@@ -103,7 +103,7 @@ Enter the 6-digit code at **`Code, e.g. 123-456`** — with or without the dash 
 - **Registration lock** — *This number is still protected by the registration lock (PIN) of a
   previous Signal account.* A previous owner of the SIM number set a PIN. The lock expires
   7 days after that account was last active (Signal may say how many hours are left). There is
-  nothing to do but wait and run `odib setup` again.
+  nothing to do but wait and run `odin setup` again.
 
 On success: *✓ +49… is registered.*
 
@@ -116,19 +116,19 @@ shows it **once**:
    number, and paste the PIN there. This is the only copy — Signal cannot recover it.
 2. Type its **last 4 characters** to confirm you saved it.
 
-Lost it before confirming? Ctrl-C and run `odib setup` again — you get a new PIN.
+Lost it before confirming? Ctrl-C and run `odin setup` again — you get a new PIN.
 
 From now on, registering ODIN's number anywhere else requires this PIN, as long as ODIN has been
 active within the last 7 days. ODIN itself never needs the PIN for day-to-day operation.
 
 Want to choose the PIN yourself (at least 4 characters, entered twice, not shown)? Use
-`odib setup --pin` — also to replace a PIN that is already set.
+`odin setup --pin` — also to replace a PIN that is already set.
 
 ### Step 5 · Profile
 
 Sets the profile name (and picture, if `avatar` is set) from the `[profile]` section of
 `config.toml`. Runs on every wizard run, so a changed name or picture is applied by just running
-`odib setup` again. Nothing to answer.
+`odin setup` again. Nothing to answer.
 
 ### Step 6 · Hello
 
@@ -170,8 +170,8 @@ Groups ODIN sees:
 - Then type the **number of the flat group**, then the **number of the dinner group**. They must
   be different groups, and ODIN must be a member of both.
 
-The chosen IDs are stored in ODIN's database; `odib run` reads them from there. (If
-`FLAT_GROUP_ID` and `DINNER_GROUP_ID` are both set in `odib.env`, there is nothing to choose and
+The chosen IDs are stored in ODIN's database; `odin run` reads them from there. (If
+`FLAT_GROUP_ID` and `DINNER_GROUP_ID` are both set in `odin.env`, there is nothing to choose and
 the step is skipped — see [Group IDs](#group-ids).)
 
 ### Step 8 · Test
@@ -183,13 +183,13 @@ skips it. Either way the step counts as answered.
 ### Step 9 · Done
 
 Shows the number, your number and both group IDs with where they come from (`database` or
-`env var`), and reminds you to back up the volume. A running `odib run` notices within 30 s and starts — no
+`env var`), and reminds you to back up the volume. A running `odin run` notices within 30 s and starts — no
 restart needed.
 
-## Checking the setup: `odib setup --status`
+## Checking the setup: `odin setup --status`
 
 ```bash
-podman exec odib odib setup --status
+podman exec odin odin setup --status
 ```
 
 Shows each step with ✓ / ✗ and changes nothing: Signal API reachable, number registered, PIN set,
@@ -202,17 +202,17 @@ backup or when ODIN has gone quiet.
 
 | Command | Use it to |
 |---------|-----------|
-| `odib setup` | Set up, or continue an interrupted setup. Re-running a finished setup only re-applies the profile. |
-| `odib setup --status` | Check what is done (see above). Cannot be combined with the other options. |
-| `odib setup --pin` | Enter your own PIN instead of a generated one; also replaces a PIN that is set. |
-| `odib setup --redo pin` | Set a new generated PIN. |
-| `odib setup --redo hello` | Do the hello again, e.g. with another operator number. |
-| `odib setup --redo groups` | Choose the flat and dinner group again, e.g. after a group was replaced. |
-| `odib setup --redo test` | Ask about the test message again. |
-| `odib setup --reregister` | Register the number again although it is registered (asks you to type `reregister`). See below — usually this cannot work. |
+| `odin setup` | Set up, or continue an interrupted setup. Re-running a finished setup only re-applies the profile. |
+| `odin setup --status` | Check what is done (see above). Cannot be combined with the other options. |
+| `odin setup --pin` | Enter your own PIN instead of a generated one; also replaces a PIN that is set. |
+| `odin setup --redo pin` | Set a new generated PIN. |
+| `odin setup --redo hello` | Do the hello again, e.g. with another operator number. |
+| `odin setup --redo groups` | Choose the flat and dinner group again, e.g. after a group was replaced. |
+| `odin setup --redo test` | Ask about the test message again. |
+| `odin setup --reregister` | Register the number again although it is registered (asks you to type `reregister`). See below — usually this cannot work. |
 
 `--redo` can be given several times (`--redo hello --redo groups`). All commands use
-`podman exec -it odib …`.
+`podman exec -it odin …`.
 
 ## What the wizard cannot do
 
@@ -225,11 +225,11 @@ backup or when ODIN has gone quiet.
 - **Register with a registration lock PIN.** The wizard never sends ODIN's PIN while verifying.
   If ODIN's account was lost (no backup) and you register again within 7 days of its last
   activity, step 3 ends with the registration-lock message even though you know the PIN. Either
-  wait the 7 days, or verify by hand from the `odib` container, after step 2 sent the code
+  wait the 7 days, or verify by hand from the `odin` container, after step 2 sent the code
   (`<code>` without dash, `<PIN>` from the password manager):
 
   ```bash
-  podman exec -it odib python -c '
+  podman exec -it odin python -c '
   import os, sys, httpx
   api = os.environ.get("SIGNAL_API_URL", "http://localhost:8080")
   r = httpx.post(f"{api}/v1/register/{os.environ["SIGNAL_NUMBER"]}/verify/{sys.argv[1]}",
@@ -237,17 +237,17 @@ backup or when ODIN has gone quiet.
   print(r.status_code, r.text)' '<code>' '<PIN>'
   ```
 
-  `201` means registered; run `odib setup` again for the remaining steps.
+  `201` means registered; run `odin setup` again for the remaining steps.
 
 ## Group IDs
 
-- **Normally:** the wizard stores both IDs in ODIN's database (`ODIB_DB`, on the `/data` volume).
-  Nothing goes into `odib.env` or the repo. `odib check-config` and `odib setup --status` show
+- **Normally:** the wizard stores both IDs in ODIN's database (`ODIN_DB`, on the `/data` volume).
+  Nothing goes into `odin.env` or the repo. `odin check-config` and `odin setup --status` show
   them and their source.
-- **Override:** `FLAT_GROUP_ID` / `DINNER_GROUP_ID` in `odib.env` take precedence over the
+- **Override:** `FLAT_GROUP_ID` / `DINNER_GROUP_ID` in `odin.env` take precedence over the
   database while they are set (use the `id` form including the `group.` prefix). Only for special
   cases, e.g. testing against another group; the wizard reminds you when one is set.
-- **Debugging:** `podman exec odib odib list-groups` prints the groups ODIN is in, with their IDs.
+- **Debugging:** `podman exec odin odin list-groups` prints the groups ODIN is in, with their IDs.
 
 ## Backing up the volume — mandatory
 
@@ -264,12 +264,12 @@ podman volume inspect <signal-volume> --format '{{.Mountpoint}}'
   store it like a password (encrypted), never in the repo:
 
   ```bash
-  podman volume export <signal-volume> --output odib-signal-cli-$(date +%F).tar
+  podman volume export <signal-volume> --output odin-signal-cli-$(date +%F).tar
   ```
 
 Restoring an old backup is fine: Signal does not invalidate the keys over time. Messages received
 while the backup was offline are lost; that does not matter for ODIN. After a restore, check with
-`odib setup --status`.
+`odin setup --status`.
 
 **Never run two signal-cli instances on the same account data at the same time**, and never
 register the number on another machine while the deployment holds the account — a new
@@ -295,20 +295,20 @@ registration replaces ODIN's keys and the volume becomes useless.
 ## Troubleshooting
 
 - **Anything fails in the Signal API:** its logs show signal-cli's own error messages. Find the
-  container with `podman ps` (the Signal API container of the `odib` pod), then
+  container with `podman ps` (the Signal API container of the `odin` pod), then
   `podman logs <container>`, or `journalctl --user -u signal-api` for its Quadlet unit.
 - **The wizard stops with *The Signal API call failed: …*:** the message is signal-cli's. Fix the
-  cause (often: API restarting, network) and run `odib setup` again — it continues where it
+  cause (often: API restarting, network) and run `odin setup` again — it continues where it
   stopped.
 - **Sending fails with a rate-limit / "proof required" error** (in the bot's logs or in step 6/8):
   Signal wants a captcha for sending. Get a token as in step 1, but from
   <https://signalcaptchas.org/challenge/generate.html>, and submit it together with the
   `challenge_token` from the error message. Here the captcha is passed **with** its
   `signalcaptcha://` prefix. The Signal API is only reachable inside the pod, so run it from the
-  `odib` container:
+  `odin` container:
 
   ```bash
-  podman exec -it odib python -c '
+  podman exec -it odin python -c '
   import os, sys, httpx
   api = os.environ.get("SIGNAL_API_URL", "http://localhost:8080")
   r = httpx.post(f"{api}/v1/accounts/{os.environ["SIGNAL_NUMBER"]}/rate-limit-challenge",

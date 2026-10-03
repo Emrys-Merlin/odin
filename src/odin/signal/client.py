@@ -3,7 +3,7 @@
 from collections.abc import AsyncIterator
 from typing import Protocol
 
-from odib.signal.models import ApiInfo, DirectMessage, Event, Group
+from odin.signal.models import ApiInfo, DirectMessage, Event, Group
 
 
 class SignalClient(Protocol):
@@ -25,7 +25,7 @@ class SignalClient(Protocol):
 class SignalAdmin(Protocol):
     """Account administration for the setup wizard; the running bot never needs it.
 
-    Failed calls raise a :class:`odib.signal.errors.SignalApiError` subclass.
+    Failed calls raise a :class:`odin.signal.errors.SignalApiError` subclass.
 
     Behaviour of signal-cli-rest-api (json-rpc mode) to keep in mind:
 

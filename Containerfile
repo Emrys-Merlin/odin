@@ -1,10 +1,10 @@
 # Multi-stage build: uv resolves and installs into /app/.venv in the builder, the runtime stage
 # only gets that venv. Builds with podman and docker:
-#   podman build -f Containerfile -t odib .
+#   podman build -f Containerfile -t odin .
 #
 # The package version normally comes from the git tag, but .git is not in the build context. CI
 # passes it in instead:
-#   podman build -f Containerfile --build-arg VERSION=1.2.3 --build-arg REVISION=<sha> -t odib .
+#   podman build -f Containerfile --build-arg VERSION=1.2.3 --build-arg REVISION=<sha> -t odin .
 # Without the build args (local builds) the version is the placeholder 0.0.0+unknown.
 
 FROM python:3.14-slim AS builder
@@ -26,30 +26,30 @@ COPY src ./src
 # Declared here, not at the top, so a new version does not invalidate the dependency layer.
 ARG VERSION=0.0.0+unknown
 RUN --mount=type=cache,target=/root/.cache/uv \
-    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_ODIB="$VERSION" uv sync --locked --no-editable
+    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_ODIN="$VERSION" uv sync --locked --no-editable
 
 
 FROM python:3.14-slim
-RUN groupadd --system --gid 1000 odib \
-    && useradd --system --uid 1000 --gid odib --home-dir /app --no-create-home odib \
+RUN groupadd --system --gid 1000 odin \
+    && useradd --system --uid 1000 --gid odin --home-dir /app --no-create-home odin \
     && mkdir -p /config /data \
-    && chown odib:odib /data
-COPY --from=builder --chown=odib:odib /app/.venv /app/.venv
+    && chown odin:odin /data
+COPY --from=builder --chown=odin:odin /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    ODIB_CONFIG=/config/config.toml \
-    ODIB_DB=/data/odib.db
+    ODIN_CONFIG=/config/config.toml \
+    ODIN_DB=/data/odin.db
 VOLUME ["/config", "/data"]
-USER odib
+USER odin
 WORKDIR /app
 # Last, so a new version only changes the metadata, not the cached layers above.
 ARG VERSION=0.0.0+unknown
 ARG REVISION=unknown
-LABEL org.opencontainers.image.title="odib" \
+LABEL org.opencontainers.image.title="odin" \
       org.opencontainers.image.description="ODIN — Open Dinner Invitation Notifier" \
-      org.opencontainers.image.source="https://github.com/Emrys-Merlin/odib" \
+      org.opencontainers.image.source="https://github.com/Emrys-Merlin/odin" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="$VERSION" \
       org.opencontainers.image.revision="$REVISION"
-ENTRYPOINT ["odib"]
+ENTRYPOINT ["odin"]
 CMD ["run"]

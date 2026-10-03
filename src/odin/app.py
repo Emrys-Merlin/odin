@@ -1,6 +1,6 @@
 """Wiring: the running bot is the reaction consumer and a periodic reconcile tick, side by side.
 
-`serve` supervises it: the bot only runs while ODIN is set up and `odib setup` is not running.
+`serve` supervises it: the bot only runs while ODIN is set up and `odin setup` is not running.
 """
 
 import asyncio
@@ -10,24 +10,24 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 
-from odib.clock import Clock
-from odib.config import Config, Env, WeeklyTime
-from odib.engine import Account, dinner_week, reconcile
-from odib.reactions import consume_reactions
-from odib.signal import SignalAdmin, SignalClient
-from odib.store import Store
+from odin.clock import Clock
+from odin.config import Config, Env, WeeklyTime
+from odin.engine import Account, dinner_week, reconcile
+from odin.reactions import consume_reactions
+from odin.signal import SignalAdmin, SignalClient
+from odin.store import Store
 
 logger = logging.getLogger(__name__)
 
 TICK_INTERVAL = timedelta(seconds=60)
 # How often `serve` checks whether ODIN is set up, or whether the setup changed.
 SETUP_CHECK_INTERVAL = timedelta(seconds=30)
-SETUP_HINT = "run: podman exec -it odib odib setup"
-SETUP_RUNNING = "odib setup is running"
+SETUP_HINT = "run: podman exec -it odin odin setup"
+SETUP_RUNNING = "odin setup is running"
 NOT_REGISTERED = "SIGNAL_NUMBER is not registered with the Signal API"
 API_UNREACHABLE = "the Signal API is not reachable"
 
-# Settings keys under which `odib setup` stores the chosen groups.
+# Settings keys under which `odin setup` stores the chosen groups.
 FLAT_GROUP_KEY = "flat_group_id"
 DINNER_GROUP_KEY = "dinner_group_id"
 
@@ -78,7 +78,7 @@ def resolve_account(env: Env, store: Store | None) -> Resolution:
     """The bot's number and the groups it sends to.
 
     The one place that decides where the group IDs come from; everything else asks here.
-    Each group ID: the env var if set, else the value `odib setup` stored in the database, else
+    Each group ID: the env var if set, else the value `odin setup` stored in the database, else
     not set. Without a store (no database yet) only the env vars count.
     """
 
@@ -118,12 +118,12 @@ async def serve(
 ) -> None:
     """Run the bot whenever ODIN is set up, until `stop` is set.
 
-    While it is not set up, or while `odib setup` holds the setup lock, the bot waits and checks
+    While it is not set up, or while `odin setup` holds the setup lock, the bot waits and checks
     again every `check_interval`. With `admin`, being set up also means that the number is
     registered with the Signal API (asked before each start; an unreachable API is waited for
     the same way). While the bot runs, the database check stops it (after the tick in progress)
     when the lock is taken or the group choice changes; then it starts over with the new state.
-    So finishing `odib setup` takes effect without a restart.
+    So finishing `odin setup` takes effect without a restart.
     """
     stopped = asyncio.create_task(stop.wait())
     waiting_for = ""
@@ -137,7 +137,7 @@ async def serve(
             if account is None:
                 if reason != waiting_for:
                     if reason == SETUP_RUNNING:
-                        logger.info("odib setup is running; waiting until it has finished")
+                        logger.info("odin setup is running; waiting until it has finished")
                     elif reason == API_UNREACHABLE:
                         logger.warning("%s; waiting until it is", API_UNREACHABLE)
                     else:

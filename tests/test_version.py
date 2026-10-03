@@ -2,12 +2,12 @@ from importlib.metadata import version
 
 import pytest
 
-import odib
-from odib.cli import main
+import odin
+from odin.cli import main
 
 
 def test_version_flag_prints_version(monkeypatch, capsys) -> None:
-    monkeypatch.setattr(odib, "__version__", "1.2.3")
+    monkeypatch.setattr(odin, "__version__", "1.2.3")
     with pytest.raises(SystemExit) as exc:
         main(["--version"], {})
     assert exc.value.code == 0
@@ -15,4 +15,4 @@ def test_version_flag_prints_version(monkeypatch, capsys) -> None:
 
 
 def test_version_comes_from_package_metadata() -> None:
-    assert odib.__version__ == version("odib")
+    assert odin.__version__ == version("odin")

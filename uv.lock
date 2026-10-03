@@ -89,7 +89,7 @@ wheels = [
 ]
 
 [[package]]
-name = "odib"
+name = "odin"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },

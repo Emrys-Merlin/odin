@@ -1,4 +1,4 @@
-"""The `odib` command: run the bot, set it up, list its groups, or check the config."""
+"""The `odin` command: run the bot, set it up, list its groups, or check the config."""
 
 import argparse
 import asyncio
@@ -11,16 +11,16 @@ from collections.abc import Mapping, Sequence
 
 import httpx
 
-import odib
-from odib.app import SETUP_HINT, Source, resolve_account, serve, upcoming_actions
-from odib.clock import Clock, SystemClock
-from odib.config import ConfigError, Settings, load_settings, load_signal_env
-from odib.setup import REDO_STEPS, SetupOptions, run_setup, setup_status
-from odib.signal import RestSignalClient, SignalApiError
-from odib.store import Store
-from odib.terminal import ConsoleTerminal, Terminal
+import odin
+from odin.app import SETUP_HINT, Source, resolve_account, serve, upcoming_actions
+from odin.clock import Clock, SystemClock
+from odin.config import ConfigError, Settings, load_settings, load_signal_env
+from odin.setup import REDO_STEPS, SetupOptions, run_setup, setup_status
+from odin.signal import RestSignalClient, SignalApiError
+from odin.store import Store
+from odin.terminal import ConsoleTerminal, Terminal
 
-logger = logging.getLogger("odib")
+logger = logging.getLogger("odin")
 
 DEFAULT_LOG_LEVEL = "INFO"
 
@@ -54,26 +54,26 @@ def main(
             case "check-config":
                 _check_config(load_settings(environ), clock)
     except ConfigError as e:
-        print(f"odib: configuration error: {e}", file=sys.stderr)
+        print(f"odin: configuration error: {e}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
-        print("\nStopped. Run `odib setup` again to continue.", file=sys.stderr)
+        print("\nStopped. Run `odin setup` again to continue.", file=sys.stderr)
         return 130
     except (httpx.HTTPError, sqlite3.Error, SignalApiError) as e:
-        print(f"odib: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"odin: {type(e).__name__}: {e}", file=sys.stderr)
         return 1
     return 0
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="odib",
+        prog="odin",
         description="Odin 🍽️ — a Signal bot for the weekly open Sunday dinner.",
-        epilog="Configured by env vars: SIGNAL_NUMBER, SIGNAL_API_URL, ODIB_CONFIG, ODIB_DB, "
-        "ODIB_LOG_LEVEL. The group IDs are stored in the database by odib setup; "
+        epilog="Configured by env vars: SIGNAL_NUMBER, SIGNAL_API_URL, ODIN_CONFIG, ODIN_DB, "
+        "ODIN_LOG_LEVEL. The group IDs are stored in the database by odin setup; "
         "FLAT_GROUP_ID and DINNER_GROUP_ID optionally override them.",
     )
-    parser.add_argument("--version", action="version", version=odib.__version__)
+    parser.add_argument("--version", action="version", version=odin.__version__)
     commands = parser.add_subparsers(dest="command", required=True, metavar="command")
     commands.add_parser(
         "run",
@@ -121,10 +121,10 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _setup_logging(environ: Mapping[str, str]) -> None:
-    level = environ.get("ODIB_LOG_LEVEL", "").strip().upper() or DEFAULT_LOG_LEVEL
+    level = environ.get("ODIN_LOG_LEVEL", "").strip().upper() or DEFAULT_LOG_LEVEL
     if level not in logging.getLevelNamesMapping():
         raise ConfigError(
-            f"ODIB_LOG_LEVEL must be a log level (DEBUG, INFO, WARNING, ERROR), got {level!r}"
+            f"ODIN_LOG_LEVEL must be a log level (DEBUG, INFO, WARNING, ERROR), got {level!r}"
         )
     logging.basicConfig(
         stream=sys.stdout,

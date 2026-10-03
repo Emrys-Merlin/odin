@@ -1,4 +1,4 @@
-"""Operator I/O for `odib setup`: a console implementation and a scripted one for tests."""
+"""Operator I/O for `odin setup`: a console implementation and a scripted one for tests."""
 
 import asyncio
 import getpass

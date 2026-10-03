@@ -1,8 +1,8 @@
-# ODIN config. Copy to config.toml and point ODIB_CONFIG at it.
+# ODIN config. Copy to config.toml and point ODIN_CONFIG at it.
 #
 # Deployment values are NOT in here. Phone number, API URL and paths come from env vars:
-# SIGNAL_NUMBER, SIGNAL_API_URL (default http://localhost:8080), ODIB_CONFIG, ODIB_DB. The group
-# IDs are stored in the database by `odib setup`; FLAT_GROUP_ID / DINNER_GROUP_ID env vars
+# SIGNAL_NUMBER, SIGNAL_API_URL (default http://localhost:8080), ODIN_CONFIG, ODIN_DB. The group
+# IDs are stored in the database by `odin setup`; FLAT_GROUP_ID / DINNER_GROUP_ID env vars
 # override them when set.
 #
 # Every value below is the default, except the templates, which have no defaults.
@@ -33,7 +33,7 @@ tally = { weekday = "fri", time = "14:00" }
 cook = { weekday = "sun", time = "17:00" }
 dinner = { weekday = "sun", time = "18:00" }
 
-# ODIN's Signal profile, applied by `odib setup`.
+# ODIN's Signal profile, applied by `odin setup`.
 [profile]
 name = "Odin 🍽️"
 # Optional profile picture (PNG or JPEG). A relative path is resolved against this file's
@@ -46,7 +46,7 @@ name = "Odin 🍽️"
 # Unknown placeholders are rejected at startup. Write {{ and }} for literal braces.
 # Weekday names are part of the text: update them when you change the schedule.
 # Flat-group texts are German; dinner-group texts are German, blank line, English.
-# hello and flat_test are only sent by `odib setup`.
+# hello and flat_test are only sent by `odin setup`.
 [templates]
 flat_ask = """
 Findet am Sonntag das offene Abendessen statt? 🍽️
@@ -86,14 +86,14 @@ Bisher haben {count} Personen mit {emoji} auf die Ankündigung reagiert. Plus-On
 gegebenenfalls in den Antworten darauf.
 """
 
-# Direct message to the operator during `odib setup`. They reply to it, so that ODIN gets their
+# Direct message to the operator during `odin setup`. They reply to it, so that ODIN gets their
 # profile key (without it, ODIN ends up only "invited" to groups the operator adds it to).
 hello = """
 Hallo, hier ist Odin 🍽️! Bitte antworte kurz auf diese Nachricht, damit die Einrichtung \
 weitergehen kann.
 """
 
-# Optional test message to the flat group at the end of `odib setup`.
+# Optional test message to the flat group at the end of `odin setup`.
 flat_test = """
 Hallo, ich bin Odin 🍽️! Ab jetzt frage ich jeden Dienstag, ob am Sonntag das offene \
 Abendessen stattfindet. Bestätigt wird mit {emoji}.

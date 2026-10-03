@@ -14,10 +14,10 @@ catch-up decision. The dinner announcement has no deadline.
 import logging
 from datetime import UTC, datetime
 
-from odib.clock import Clock
-from odib.config import Config
-from odib.signal import ReactionEvent, SignalClient
-from odib.store import MessageKind, Store, TrackedMessage
+from odin.clock import Clock
+from odin.config import Config
+from odin.signal import ReactionEvent, SignalClient
+from odin.store import MessageKind, Store, TrackedMessage
 
 logger = logging.getLogger(__name__)
 

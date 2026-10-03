@@ -6,7 +6,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from odib.signal import (
+from odin.signal import (
     AlreadyRegistered,
     ApiInfo,
     DirectMessage,

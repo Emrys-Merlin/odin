@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from odib.clock import FixedClock
+from odin.clock import FixedClock
 
 
 def test_fixed_clock_stands_still_until_moved() -> None:

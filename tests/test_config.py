@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from odib.config import (
+from odin.config import (
     DEFAULT_SIGNAL_API_URL,
     ConfigError,
     WeeklyTime,
@@ -31,8 +31,8 @@ ENV = {
     "FLAT_GROUP_ID": "ZmxhdA==",
     "DINNER_GROUP_ID": "ZGlubmVy",
     "SIGNAL_API_URL": "http://signal:8080/",
-    "ODIB_CONFIG": "/config/config.toml",
-    "ODIB_DB": "/data/odib.sqlite3",
+    "ODIN_CONFIG": "/config/config.toml",
+    "ODIN_DB": "/data/odin.sqlite3",
 }
 
 
@@ -266,7 +266,7 @@ def test_env() -> None:
     assert env.dinner_group_id == "ZGlubmVy"
     assert env.signal_api_url == "http://signal:8080"
     assert env.config_path == Path("/config/config.toml")
-    assert env.db_path == Path("/data/odib.sqlite3")
+    assert env.db_path == Path("/data/odin.sqlite3")
 
 
 def test_env_default_api_url() -> None:
@@ -274,15 +274,15 @@ def test_env_default_api_url() -> None:
     assert env.signal_api_url == DEFAULT_SIGNAL_API_URL
 
 
-@pytest.mark.parametrize("name", ["SIGNAL_NUMBER", "ODIB_CONFIG", "ODIB_DB"])
+@pytest.mark.parametrize("name", ["SIGNAL_NUMBER", "ODIN_CONFIG", "ODIN_DB"])
 def test_missing_env_var(name: str) -> None:
     with pytest.raises(ConfigError, match=name):
         load_env({k: v for k, v in ENV.items() if k != name})
 
 
 def test_blank_env_var_counts_as_missing() -> None:
-    with pytest.raises(ConfigError, match="ODIB_DB"):
-        load_env({**ENV, "ODIB_DB": "  "})
+    with pytest.raises(ConfigError, match="ODIN_DB"):
+        load_env({**ENV, "ODIN_DB": "  "})
 
 
 def test_group_ids_are_optional() -> None:
@@ -305,7 +305,7 @@ def test_invalid_api_url() -> None:
 def test_load_settings(tmp_path: Path) -> None:
     path = tmp_path / "config.toml"
     path.write_bytes(EXAMPLE.read_bytes())
-    settings = load_settings({**ENV, "ODIB_CONFIG": str(path)})
+    settings = load_settings({**ENV, "ODIN_CONFIG": str(path)})
     assert settings.env.config_path == path
     assert settings.config.emoji == "👍"
 

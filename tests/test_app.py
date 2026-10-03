@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from odib.app import (
+from odin.app import (
     DINNER_GROUP_KEY,
     FLAT_GROUP_KEY,
     GroupSetting,
@@ -17,12 +17,12 @@ from odib.app import (
     serve,
     upcoming_actions,
 )
-from odib.cli import main
-from odib.clock import FixedClock
-from odib.config import load_config, load_env
-from odib.engine import Account
-from odib.signal import FakeSignalAdmin, FakeSignalClient, ReactionEvent
-from odib.store import Action, MessageKind, Store
+from odin.cli import main
+from odin.clock import FixedClock
+from odin.config import load_config, load_env
+from odin.engine import Account
+from odin.signal import FakeSignalAdmin, FakeSignalClient, ReactionEvent
+from odin.store import Action, MessageKind, Store
 
 EXAMPLE = Path(__file__).parent.parent / "config.example.toml"
 CONFIG = load_config(EXAMPLE)
@@ -33,8 +33,8 @@ ENV = {
     "FLAT_GROUP_ID": "group.ZmxhdA==",
     "DINNER_GROUP_ID": "group.ZGlubmVy",
     "SIGNAL_API_URL": "http://signal:8080",
-    "ODIB_CONFIG": str(EXAMPLE),
-    "ODIB_DB": "/data/odib.db",
+    "ODIN_CONFIG": str(EXAMPLE),
+    "ODIN_DB": "/data/odin.db",
 }
 NO_GROUPS = {k: v for k, v in ENV.items() if not k.endswith("_GROUP_ID")}
 _account = resolve_account(load_env(ENV), None).account
@@ -115,7 +115,7 @@ def test_readiness_waits_for_the_setup_lock(store: Store) -> None:
     assert readiness(env, store, now) == (ACCOUNT, "")
     token = store.acquire_setup_lock(now)
     assert token is not None
-    assert readiness(env, store, now) == (None, "odib setup is running")
+    assert readiness(env, store, now) == (None, "odin setup is running")
     store.release_setup_lock(token)
     assert readiness(env, store, now) == (ACCOUNT, "")
 
@@ -236,20 +236,20 @@ def test_serve_waits_until_set_up_and_then_starts_without_restart(
             await asyncio.sleep(0)
         assert client.sent == []
 
-        store.set_setting(FLAT_GROUP_KEY, "group.flat=")  # what odib setup will do
+        store.set_setting(FLAT_GROUP_KEY, "group.flat=")  # what odin setup will do
         store.set_setting(DINNER_GROUP_KEY, "group.dinner=")
         await until(lambda: len(client.sent) == 1)
         stop.set()
         await task
 
-    with caplog.at_level("INFO", logger="odib"):
+    with caplog.at_level("INFO", logger="odin"):
         asyncio.run(scenario())
 
     assert client.sent[0].group_id == "group.flat="
     waiting = [r.getMessage() for r in caplog.records if "not set up yet" in r.getMessage()]
     assert waiting == [
         "ODIN is not set up yet (no flat and no dinner group chosen)"
-        " — run: podman exec -it odib odib setup"
+        " — run: podman exec -it odin odin setup"
     ]  # logged once, not on every check
     assert "flat group group.flat= (from database)" in caplog.text
 
@@ -265,7 +265,7 @@ def test_serve_pauses_while_setup_runs(store: Store, caplog: pytest.LogCaptureFi
         await until(lambda: "flat group" in caplog.text)  # the bot is running
         token = store.acquire_setup_lock(clock.now())
         assert token is not None
-        await until(lambda: "odib setup is running" in caplog.text)
+        await until(lambda: "odin setup is running" in caplog.text)
 
         clock.set(local(6, 18, 5))  # the flat ask becomes due while setup runs
         store.refresh_setup_lock(token, clock.now())
@@ -278,7 +278,7 @@ def test_serve_pauses_while_setup_runs(store: Store, caplog: pytest.LogCaptureFi
         stop.set()
         await task
 
-    with caplog.at_level("INFO", logger="odib"):
+    with caplog.at_level("INFO", logger="odin"):
         asyncio.run(scenario())
     assert client.sent[0].group_id == ACCOUNT.flat_group_id
 
@@ -322,17 +322,17 @@ def test_serve_waits_until_the_number_is_registered(
         )
         await until(lambda: "SIGNAL_NUMBER is not registered" in caplog.text)
         assert admin.sent == []
-        admin.accounts.append(ACCOUNT.number)  # what odib setup will do
+        admin.accounts.append(ACCOUNT.number)  # what odin setup will do
         await until(lambda: len(admin.sent) == 1)
         stop.set()
         await task
 
-    with caplog.at_level("INFO", logger="odib"):
+    with caplog.at_level("INFO", logger="odin"):
         asyncio.run(scenario())
     assert "the Signal API is not reachable; waiting until it is" in caplog.text
     assert (
         "ODIN is not set up yet (SIGNAL_NUMBER is not registered with the Signal API)"
-        " — run: podman exec -it odib odib setup"
+        " — run: podman exec -it odin odin setup"
     ) in caplog.text
 
 
@@ -394,11 +394,11 @@ def test_check_config_with_the_example_config(capsys: pytest.CaptureFixture[str]
 def test_check_config_shows_where_group_ids_come_from(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    db = tmp_path / "odib.db"
+    db = tmp_path / "odin.db"
     with Store(db) as store:
         store.set_setting(FLAT_GROUP_KEY, "group.db-flat=")
         store.set_setting(DINNER_GROUP_KEY, "group.db-dinner=")
-    env = {**NO_GROUPS, "ODIB_DB": str(db), "DINNER_GROUP_ID": "group.env-dinner="}
+    env = {**NO_GROUPS, "ODIN_DB": str(db), "DINNER_GROUP_ID": "group.env-dinner="}
     assert main(["check-config"], env, FixedClock(local(3, 12))) == 0
     out = capsys.readouterr().out
     assert "Flat group:   group.db-flat= (from database)" in out
@@ -409,22 +409,22 @@ def test_check_config_shows_where_group_ids_come_from(
 def test_check_config_reports_not_set_up(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    db = tmp_path / "odib.db"
-    env = {**NO_GROUPS, "ODIB_DB": str(db)}
+    db = tmp_path / "odin.db"
+    env = {**NO_GROUPS, "ODIN_DB": str(db)}
     assert main(["check-config"], env, FixedClock(local(3, 12))) == 0
     out = capsys.readouterr().out
     assert "Flat group:   -" in out
     assert (
-        "Not set up yet (no flat and no dinner group chosen) — run: podman exec -it odib odib setup"
+        "Not set up yet (no flat and no dinner group chosen) — run: podman exec -it odin odin setup"
     ) in out
     assert "Next scheduled actions:" in out
     assert not db.exists()  # check-config never creates the database
 
 
 def test_check_config_reports_a_missing_env_var(capsys: pytest.CaptureFixture[str]) -> None:
-    env = {k: v for k, v in ENV.items() if k != "ODIB_DB"}
+    env = {k: v for k, v in ENV.items() if k != "ODIN_DB"}
     assert main(["check-config"], env) == 2
-    assert "ODIB_DB" in capsys.readouterr().err
+    assert "ODIN_DB" in capsys.readouterr().err
 
 
 def test_check_config_reports_a_bad_config(
@@ -432,13 +432,13 @@ def test_check_config_reports_a_bad_config(
 ) -> None:
     path = tmp_path / "config.toml"
     path.write_text('emoji = ""\n')
-    assert main(["check-config"], {**ENV, "ODIB_CONFIG": str(path)}) == 2
+    assert main(["check-config"], {**ENV, "ODIN_CONFIG": str(path)}) == 2
     assert "emoji" in capsys.readouterr().err
 
 
 def test_invalid_log_level(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["check-config"], {**ENV, "ODIB_LOG_LEVEL": "chatty"}) == 2
-    assert "ODIB_LOG_LEVEL" in capsys.readouterr().err
+    assert main(["check-config"], {**ENV, "ODIN_LOG_LEVEL": "chatty"}) == 2
+    assert "ODIN_LOG_LEVEL" in capsys.readouterr().err
 
 
 def test_list_groups_needs_only_the_signal_env(capsys: pytest.CaptureFixture[str]) -> None:

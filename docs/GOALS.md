@@ -1,7 +1,7 @@
 # ODIN — Open Dinner Invitation Notifier
 
 ODIN is a Signal bot that organises the weekly open Sunday dinner at our flat share. This repo is
-`odib`; the bot's Signal display name is **Odin 🍽️**.
+`odin` (called `odib` until v0.3.0); the bot's Signal display name is **Odin 🍽️**.
 
 Work is tracked in GitHub issues (milestone **MVP** for the first usable version). This document
 holds the goals and the agreed design; issues hold the individual tasks.
@@ -62,15 +62,15 @@ anyone who wants to help cook (explicitly optional — helping is absolutely no 
 
 ## Architecture
 
-- **Python 3.14** package managed with **uv** (src layout, package `odib`).
+- **Python 3.14** package managed with **uv** (src layout, package `odin`).
 - Signal access via **`bbernhard/signal-cli-rest-api`** in `json-rpc` mode, running as a sidecar
   container. ODIN talks to it over HTTP + WebSocket with a thin own client behind an interface; a
   **fake client** implements the same interface for tests.
 - Time is injected (clock interface), so the weekly cycle is tested by time travel, fully offline.
 - **Config:** TOML file mounted into the container (schedule, emoji, templates). **Env vars** for
   deployment-specific values: `SIGNAL_NUMBER`, signal API URL. The group IDs are chosen in
-  `odib setup` and stored in the SQLite state DB; `FLAT_GROUP_ID` / `DINNER_GROUP_ID` env vars
-  override them when set. Until ODIN is set up, `odib run` waits instead of failing.
+  `odin setup` and stored in the SQLite state DB; `FLAT_GROUP_ID` / `DINNER_GROUP_ID` env vars
+  override them when set. Until ODIN is set up, `odin run` waits instead of failing.
 - **Quality gates:** ruff (lint + format), ty (types), pytest. ruff and ty run as **prek** hooks;
   CI runs `prek run --all-files` and pytest on every PR.
 
@@ -82,9 +82,9 @@ anyone who wants to help cook (explicitly optional — helping is absolutely no 
   `release:none` merges publish nothing. We stay on `0.x` until the bot goes live; going live is a
   `release:major` PR → `1.0.0`.
 - Homelab: a **Debian 13 VM on Proxmox** (general container VM, ~1 vCPU / 1.5 GB RAM / 10 GB),
-  **rootless podman** under a dedicated `odib` user with lingering, **Quadlet** units defining a pod
-  (signal-cli-rest-api + odib), **`podman auto-update`** to follow the GHCR image. The Quadlet
-  unit follows the **major tag** (`ghcr.io/emrys-merlin/odib:0` now, `:1` after going live), not
+  **rootless podman** under a dedicated `odin` user with lingering, **Quadlet** units defining a pod
+  (signal-cli-rest-api + odin), **`podman auto-update`** to follow the GHCR image. The Quadlet
+  unit follows the **major tag** (`ghcr.io/emrys-merlin/odin:0` now, `:1` after going live), not
   `:latest`, so auto-update never pulls a breaking release on its own; a major bump means editing
   the unit by hand.
 - The signal-cli data volume holds the account keys — **it must be backed up** (Proxmox VM backup
@@ -95,7 +95,7 @@ anyone who wants to help cook (explicitly optional — helping is absolutely no 
 | Name | What | Where it comes from |
 |------|------|---------------------|
 | `SIGNAL_NUMBER` | Bot phone number, E.164 (`+49…`) | Tim |
-| group IDs (flat, dinner) | Base64 Signal group IDs | Picked in `odib setup` after ODIN is added to both groups; stored in the state DB. Optional override: `FLAT_GROUP_ID`, `DINNER_GROUP_ID` env vars |
+| group IDs (flat, dinner) | Base64 Signal group IDs | Picked in `odin setup` after ODIN is added to both groups; stored in the state DB. Optional override: `FLAT_GROUP_ID`, `DINNER_GROUP_ID` env vars |
 | signal-cli data volume | Account keys | Created at registration |
 | captcha token | One-time, for registration | signalcaptchas.org |
 

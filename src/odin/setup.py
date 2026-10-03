@@ -1,4 +1,4 @@
-"""`odib setup`: the interactive wizard that registers ODIN's number and picks its groups.
+"""`odin setup`: the interactive wizard that registers ODIN's number and picks its groups.
 
 Steps (see issue #25): 0 preflight, 1 captcha, 2 register, 3 code, 4 PIN, 5 profile, 6 hello,
 7 groups, 8 test message, 9 done. Every step first looks at the real state (the Signal API and
@@ -8,7 +8,7 @@ run again later; it continues where it stopped.
 What the wizard remembers lives in the settings table (`SETUP_KEYS`): when a code was requested,
 when the PIN was set (never the PIN itself), when the profile was applied, the operator's number
 and when their reply to the hello arrived, whether the test step was answered, and the chosen
-groups (`odib.app.FLAT_GROUP_KEY` / `DINNER_GROUP_KEY`, which the bot reads).
+groups (`odin.app.FLAT_GROUP_KEY` / `DINNER_GROUP_KEY`, which the bot reads).
 
 `setup_status` is the read-only `--status` view of the same state.
 """
@@ -23,10 +23,10 @@ from typing import Protocol
 
 import httpx
 
-from odib.app import DINNER_GROUP_KEY, FLAT_GROUP_KEY, Source, resolve_account
-from odib.clock import Clock
-from odib.config import Config, Env, Template, is_e164
-from odib.signal import (
+from odin.app import DINNER_GROUP_KEY, FLAT_GROUP_KEY, Source, resolve_account
+from odin.clock import Clock
+from odin.config import Config, Env, Template, is_e164
+from odin.signal import (
     AlreadyRegistered,
     CaptchaRequired,
     DirectMessage,
@@ -40,8 +40,8 @@ from odib.signal import (
     VoiceRequired,
     WrongCode,
 )
-from odib.store import SETUP_LOCK_TTL, Store
-from odib.terminal import Terminal
+from odin.store import SETUP_LOCK_TTL, Store
+from odin.terminal import Terminal
 
 # Settings keys. Times are stored as ISO 8601 (UTC).
 CODE_REQUESTED_KEY = "setup.code_requested_at"
@@ -74,7 +74,7 @@ PIN_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 PIN_LENGTH = 16
 MIN_OWN_PIN_LENGTH = 4
 
-RUN_AGAIN = "Run `odib setup` again to continue; finished steps are skipped."
+RUN_AGAIN = "Run `odin setup` again to continue; finished steps are skipped."
 
 
 class SetupSignal(SignalAdmin, SignalClient, Protocol):
@@ -138,7 +138,7 @@ async def run_setup(
 ) -> int:
     """Run the wizard; returns the exit code (0: ODIN is set up).
 
-    The wizard holds the setup lock for its whole run, so `odib run` neither sends nor consumes
+    The wizard holds the setup lock for its whole run, so `odin run` neither sends nor consumes
     events meanwhile. Strictly the lock is only needed for the hello step: signal-cli-rest-api
     (json-rpc mode) fans every received message out to *all* WebSocket clients of the number
     without waiting, so the bot would see the operator's reply too, and a client that is busy
@@ -149,7 +149,7 @@ async def run_setup(
     token = store.acquire_setup_lock(clock.now())
     if token is None:
         terminal.print(
-            "Another `odib setup` is running right now. Finish that one first. (If it was "
+            "Another `odin setup` is running right now. Finish that one first. (If it was "
             f"killed, its lock expires within {SETUP_LOCK_TTL.seconds // 60} minutes.)"
         )
         return 1
@@ -160,7 +160,7 @@ async def run_setup(
         await asyncio.wait({work, heartbeat}, return_when=asyncio.FIRST_COMPLETED)
         if not work.done():
             terminal.print()
-            terminal.print("Lost the setup lock (did another `odib setup` take over?). Stopping.")
+            terminal.print("Lost the setup lock (did another `odin setup` take over?). Stopping.")
             return 1
         return work.result()
     finally:
@@ -242,7 +242,7 @@ class _Wizard:
         if info.mode != "json-rpc":
             raise SetupExit(
                 f"The Signal API at {url} runs in {info.mode!r} mode; ODIN needs MODE=json-rpc. "
-                "Fix the container's environment and run `odib setup` again."
+                "Fix the container's environment and run `odin setup` again."
             )
         number = self.env.signal_number
         registered = number in await self.admin.list_accounts()
@@ -375,7 +375,7 @@ class _Wizard:
                 raise SetupExit(
                     "This number is still protected by the registration lock (PIN) of a "
                     "previous Signal account. The lock expires 7 days after that account was "
-                    f"last active{remaining}. Run `odib setup` again after that."
+                    f"last active{remaining}. Run `odin setup` again after that."
                 ) from None
             break
         # A new registration means a new account: what was set up for the old one is void.
@@ -421,7 +421,7 @@ class _Wizard:
                 return pin
             self.t.print(
                 "That does not match. Check the saved entry and try again. (Lost it? Press "
-                "Ctrl-C and run `odib setup` again for a new PIN.)"
+                "Ctrl-C and run `odin setup` again for a new PIN.)"
             )
 
     async def own_pin(self) -> str:
@@ -652,7 +652,7 @@ class _Wizard:
             self.t.print(f"{label} {group.id} (from {group.source})")
         self.t.print()
         self.t.print(
-            "✓ ODIN is set up. A running `odib run` notices within 30 s and starts — no restart "
+            "✓ ODIN is set up. A running `odin run` notices within 30 s and starts — no restart "
             "needed."
         )
         self.t.print(
@@ -762,8 +762,8 @@ async def setup_status(
     test = setting(TEST_KEY)
     terminal.print(f"  Test message step: {'answered at ' + local(test) if test else 'not yet'}")
     if store is not None and store.setup_lock_held(clock.now()):
-        terminal.print("  `odib setup` is running right now.")
+        terminal.print("  `odin setup` is running right now.")
     complete = all(ok for ok, _ in rows)
     terminal.print()
-    terminal.print("ODIN is set up." if complete else "Not set up yet — run: odib setup")
+    terminal.print("ODIN is set up." if complete else "Not set up yet — run: odin setup")
     return 0 if complete else 1

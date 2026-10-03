@@ -36,7 +36,7 @@ def is_e164(number: str) -> bool:
 class Env:
     """Deployment-specific values from environment variables.
 
-    The group IDs are optional overrides; normally `odib setup` stores them in the database.
+    The group IDs are optional overrides; normally `odin setup` stores them in the database.
     """
 
     signal_number: str
@@ -86,8 +86,8 @@ def load_env(environ: Mapping[str, str]) -> Env:
         flat_group_id=_optional(environ, "FLAT_GROUP_ID"),
         dinner_group_id=_optional(environ, "DINNER_GROUP_ID"),
         signal_api_url=signal.signal_api_url,
-        config_path=Path(_required(environ, "ODIB_CONFIG")),
-        db_path=Path(_required(environ, "ODIB_DB")),
+        config_path=Path(_required(environ, "ODIN_CONFIG")),
+        db_path=Path(_required(environ, "ODIN_DB")),
     )
 
 
@@ -237,8 +237,8 @@ TEMPLATE_PLACEHOLDERS: dict[str, frozenset[str]] = {
     "cancellation": COMMON_PLACEHOLDERS,  # dinner group, bilingual
     "announcement": COMMON_PLACEHOLDERS,  # dinner group, bilingual
     "tally": COMMON_PLACEHOLDERS | {"count"},  # flat group, German
-    "hello": COMMON_PLACEHOLDERS,  # direct message to the operator during `odib setup`
-    "flat_test": COMMON_PLACEHOLDERS,  # flat group, optional test at the end of `odib setup`
+    "hello": COMMON_PLACEHOLDERS,  # direct message to the operator during `odin setup`
+    "flat_test": COMMON_PLACEHOLDERS,  # flat group, optional test at the end of `odin setup`
 }
 
 
@@ -309,7 +309,7 @@ DEFAULT_PROFILE_NAME = "Odin 🍽️"
 
 @dataclass(frozen=True)
 class Profile:
-    """ODIN's Signal profile, applied by `odib setup`."""
+    """ODIN's Signal profile, applied by `odin setup`."""
 
     name: str
     avatar: Path | None  # an image file; relative paths are resolved against the config's dir

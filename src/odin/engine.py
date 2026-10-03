@@ -25,10 +25,10 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
-from odib.config import Config, WeeklyTime
-from odib.reactions import count_confirmations
-from odib.signal import SignalClient
-from odib.store import Action, MessageKind, Outcome, Store
+from odin.config import Config, WeeklyTime
+from odin.reactions import count_confirmations
+from odin.signal import SignalClient
+from odin.store import Action, MessageKind, Outcome, Store
 
 logger = logging.getLogger(__name__)
 

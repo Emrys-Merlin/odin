@@ -1,7 +1,7 @@
 """Signal access: the client interfaces, their real and fake implementations, and parsing."""
 
-from odib.signal.client import SignalAdmin, SignalClient
-from odib.signal.errors import (
+from odin.signal.client import SignalAdmin, SignalClient
+from odin.signal.errors import (
     AlreadyRegistered,
     CaptchaRequired,
     NotRegistered,
@@ -12,16 +12,16 @@ from odib.signal.errors import (
     VoiceRequired,
     WrongCode,
 )
-from odib.signal.fake import (
+from odin.signal.fake import (
     AdminCall,
     FakeSignalAdmin,
     FakeSignalClient,
     SentDirectMessage,
     SentMessage,
 )
-from odib.signal.models import ApiInfo, DirectMessage, Event, Group, ReactionEvent
-from odib.signal.parsing import group_id_from_internal, parse_direct_message, parse_event
-from odib.signal.rest import RestSignalClient
+from odin.signal.models import ApiInfo, DirectMessage, Event, Group, ReactionEvent
+from odin.signal.parsing import group_id_from_internal, parse_direct_message, parse_event
+from odin.signal.rest import RestSignalClient
 
 __all__ = [
     "AdminCall",
