@@ -1,0 +1,19 @@
+{
+  "envelope": {
+    "source": "+4915100000002",
+    "sourceNumber": "+4915100000002",
+    "sourceUuid": "5c6a3e2b-1f0d-4c8e-9a7b-2d3e4f5a6b7c",
+    "sourceName": "Alex",
+    "sourceDevice": 1,
+    "timestamp": 1760454500000,
+    "serverReceivedTimestamp": 1760454500110,
+    "serverDeliveredTimestamp": 1760454500150,
+    "dataMessage": {
+      "timestamp": 1760454500000,
+      "message": "Ja, das bin ich.",
+      "expiresInSeconds": 0,
+      "viewOnce": false
+    }
+  },
+  "account": "+4915100000001"
+}

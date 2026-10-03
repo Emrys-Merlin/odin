@@ -8,7 +8,8 @@
     "pending_invites": [],
     "pending_requests": [],
     "invite_link": "",
-    "admins": ["+4915100000002"]
+    "admins": ["+4915100000002"],
+    "member": true
   },
   {
     "name": "Sonntagsessen",
@@ -19,6 +20,19 @@
     "pending_invites": [],
     "pending_requests": [],
     "invite_link": "https://signal.group/#CjQKIExample",
-    "admins": ["+4915100000002"]
+    "admins": ["+4915100000002"],
+    "member": true
+  },
+  {
+    "name": "Buchclub",
+    "id": "group.UW05dmF6TkRiSFZpU1c1MmFYUmxaRWR5YjNWd1NXUkdiM0pQWkdsdU1UST0=",
+    "internal_id": "Qm9vazNDbHViSW52aXRlZEdyb3VwSWRGb3JPZGluMTI=",
+    "members": ["+4915100000004"],
+    "blocked": false,
+    "pending_invites": ["+4915100000001"],
+    "pending_requests": [],
+    "invite_link": "",
+    "admins": ["+4915100000004"],
+    "member": false
   }
 ]
