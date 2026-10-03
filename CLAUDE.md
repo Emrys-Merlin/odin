@@ -52,3 +52,12 @@ The prek hook is installed in cloud sessions by `scripts/session-start.sh`.
 
 Cloud sessions have no Signal access and no secrets. Anything that needs the real bot (registration,
 deployment) is written as a runbook in `docs/` for Tim to execute.
+
+Cloud sessions cannot push changes under `.github/workflows/` (the GitHub connection lacks the
+`workflow` scope, so GitHub refuses the push). Do not try. Instead:
+
+1. Commit the workflow change as its own commit(s), separate from everything else.
+2. Export it with `git format-patch` into a `.patch` file and hand that file to Tim (send it in the
+   session and paste it into the PR description, so it survives the container).
+3. Drop those commits from the branch before pushing, and push the rest as usual.
+4. Say in the PR that it needs the patch; Tim applies it to the PR branch locally with `git am`.
