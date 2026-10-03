@@ -290,6 +290,17 @@ class Config:
     schedule: Schedule
     templates: Templates
 
+    def when(self, point: WeeklyTime, week: dt.date) -> dt.datetime:
+        """When `point` happens in the dinner week whose dinner falls on `week`.
+
+        Computed in wall-clock time, so a point keeps its local time across a DST change.
+        """
+        if week.weekday() != self.schedule.dinner.weekday:
+            raise ValueError(f"{week} is not a dinner day ({self.schedule.dinner})")
+        dinner = dt.datetime.combine(week, self.schedule.dinner.time)
+        local = dinner - dt.timedelta(minutes=point.minutes_before(self.schedule.dinner))
+        return local.replace(tzinfo=self.timezone)
+
     def placeholder_values(self) -> dict[str, str]:
         """Values for COMMON_PLACEHOLDERS; message-specific ones (e.g. count) are added later."""
         s = self.schedule

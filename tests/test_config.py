@@ -302,3 +302,30 @@ def test_load_settings(tmp_path: Path) -> None:
     settings = load_settings({**ENV, "ODIB_CONFIG": str(path)})
     assert settings.env.config_path == path
     assert settings.config.emoji == "👍"
+
+
+# --- when ---------------------------------------------------------------------------------------
+
+
+def test_when_places_points_in_the_dinner_week() -> None:
+    c = parse_config(config())
+    berlin = c.timezone
+    sunday = dt.date(2026, 10, 11)
+    assert c.when(c.schedule.flat_ask, sunday) == dt.datetime(2026, 10, 6, 18, 0, tzinfo=berlin)
+    assert c.when(c.schedule.tally, sunday) == dt.datetime(2026, 10, 9, 14, 0, tzinfo=berlin)
+    assert c.when(c.schedule.dinner, sunday) == dt.datetime(2026, 10, 11, 18, 0, tzinfo=berlin)
+
+
+def test_when_keeps_local_time_across_dst() -> None:
+    c = parse_config(config())
+    sunday = dt.date(2026, 10, 25)  # summer time ends at 03:00 that morning
+    deadline = c.when(c.schedule.flat_deadline, sunday)
+    dinner = c.when(c.schedule.dinner, sunday)
+    assert (deadline.hour, deadline.utcoffset()) == (18, dt.timedelta(hours=2))
+    assert (dinner.hour, dinner.utcoffset()) == (18, dt.timedelta(hours=1))
+
+
+def test_when_rejects_a_day_without_dinner() -> None:
+    c = parse_config(config())
+    with pytest.raises(ValueError, match="not a dinner day"):
+        c.when(c.schedule.flat_ask, dt.date(2026, 10, 10))
