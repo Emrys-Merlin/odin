@@ -1,0 +1,25 @@
+{
+  "envelope": {
+    "source": "+4915100000002",
+    "sourceNumber": "+4915100000002",
+    "sourceUuid": "5c6a3e2b-1f0d-4c8e-9a7b-2d3e4f5a6b7c",
+    "sourceName": "Alex",
+    "sourceDevice": 1,
+    "timestamp": 1760454300000,
+    "serverReceivedTimestamp": 1760454300120,
+    "serverDeliveredTimestamp": 1760454300160,
+    "dataMessage": {
+      "timestamp": 1760454300000,
+      "message": "Ich bringe noch jemanden mit!",
+      "expiresInSeconds": 0,
+      "viewOnce": false,
+      "groupInfo": {
+        "groupId": "kDUPwaOoyWrT8vMJ5mB/s8GcFwVv8Gxe2jF3e9mIuO0=",
+        "groupName": "WG",
+        "revision": 7,
+        "type": "DELIVER"
+      }
+    }
+  },
+  "account": "+4915100000001"
+}

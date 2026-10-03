@@ -1,0 +1,27 @@
+{
+  "envelope": {
+    "source": "+4915100000002",
+    "sourceNumber": "+4915100000002",
+    "sourceUuid": "5c6a3e2b-1f0d-4c8e-9a7b-2d3e4f5a6b7c",
+    "sourceName": "Alex",
+    "sourceDevice": 1,
+    "timestamp": 1760454400000,
+    "serverReceivedTimestamp": 1760454400100,
+    "serverDeliveredTimestamp": 1760454400140,
+    "dataMessage": {
+      "timestamp": 1760454400000,
+      "message": null,
+      "expiresInSeconds": 0,
+      "viewOnce": false,
+      "reaction": {
+        "emoji": "👍",
+        "targetAuthor": "+4915100000001",
+        "targetAuthorNumber": "+4915100000001",
+        "targetAuthorUuid": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+        "targetSentTimestamp": 1760454000000,
+        "isRemove": false
+      }
+    }
+  },
+  "account": "+4915100000001"
+}
