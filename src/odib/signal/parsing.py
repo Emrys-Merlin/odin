@@ -4,7 +4,7 @@ import base64
 import json
 from typing import Any
 
-from odib.signal.models import Event, Group, ReactionEvent
+from odib.signal.models import ApiInfo, DirectMessage, Event, Group, ReactionEvent
 
 
 def group_id_from_internal(internal_id: str) -> str:
@@ -23,13 +23,7 @@ def parse_event(raw: str | bytes) -> Event | None:
     Returns ``None`` for anything that is not a group reaction. Raises ``ValueError`` if
     ``raw`` is not valid JSON.
     """
-    data = json.loads(raw)
-    if not isinstance(data, dict):
-        return None
-    if data.get("method") == "receive" and isinstance(data.get("params"), dict):
-        data = data["params"]
-
-    envelope = _dict(data.get("envelope"))
+    envelope = _envelope(raw)
     data_message = _dict(envelope.get("dataMessage"))
     reaction = _dict(data_message.get("reaction"))
     group_info = _dict(data_message.get("groupInfo"))
@@ -63,17 +57,65 @@ def parse_event(raw: str | bytes) -> Event | None:
     )
 
 
+def parse_direct_message(raw: str | bytes) -> DirectMessage | None:
+    """Parse one WebSocket message from ``/v1/receive/{number}`` as a direct text message.
+
+    A direct message is a ``dataMessage`` with text and without ``groupInfo`` and without
+    ``reaction``. Returns ``None`` for anything else. Raises ``ValueError`` if ``raw`` is not
+    valid JSON.
+    """
+    envelope = _envelope(raw)
+    data_message = _dict(envelope.get("dataMessage"))
+    if not data_message or "groupInfo" in data_message or "reaction" in data_message:
+        return None
+
+    text = data_message.get("message")
+    sender = _author(envelope, "source")
+    timestamp = envelope.get("timestamp")
+    if not (isinstance(text, str) and text and sender and isinstance(timestamp, int)):
+        return None
+    return DirectMessage(sender=sender, text=text, timestamp=timestamp)
+
+
 def parse_groups(data: Any) -> list[Group]:
-    """Parse the response of ``GET /v1/groups/{number}``."""
+    """Parse the response of ``GET /v1/groups/{number}``.
+
+    A missing ``member`` field (older API versions) counts as member.
+    """
     return [
-        Group(id=item["id"], internal_id=item["internal_id"], name=item.get("name") or "")
+        Group(
+            id=item["id"],
+            internal_id=item["internal_id"],
+            name=item.get("name") or "",
+            member=bool(item.get("member", True)),
+        )
         for item in data
     ]
+
+
+def parse_about(data: Any) -> ApiInfo:
+    """Parse the response of ``GET /v1/about``."""
+    return ApiInfo(mode=str(data.get("mode") or ""), version=str(data.get("version") or ""))
+
+
+def parse_accounts(data: Any) -> list[str]:
+    """Parse the response of ``GET /v1/accounts``: the registered numbers."""
+    return [item for item in data if isinstance(item, str)]
 
 
 def parse_send_timestamp(data: Any) -> int:
     """Parse the response of ``POST /v2/send``; the API returns the timestamp as a string."""
     return int(data["timestamp"])
+
+
+def _envelope(raw: str | bytes) -> dict[str, Any]:
+    """The ``envelope`` of a receive message, bare or wrapped in a JSON-RPC notification."""
+    data = json.loads(raw)
+    if not isinstance(data, dict):
+        return {}
+    if data.get("method") == "receive" and isinstance(data.get("params"), dict):
+        data = data["params"]
+    return _dict(data.get("envelope"))
 
 
 def _dict(value: object) -> dict[str, Any]:
