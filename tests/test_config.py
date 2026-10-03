@@ -272,17 +272,21 @@ def test_env_default_api_url() -> None:
     assert env.signal_api_url == DEFAULT_SIGNAL_API_URL
 
 
-@pytest.mark.parametrize(
-    "name", ["SIGNAL_NUMBER", "FLAT_GROUP_ID", "DINNER_GROUP_ID", "ODIB_CONFIG", "ODIB_DB"]
-)
+@pytest.mark.parametrize("name", ["SIGNAL_NUMBER", "ODIB_CONFIG", "ODIB_DB"])
 def test_missing_env_var(name: str) -> None:
     with pytest.raises(ConfigError, match=name):
         load_env({k: v for k, v in ENV.items() if k != name})
 
 
 def test_blank_env_var_counts_as_missing() -> None:
-    with pytest.raises(ConfigError, match="FLAT_GROUP_ID"):
-        load_env({**ENV, "FLAT_GROUP_ID": "  "})
+    with pytest.raises(ConfigError, match="ODIB_DB"):
+        load_env({**ENV, "ODIB_DB": "  "})
+
+
+def test_group_ids_are_optional() -> None:
+    env = load_env({k: v for k, v in ENV.items() if not k.endswith("_GROUP_ID")})
+    assert (env.flat_group_id, env.dinner_group_id) == (None, None)
+    assert load_env({**ENV, "FLAT_GROUP_ID": "  "}).flat_group_id is None
 
 
 @pytest.mark.parametrize("number", ["01701234567", "+49 170 1234567", "+0123456789"])

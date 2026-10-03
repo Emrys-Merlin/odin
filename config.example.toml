@@ -1,8 +1,9 @@
 # ODIN config. Copy to config.toml and point ODIB_CONFIG at it.
 #
-# Deployment values (phone number, group IDs, API URL, paths) are NOT in here; they come from
-# env vars: SIGNAL_NUMBER, FLAT_GROUP_ID, DINNER_GROUP_ID, SIGNAL_API_URL (default
-# http://localhost:8080), ODIB_CONFIG, ODIB_DB.
+# Deployment values are NOT in here. Phone number, API URL and paths come from env vars:
+# SIGNAL_NUMBER, SIGNAL_API_URL (default http://localhost:8080), ODIB_CONFIG, ODIB_DB. The group
+# IDs are stored in the database by `odib setup`; FLAT_GROUP_ID / DINNER_GROUP_ID env vars
+# override them when set.
 #
 # Every value below is the default, except the templates, which have no defaults.
 

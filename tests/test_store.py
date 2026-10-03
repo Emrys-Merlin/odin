@@ -4,7 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from odib.store import SCHEMA_VERSION, Action, MessageKind, Outcome, Reaction, Store
+from odib.store import (
+    SCHEMA_VERSION,
+    SETUP_LOCK_TTL,
+    Action,
+    MessageKind,
+    Outcome,
+    Reaction,
+    Store,
+)
 
 BERLIN = timezone(timedelta(hours=2))
 UTC_MINUS_5 = timezone(timedelta(hours=-5))
@@ -170,3 +178,81 @@ def test_upgrade_keeps_old_actions_as_sent(tmp_path: Path) -> None:
     conn.close()
     with Store(path) as store:
         assert store.action_outcome(WEEK, Action.FLAT_ASK) is Outcome.SENT
+
+
+# --- settings and the setup lock -----------------------------------------------------------------
+
+
+def test_settings(store: Store) -> None:
+    assert store.get_setting("flat_group_id") is None
+    store.set_setting("flat_group_id", "group.a=")
+    store.set_setting("flat_group_id", "group.b=")
+    assert store.get_setting("flat_group_id") == "group.b="
+    store.delete_setting("flat_group_id")
+    assert store.get_setting("flat_group_id") is None
+
+
+def test_settings_are_shared_between_connections(tmp_path: Path) -> None:
+    path = tmp_path / "odib.db"
+    with Store(path) as setup, Store(path) as bot:
+        setup.set_setting("dinner_group_id", "group.d=")
+        assert bot.get_setting("dinner_group_id") == "group.d="
+
+
+def test_setup_lock_excludes_a_second_holder(store: Store) -> None:
+    assert not store.setup_lock_held(TUE)
+    token = store.acquire_setup_lock(TUE)
+    assert token is not None
+    assert store.setup_lock_held(TUE)
+    assert store.acquire_setup_lock(TUE + timedelta(seconds=30)) is None
+
+    store.release_setup_lock(token)
+    assert not store.setup_lock_held(TUE)
+    assert store.acquire_setup_lock(TUE) is not None
+
+
+def test_setup_lock_heartbeat_keeps_it_fresh(store: Store) -> None:
+    token = store.acquire_setup_lock(TUE)
+    assert token is not None
+    later = TUE + SETUP_LOCK_TTL - timedelta(seconds=1)
+    assert store.refresh_setup_lock(token, later)
+    assert store.setup_lock_held(later + SETUP_LOCK_TTL - timedelta(seconds=1))
+    assert not store.setup_lock_held(later + SETUP_LOCK_TTL)
+
+
+def test_stale_setup_lock_is_taken_over(store: Store) -> None:
+    old = store.acquire_setup_lock(TUE)
+    assert old is not None
+    later = TUE + SETUP_LOCK_TTL
+    assert not store.setup_lock_held(later)
+    new = store.acquire_setup_lock(later)
+    assert new is not None
+
+    # The old holder can neither renew nor release the lock it lost.
+    assert not store.refresh_setup_lock(old, later)
+    store.release_setup_lock(old)
+    assert store.setup_lock_held(later)
+    assert store.refresh_setup_lock(new, later)
+
+
+def test_setup_lock_across_connections(tmp_path: Path) -> None:
+    path = tmp_path / "odib.db"
+    with Store(path) as setup, Store(path) as bot:
+        token = setup.acquire_setup_lock(TUE)
+        assert token is not None
+        assert bot.setup_lock_held(TUE)
+        assert bot.acquire_setup_lock(TUE) is None
+        setup.release_setup_lock(token)
+        assert not bot.setup_lock_held(TUE)
+
+
+def test_upgrade_from_version_2_adds_settings(tmp_path: Path) -> None:
+    from odib.store import _MIGRATIONS
+
+    path = tmp_path / "odib.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(f"{_MIGRATIONS[0]}; {_MIGRATIONS[1]}; PRAGMA user_version = 2;")
+    conn.close()
+    with Store(path) as store:
+        store.set_setting("flat_group_id", "group.a=")
+        assert store.get_setting("flat_group_id") == "group.a="
