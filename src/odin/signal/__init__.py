@@ -11,6 +11,7 @@ from odin.signal.errors import (
     VoiceNotYetAllowed,
     VoiceRequired,
     WrongCode,
+    WrongPin,
 )
 from odin.signal.fake import (
     AdminCall,
@@ -46,6 +47,7 @@ __all__ = [
     "VoiceNotYetAllowed",
     "VoiceRequired",
     "WrongCode",
+    "WrongPin",
     "group_id_from_internal",
     "parse_direct_message",
     "parse_event",

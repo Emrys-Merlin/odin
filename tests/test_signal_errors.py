@@ -14,6 +14,7 @@ from odin.signal import (
     VoiceNotYetAllowed,
     VoiceRequired,
     WrongCode,
+    WrongPin,
 )
 from odin.signal.errors import error_from_response, raise_for_api_error
 
@@ -38,6 +39,7 @@ def error(case: str) -> SignalApiError:
         ("rate_limited_next_attempt", RateLimited),
         ("rate_limited_429", RateLimited),
         ("registration_locked", RegistrationLocked),
+        ("wrong_pin", WrongPin),
         ("wrong_code", WrongCode),
         ("already_registered", AlreadyRegistered),
         ("not_registered_jsonrpc", NotRegistered),
@@ -62,6 +64,7 @@ def test_every_fixture_case_is_tested() -> None:
         "rate_limited_next_attempt",
         "rate_limited_429",
         "registration_locked",
+        "wrong_pin",
         "wrong_code",
         "already_registered",
         "not_registered_jsonrpc",
@@ -100,6 +103,12 @@ def test_registration_lock_hours_remaining() -> None:
     exc = error("registration_locked")
     assert isinstance(exc, RegistrationLocked)
     assert exc.hours_remaining == 167
+
+
+def test_wrong_pin_tries_remaining() -> None:
+    exc = error("wrong_pin")
+    assert isinstance(exc, WrongPin)
+    assert exc.tries_remaining == 4
 
 
 def test_all_errors_are_signal_api_errors() -> None:

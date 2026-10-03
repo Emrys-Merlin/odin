@@ -53,6 +53,16 @@ class RegistrationLocked(SignalApiError):
         return int(match.group(1)) if match else None
 
 
+class WrongPin(SignalApiError):
+    """Verification with a registration lock PIN failed: the PIN is wrong. ``tries_remaining``
+    until Signal stops accepting PINs for this number."""
+
+    @property
+    def tries_remaining(self) -> int | None:
+        match = re.search(r"tries remaining: (\d+)", self.message)
+        return int(match.group(1)) if match else None
+
+
 class WrongCode(SignalApiError):
     """Verification failed, e.g. the code is wrong or expired."""
 
@@ -75,6 +85,7 @@ _PATTERNS: list[tuple[re.Pattern[str], type[SignalApiError]]] = [
         VoiceNotYetAllowed,
     ),
     (re.compile(r"This number is locked with a pin"), RegistrationLocked),
+    (re.compile(r"Invalid pin, tries remaining"), WrongPin),
     (re.compile(r"Verify error:"), WrongCode),
     (re.compile(r"Account is already registered"), AlreadyRegistered),
     (re.compile(r"Specified account does not exist|User .* is not registered"), NotRegistered),
