@@ -1,6 +1,6 @@
 [project]
 name = "odib"
-version = "0.1.0"
+dynamic = ["version"]
 description = "ODIN — Open Dinner Invitation Notifier: a Signal bot for our weekly open Sunday dinner"
 readme = "README.md"
 license = "MIT"
@@ -25,8 +25,23 @@ dev = [
 ]
 
 [build-system]
-requires = ["uv_build>=0.12.22,<0.13"]
-build-backend = "uv_build"
+requires = ["hatchling>=1.27", "hatch-vcs>=0.5"]
+build-backend = "hatchling.build"
+
+# The version comes from the latest `vX.Y.Z` git tag (see .github/workflows/release.yml). Without
+# git (container build) it comes from SETUPTOOLS_SCM_PRETEND_VERSION_FOR_ODIB.
+[tool.hatch.version]
+source = "vcs"
+# Lets setuptools-scm match the per-package SETUPTOOLS_SCM_PRETEND_VERSION_FOR_ODIB.
+raw-options = { dist_name = "odib" }
+
+[tool.uv]
+# Rebuild the project when a commit or tag changes the version, not only when pyproject.toml does.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { git = { commit = true, tags = true } },
+    { env = "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_ODIB" },
+]
 
 [tool.ruff]
 line-length = 100

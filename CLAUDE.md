@@ -12,6 +12,20 @@ the architecture are in `docs/GOALS.md` — read it before starting an issue.
 - If an issue's description turns out wrong or incomplete, say so in the PR rather than silently
   deviating.
 
+## Release
+
+Every merge to `main` is a release `vX.Y.Z` (git tag, GitHub Release, image on GHCR); the tag is
+the only source of the version. The bump comes from the PR's label — set at most one:
+
+| Label | Bump |
+|---|---|
+| *(none)* | minor (default) |
+| `release:major` | major — reserved for going live (`1.0.0`) and breaking changes after that |
+| `release:patch` | patch — hotfixes |
+| `release:none` | nothing released, no image pushed — docs-only, CI-only, … |
+
+Never create `v*` tags or edit `version` by hand; `.github/workflows/release.yml` does it.
+
 ## Commands
 
 Everything goes through uv; do not use pip or ad-hoc venvs.

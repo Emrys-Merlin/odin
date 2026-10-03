@@ -1,6 +1,11 @@
 # Multi-stage build: uv resolves and installs into /app/.venv in the builder, the runtime stage
 # only gets that venv. Builds with podman and docker:
 #   podman build -f Containerfile -t odib .
+#
+# The package version normally comes from the git tag, but .git is not in the build context. CI
+# passes it in instead:
+#   podman build -f Containerfile --build-arg VERSION=1.2.3 --build-arg REVISION=<sha> -t odib .
+# Without the build args (local builds) the version is the placeholder 0.0.0+unknown.
 
 FROM python:3.14-slim AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /bin/uv
@@ -18,8 +23,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
+# Declared here, not at the top, so a new version does not invalidate the dependency layer.
+ARG VERSION=0.0.0+unknown
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-editable
+    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_ODIB="$VERSION" uv sync --locked --no-editable
 
 
 FROM python:3.14-slim
@@ -35,5 +42,14 @@ ENV PATH="/app/.venv/bin:$PATH" \
 VOLUME ["/config", "/data"]
 USER odib
 WORKDIR /app
+# Last, so a new version only changes the metadata, not the cached layers above.
+ARG VERSION=0.0.0+unknown
+ARG REVISION=unknown
+LABEL org.opencontainers.image.title="odib" \
+      org.opencontainers.image.description="ODIN — Open Dinner Invitation Notifier" \
+      org.opencontainers.image.source="https://github.com/Emrys-Merlin/odib" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="$VERSION" \
+      org.opencontainers.image.revision="$REVISION"
 ENTRYPOINT ["odib"]
 CMD ["run"]

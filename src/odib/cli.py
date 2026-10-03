@@ -11,6 +11,7 @@ from collections.abc import Mapping, Sequence
 
 import httpx
 
+import odib
 from odib.app import resolve_account, run_bot, upcoming_actions
 from odib.clock import Clock, SystemClock
 from odib.config import ConfigError, Settings, load_settings, load_signal_env
@@ -56,6 +57,7 @@ def _parser() -> argparse.ArgumentParser:
         epilog="Configured by env vars: SIGNAL_NUMBER, FLAT_GROUP_ID, DINNER_GROUP_ID, "
         "SIGNAL_API_URL, ODIB_CONFIG, ODIB_DB, ODIB_LOG_LEVEL.",
     )
+    parser.add_argument("--version", action="version", version=odib.__version__)
     commands = parser.add_subparsers(dest="command", required=True, metavar="command")
     commands.add_parser("run", help="run the bot until SIGTERM or SIGINT")
     commands.add_parser(
