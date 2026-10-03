@@ -1,0 +1,29 @@
+# Rejects PRs with more than one (or an unknown) release:* label. The release workflow reads the
+# label after the merge; see the "Release" section in CLAUDE.md.
+name: Release label
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: At most one known release label
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          release_labels="$(jq -r '.[] | select(startswith("release:"))' <<<"$LABELS")"
+          echo "release labels: ${release_labels:-(none) -> minor release}"
+          for label in $release_labels; do
+            case "$label" in
+              release:major | release:patch | release:none) ;;
+              *) echo "::error::Unknown release label $label" && exit 1 ;;
+            esac
+          done
+          if [ "$(grep -c . <<<"$release_labels")" -gt 1 ]; then
+            echo "::error::Conflicting release labels: $(echo $release_labels)" && exit 1
+          fi

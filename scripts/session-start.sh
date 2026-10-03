@@ -8,9 +8,9 @@ cd "${CLAUDE_PROJECT_DIR:-.}"
 export PATH="$HOME/.local/bin:$PATH"
 [ -n "${CLAUDE_ENV_FILE:-}" ] && echo "export PATH=\"$HOME/.local/bin:\$PATH\"" >> "$CLAUDE_ENV_FILE"
 
-# The cloud image ships an old uv (0.8.x) that neither knows the final Python 3.14 nor matches
-# our uv_build pin. The astral.sh installer and `uv self update` are blocked by the proxy, but
-# PyPI works, so install uv as a uv tool from there.
+# The cloud image ships an old uv (0.8.x) that does not know the final Python 3.14. The astral.sh
+# installer and `uv self update` are blocked by the proxy, but PyPI works, so install uv as a uv
+# tool from there.
 uv_is_current() {
   command -v uv >/dev/null || return 1
   local version

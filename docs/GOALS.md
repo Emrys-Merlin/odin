@@ -74,11 +74,17 @@ anyone who wants to help cook (explicitly optional — helping is absolutely no 
 
 ## Deployment
 
-- CI builds the container image on `main` and pushes it to **GHCR** (public package; it contains
-  no secrets).
+- Every merge to `main` is a semver release: CI tags `vX.Y.Z` (bump from the PR's `release:*`
+  label, see `CLAUDE.md`), creates a GitHub Release and pushes the container image to **GHCR**
+  (public package; it contains no secrets) as `X.Y.Z`, `X.Y`, `X`, `latest` and the commit SHA.
+  `release:none` merges publish nothing. We stay on `0.x` until the bot goes live; going live is a
+  `release:major` PR → `1.0.0`.
 - Homelab: a **Debian 13 VM on Proxmox** (general container VM, ~1 vCPU / 1.5 GB RAM / 10 GB),
   **rootless podman** under a dedicated `odib` user with lingering, **Quadlet** units defining a pod
-  (signal-cli-rest-api + odib), **`podman auto-update`** to follow the GHCR image.
+  (signal-cli-rest-api + odib), **`podman auto-update`** to follow the GHCR image. The Quadlet
+  unit follows the **major tag** (`ghcr.io/emrys-merlin/odib:0` now, `:1` after going live), not
+  `:latest`, so auto-update never pulls a breaking release on its own; a major bump means editing
+  the unit by hand.
 - The signal-cli data volume holds the account keys — **it must be backed up** (Proxmox VM backup
   covers it). Losing it means re-registering the number.
 

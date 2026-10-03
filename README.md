@@ -26,8 +26,10 @@ Logs go to stdout; set the level with `ODIB_LOG_LEVEL` (default `INFO`).
 
 ## Container image
 
-`podman build -f Containerfile -t odib .` (docker works too). CI publishes
-`ghcr.io/emrys-merlin/odib` with tags `latest` and the commit SHA on every push to `main`. The
+`podman build -f Containerfile -t odib .` (docker works too; without `--build-arg VERSION=…` the
+image reports version `0.0.0+unknown`). Every merge to `main` is a release `vX.Y.Z`, and CI
+publishes `ghcr.io/emrys-merlin/odib` with tags `X.Y.Z`, `X.Y`, `X`, `latest` and the commit SHA;
+deployments follow the major tag (`:0`). `odib --version` prints the version. The
 image presets `ODIB_CONFIG=/config/config.toml` and `ODIB_DB=/data/odib.db`; mount `/config` and
 `/data` as volumes and pass the other env vars at run time.
 

@@ -1,0 +1,132 @@
+# Builds and smoke-tests the container image on every PR and push. On a push to main it also cuts
+# a release: computes the next version from the merged PR's release:* label (scripts/release_plan.py),
+# pushes the tag vX.Y.Z, creates a GitHub Release and pushes the image to GHCR.
+#
+# All of this is one workflow on purpose: a tag pushed with GITHUB_TOKEN does not trigger other
+# workflows, so an `on: push: tags` workflow would never run.
+name: Release
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Releases on main run one at a time and are never cancelled, so two quick merges cannot compute
+# the same version. (GitHub keeps only the newest pending run per group; the commit of a run
+# dropped that way is included in the next release, see release_plan.py.) PR builds cancel
+# superseded runs.
+concurrency:
+  group: ${{ github.event_name == 'push' && 'release' || format('image-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: ghcr.io/emrys-merlin/odib
+
+jobs:
+  labels:
+    name: Ensure release labels exist
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - run: |
+          gh label create release:major --force --color B60205 \
+            --description "Merging this PR releases a new major version"
+          gh label create release:patch --force --color FBCA04 \
+            --description "Merging this PR releases a patch version (hotfix)"
+          gh label create release:none --force --color CCCCCC \
+            --description "Merging this PR releases nothing: no tag, no GitHub Release, no image"
+
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # tag + GitHub Release
+      packages: write # GHCR
+      pull-requests: read # labels of the merged PR
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # all tags, to find the latest release
+
+      - name: Plan release
+        id: plan
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/release_plan.py
+
+      - name: Version
+        id: version
+        env:
+          RELEASE: ${{ steps.plan.outputs.release }}
+          RELEASE_VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          if [ "$RELEASE" = true ]; then
+            version="$RELEASE_VERSION"
+          else
+            # PR builds and release:none merges: a dev version that is never published.
+            version="0.0.0+g${GITHUB_SHA::7}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Image version: $version"
+
+      # podman ships with the ubuntu runner; building with it is the same path as on the homelab.
+      - name: Build
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          podman build -f Containerfile \
+            --build-arg VERSION="$VERSION" --build-arg REVISION="$GITHUB_SHA" \
+            -t "$IMAGE:$GITHUB_SHA" .
+
+      - name: Smoke test
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          podman run --rm "$IMAGE:$GITHUB_SHA" --help
+          actual="$(podman run --rm "$IMAGE:$GITHUB_SHA" --version)"
+          echo "odib --version: $actual"
+          [ "$actual" = "$VERSION" ] || { echo "expected $VERSION" >&2; exit 1; }
+
+      - name: Tag
+        if: steps.plan.outputs.create_tag == 'true'
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "v$VERSION" "$GITHUB_SHA"
+          git push origin "v$VERSION"
+
+      - name: GitHub Release
+        if: steps.plan.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          # Skipped when a re-run finds the release already there.
+          gh release view "v$VERSION" >/dev/null 2>&1 ||
+            gh release create "v$VERSION" --verify-tag --generate-notes --title "v$VERSION"
+
+      - name: Push image
+        if: steps.plan.outputs.release == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          echo "$GITHUB_TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          major="${VERSION%%.*}"
+          minor="${VERSION%.*}"
+          for tag in "$VERSION" "$minor" "$major" latest "$GITHUB_SHA"; do
+            if [ "$tag" != "$GITHUB_SHA" ]; then
+              podman tag "$IMAGE:$GITHUB_SHA" "$IMAGE:$tag"
+            fi
+            podman push "$IMAGE:$tag"
+          done
