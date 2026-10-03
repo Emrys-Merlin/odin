@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from odib.store import SCHEMA_VERSION, Action, MessageKind, Reaction, Store
+from odib.store import SCHEMA_VERSION, Action, MessageKind, Outcome, Reaction, Store
 
 BERLIN = timezone(timedelta(hours=2))
 UTC_MINUS_5 = timezone(timedelta(hours=-5))
@@ -34,6 +34,26 @@ def test_actions_are_per_week_and_kind(store: Store) -> None:
     store.record_action(WEEK, Action.FLAT_ASK, TUE)
     assert not store.has_action(WEEK, Action.NUDGE)
     assert not store.has_action(WEEK + timedelta(weeks=1), Action.FLAT_ASK)
+
+
+def test_action_outcome(store: Store) -> None:
+    assert store.action_outcome(WEEK, Action.NUDGE) is None
+    store.record_action(WEEK, Action.FLAT_ASK, TUE)
+    store.record_action(WEEK, Action.NUDGE, TUE, Outcome.SKIPPED)
+    assert store.action_outcome(WEEK, Action.FLAT_ASK) is Outcome.SENT
+    assert store.action_outcome(WEEK, Action.NUDGE) is Outcome.SKIPPED
+    assert store.has_action(WEEK, Action.NUDGE)
+
+
+def test_transaction_rolls_back_on_error(store: Store) -> None:
+    with pytest.raises(RuntimeError), store.transaction():
+        store.record_action(WEEK, Action.FLAT_ASK, TUE)
+        raise RuntimeError
+    assert not store.has_action(WEEK, Action.FLAT_ASK)
+
+    with store.transaction():
+        store.record_action(WEEK, Action.FLAT_ASK, TUE)
+    assert store.has_action(WEEK, Action.FLAT_ASK)
 
 
 def test_naive_datetimes_are_rejected(store: Store) -> None:
@@ -135,3 +155,18 @@ def test_newer_schema_is_refused(tmp_path: Path) -> None:
     conn.close()
     with pytest.raises(RuntimeError, match="newer"):
         Store(path)
+
+
+def test_upgrade_keeps_old_actions_as_sent(tmp_path: Path) -> None:
+    from odib.store import _MIGRATIONS
+
+    path = tmp_path / "odib.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(f"{_MIGRATIONS[0]}; PRAGMA user_version = 1;")
+    conn.execute(
+        "INSERT INTO actions VALUES (?, ?, ?)", (WEEK.isoformat(), "flat_ask", TUE.isoformat())
+    )
+    conn.commit()
+    conn.close()
+    with Store(path) as store:
+        assert store.action_outcome(WEEK, Action.FLAT_ASK) is Outcome.SENT

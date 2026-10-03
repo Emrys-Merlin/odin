@@ -13,6 +13,8 @@ how incoming reactions refer to their target message.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from enum import StrEnum
@@ -28,6 +30,13 @@ class Action(StrEnum):
     ANNOUNCEMENT = "announcement"
     CANCELLATION = "cancellation"
     TALLY = "tally"
+
+
+class Outcome(StrEnum):
+    """What became of a recorded action."""
+
+    SENT = "sent"
+    SKIPPED = "skipped"  # deliberately not sent: too late, or not needed (e.g. no nudge)
 
 
 class MessageKind(StrEnum):
@@ -82,6 +91,9 @@ _MIGRATIONS: tuple[str, ...] = (
             REFERENCES messages (author, timestamp) ON DELETE CASCADE
     );
     """,
+    """
+    ALTER TABLE actions ADD COLUMN outcome TEXT NOT NULL DEFAULT 'sent';
+    """,
 )
 
 SCHEMA_VERSION = len(_MIGRATIONS)
@@ -121,16 +133,34 @@ class Store:
             # executescript commits on its own, so wrap the migration explicitly.
             self._conn.executescript(f"BEGIN; {script}; PRAGMA user_version = {target}; COMMIT;")
 
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """Apply the writes inside the block all together or not at all."""
+        self._conn.execute("BEGIN")
+        try:
+            yield
+        except BaseException:
+            self._conn.execute("ROLLBACK")
+            raise
+        self._conn.execute("COMMIT")
+
     # Actions
 
-    def record_action(self, week: date, action: Action, performed_at: datetime) -> bool:
-        """Record that ``action`` was performed for ``week``.
+    def record_action(
+        self,
+        week: date,
+        action: Action,
+        performed_at: datetime,
+        outcome: Outcome = Outcome.SENT,
+    ) -> bool:
+        """Record that ``action`` was performed (or deliberately skipped) for ``week``.
 
-        Returns False (and keeps the original timestamp) if it was already recorded.
+        Returns False (and keeps the original record) if it was already recorded.
         """
         cursor = self._conn.execute(
-            "INSERT OR IGNORE INTO actions (week, action, performed_at) VALUES (?, ?, ?)",
-            (week.isoformat(), action.value, _utc(performed_at)),
+            "INSERT OR IGNORE INTO actions (week, action, performed_at, outcome)"
+            " VALUES (?, ?, ?, ?)",
+            (week.isoformat(), action.value, _utc(performed_at), outcome.value),
         )
         return cursor.rowcount == 1
 
@@ -147,6 +177,14 @@ class Store:
             (week.isoformat(), action.value),
         ).fetchone()
         return None if row is None else datetime.fromisoformat(row[0])
+
+    def action_outcome(self, week: date, action: Action) -> Outcome | None:
+        """Whether ``action`` was sent or skipped for ``week``; None if not recorded yet."""
+        row = self._conn.execute(
+            "SELECT outcome FROM actions WHERE week = ? AND action = ?",
+            (week.isoformat(), action.value),
+        ).fetchone()
+        return None if row is None else Outcome(row[0])
 
     # Tracked messages
 
