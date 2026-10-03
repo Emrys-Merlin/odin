@@ -315,7 +315,12 @@ def test_load_settings(tmp_path: Path) -> None:
 
 def test_profile_defaults() -> None:
     profile = parse_config(config()).profile
-    assert (profile.name, profile.avatar) == ("Odin 🍽️", None)
+    assert (profile.name, profile.avatar, profile.about) == ("Odin 🍽️", None, None)
+
+
+@pytest.mark.parametrize(("about", "expected"), [(" Sonntagsessen ", "Sonntagsessen"), ("", "")])
+def test_profile_about(about: str, expected: str) -> None:
+    assert parse_config(config(profile={"about": about})).profile.about == expected
 
 
 def test_profile_avatar_resolves_against_the_config_dir(tmp_path: Path) -> None:
@@ -330,7 +335,9 @@ def test_profile_avatar_must_exist(tmp_path: Path) -> None:
         parse_config(config(profile={"avatar": "missing.png"}), base_dir=tmp_path)
 
 
-@pytest.mark.parametrize("profile", [{"name": ""}, {"name": 3}, {"nick": "Odin"}, {"avatar": 1}])
+@pytest.mark.parametrize(
+    "profile", [{"name": ""}, {"name": 3}, {"nick": "Odin"}, {"avatar": 1}, {"about": 1}]
+)
 def test_invalid_profile(profile: dict[str, Any]) -> None:
     with pytest.raises(ConfigError, match="profile"):
         parse_config(config(profile=profile))

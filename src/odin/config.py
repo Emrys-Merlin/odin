@@ -313,23 +313,29 @@ class Profile:
 
     name: str
     avatar: Path | None  # an image file; relative paths are resolved against the config's dir
+    about: str | None = None  # None leaves Signal's about text as it is; "" clears it
 
 
 def _parse_profile(raw: object, base_dir: Path) -> Profile:
     table = _table(raw, "profile")
-    _reject_unknown(table, {"name", "avatar"}, "profile")
+    _reject_unknown(table, {"name", "avatar", "about"}, "profile")
     name = table.get("name", DEFAULT_PROFILE_NAME)
     if not isinstance(name, str) or not name.strip():
         raise ConfigError(f"profile.name: must be a non-empty string, got {name!r}")
+    about = table.get("about")
+    if about is not None:
+        if not isinstance(about, str):
+            raise ConfigError(f"profile.about: must be a string, got {about!r}")
+        about = about.strip()
     avatar = table.get("avatar")
     if avatar is None:
-        return Profile(name=name.strip(), avatar=None)
+        return Profile(name=name.strip(), avatar=None, about=about)
     if not isinstance(avatar, str) or not avatar.strip():
         raise ConfigError(f"profile.avatar: must be a file path, got {avatar!r}")
     path = base_dir / avatar.strip()
     if not path.is_file():
         raise ConfigError(f"profile.avatar: no such file {path}")
-    return Profile(name=name.strip(), avatar=path)
+    return Profile(name=name.strip(), avatar=path, about=about)
 
 
 # --- Config -------------------------------------------------------------------------------------

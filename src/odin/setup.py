@@ -459,10 +459,14 @@ class _Wizard:
                 avatar = profile.avatar.read_bytes()
             except OSError as e:
                 raise SetupExit(f"Cannot read the avatar {profile.avatar}: {e}") from None
-        await self.admin.update_profile(profile.name, avatar)
+        await self.admin.update_profile(profile.name, avatar, profile.about)
         self.store.set_setting(PROFILE_KEY, self.clock.now().isoformat())
         with_avatar = f" with the picture {profile.avatar.name}" if profile.avatar else ""
         self.t.print(f"✓ Profile name set to {profile.name}{with_avatar}.")
+        if profile.about:
+            self.t.print(f"✓ About text set to “{profile.about}”.")
+        elif profile.about is not None:
+            self.t.print("✓ About text cleared.")
 
     # Step 6
 

@@ -39,6 +39,8 @@ name = "Odin 🍽️"
 # Optional profile picture (PNG or JPEG). A relative path is resolved against this file's
 # directory, e.g. avatar = "odin.png" next to config.toml.
 # avatar = "odin.png"
+# Optional about text, shown under the name. Leave it out to keep what Signal has; "" clears it.
+# about = "Ich organisiere das Sonntagsessen · I organise the Sunday dinner"
 
 # Message texts. Placeholders (times as HH:MM):
 #   {emoji} {deadline} {rsvp_by} {cook_time} {dinner_time}   — in every template

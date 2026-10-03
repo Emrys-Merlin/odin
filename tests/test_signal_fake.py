@@ -99,11 +99,11 @@ def test_admin_defaults_succeed_and_are_recorded() -> None:
         await fake.verify("123456")
         assert await fake.list_accounts() == [NUMBER]
         await fake.set_pin("4711")
-        await fake.update_profile("Odin 🍽️", b"png")
+        await fake.update_profile("Odin 🍽️", b"png", "Sonntagsessen")
 
     asyncio.run(scenario())
     assert fake.pin == "4711"
-    assert fake.profile == ("Odin 🍽️", b"png")
+    assert fake.profile == ("Odin 🍽️", b"png", "Sonntagsessen")
     assert fake.calls == [
         AdminCall("about"),
         AdminCall("list_accounts"),
@@ -111,7 +111,7 @@ def test_admin_defaults_succeed_and_are_recorded() -> None:
         AdminCall("verify", {"code": "123456", "pin": None}),
         AdminCall("list_accounts"),
         AdminCall("set_pin", {"pin": "4711"}),
-        AdminCall("update_profile", {"name": "Odin 🍽️", "avatar": b"png"}),
+        AdminCall("update_profile", {"name": "Odin 🍽️", "avatar": b"png", "about": "Sonntagsessen"}),
     ]
     assert fake.calls_to("list_accounts") == [AdminCall("list_accounts")] * 2
 
