@@ -288,23 +288,16 @@ def test_already_registered_skips_to_the_pin(store: Store, clock: FixedClock) ->
     assert "Step 1/9" not in terminal.text
 
 
-def test_reregister_needs_confirmation(store: Store, clock: FixedClock) -> None:
-    admin = admin_with(accounts=[NUMBER])
-    code, terminal = run(admin, store, clock, ["yes"], SetupOptions(reregister=True))
-    assert code == 1
-    assert "Not confirmed — nothing changed." in terminal.text
-    assert calls(admin, "register") == []
-
-
-def test_reregister_explains_that_the_api_cannot_force_it(store: Store, clock: FixedClock) -> None:
-    admin = admin_with(accounts=[NUMBER])
+def test_registered_between_preflight_and_register_is_explained(
+    store: Store, clock: FixedClock
+) -> None:
+    admin = admin_with()
     admin.script("register", AlreadyRegistered(400, "Account is already registered"))
-    code, terminal = run(
-        admin, store, clock, ["reregister", CAPTCHA], SetupOptions(reregister=True)
-    )
+    code, terminal = run(admin, store, clock, [CAPTCHA])
     assert code == 1
     assert len(calls(admin, "register")) == 1
     assert "cannot force a new registration" in terminal.text
+    assert "signal-registration.md" in terminal.text
 
 
 # --- steps 1-3: captcha, register, code ---------------------------------------------------------
@@ -769,6 +762,13 @@ def test_status_cannot_be_combined(capsys: pytest.CaptureFixture[str]) -> None:
         main(["setup", "--status", "--pin"], ENV_VARS)
     assert exit.value.code == 2
     assert "--status cannot be combined" in capsys.readouterr().err
+
+
+def test_there_is_no_reregister_option(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exit:
+        main(["setup", "--reregister"], ENV_VARS)
+    assert exit.value.code == 2
+    assert "unrecognized arguments: --reregister" in capsys.readouterr().err
 
 
 def test_redo_rejects_unknown_steps(capsys: pytest.CaptureFixture[str]) -> None:

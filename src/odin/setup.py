@@ -52,8 +52,8 @@ HELLO_KEY = "setup.hello_reply_at"
 TEST_KEY = "setup.test_answered_at"
 SETUP_KEYS = (CODE_REQUESTED_KEY, PIN_SET_KEY, PROFILE_KEY, OPERATOR_KEY, HELLO_KEY, TEST_KEY)
 
-# Steps that `--redo` can repeat although they are done. Registration has `--reregister`, and
-# the profile is applied on every run anyway.
+# Steps that `--redo` can repeat although they are done. Registration cannot be repeated (the
+# REST API cannot re-register an account), and the profile is applied on every run anyway.
 REDO_STEPS = ("pin", "hello", "groups", "test")
 
 CAPTCHA_URL = "https://signalcaptchas.org/registration/generate.html"
@@ -83,7 +83,6 @@ class SetupSignal(SignalAdmin, SignalClient, Protocol):
 
 @dataclass(frozen=True)
 class SetupOptions:
-    reregister: bool = False  # do steps 1-3 even though the account is registered
     own_pin: bool = False  # ask for a PIN instead of generating one; also re-sets a set PIN
     redo: frozenset[str] = field(default_factory=frozenset)  # subset of REDO_STEPS
 
@@ -203,7 +202,7 @@ class _Wizard:
     async def run(self) -> int:
         try:
             registered = await self.preflight()
-            if not registered or await self.confirm_reregister():
+            if not registered:
                 await self.register()
             await self.pin()
             await self.profile()
@@ -247,27 +246,11 @@ class _Wizard:
         number = self.env.signal_number
         registered = number in await self.admin.list_accounts()
         self.t.print(f"Signal API {url} is up (json-rpc, version {info.version}).")
-        if registered and not self.options.reregister:
-            self.t.print(
-                f"✓ {number} is already registered — skipping to step 4. (Never registering "
-                "it again replaces ODIN's keys; use --reregister if you really mean that.)"
-            )
-        elif not registered:
+        if registered:
+            self.t.print(f"✓ {number} is already registered — skipping to step 4.")
+        else:
             self.t.print(f"{number} is not registered yet.")
         return registered
-
-    async def confirm_reregister(self) -> bool:
-        """With --reregister on a registered number: True if the operator confirms."""
-        if not self.options.reregister:
-            return False
-        self.t.print(
-            f"{self.env.signal_number} is registered. Registering it again replaces ODIN's "
-            "account keys; groups may have to be set up again."
-        )
-        answer = await self.t.prompt("Type 'reregister' to do it anyway: ")
-        if answer.strip() != "reregister":
-            raise SetupExit("Not confirmed — nothing changed.")
-        return True
 
     # Steps 1-3
 
@@ -329,7 +312,8 @@ class _Wizard:
                     "Signal says the account is already registered. signal-cli-rest-api cannot "
                     "force a new registration of an existing account; to really start over, "
                     "ODIN's account data would have to be removed from the signal-cli volume "
-                    "first (this throws away its keys)."
+                    'first (this throws away its keys). See "What the wizard cannot do" in '
+                    "docs/runbooks/signal-registration.md."
                 ) from None
             captcha = await self.captcha()
         self.store.set_setting(CODE_REQUESTED_KEY, self.clock.now().isoformat())

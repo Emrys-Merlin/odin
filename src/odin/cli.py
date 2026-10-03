@@ -38,7 +38,7 @@ def main(
     terminal = terminal or ConsoleTerminal()
     parser = _parser()
     args = parser.parse_args(argv)
-    if args.command == "setup" and args.status and (args.reregister or args.pin or args.redo):
+    if args.command == "setup" and args.status and (args.pin or args.redo):
         parser.error("setup --status cannot be combined with other options")
     try:
         _setup_logging(environ)
@@ -88,11 +88,6 @@ def _parser() -> argparse.ArgumentParser:
         "--status",
         action="store_true",
         help="only show which steps are done, change nothing; exit code 0 when fully set up",
-    )
-    setup.add_argument(
-        "--reregister",
-        action="store_true",
-        help="register the number again although it is registered (asks for confirmation)",
     )
     setup.add_argument(
         "--pin",
@@ -162,9 +157,7 @@ async def _setup(
                 return await setup_status(client, None, settings.config, env, terminal, clock)
             with Store(env.db_path) as store:
                 return await setup_status(client, store, settings.config, env, terminal, clock)
-        options = SetupOptions(
-            reregister=args.reregister, own_pin=args.pin, redo=frozenset(args.redo)
-        )
+        options = SetupOptions(own_pin=args.pin, redo=frozenset(args.redo))
         with Store(env.db_path) as store:
             return await run_setup(client, store, settings.config, env, terminal, clock, options)
     finally:

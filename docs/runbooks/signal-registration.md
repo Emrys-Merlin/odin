@@ -209,7 +209,6 @@ backup or when ODIN has gone quiet.
 | `odin setup --redo hello` | Do the hello again, e.g. with another operator number. |
 | `odin setup --redo groups` | Choose the flat and dinner group again, e.g. after a group was replaced. |
 | `odin setup --redo test` | Ask about the test message again. |
-| `odin setup --reregister` | Register the number again although it is registered (asks you to type `reregister`). See below — usually this cannot work. |
 
 `--redo` can be given several times (`--redo hello --redo groups`). All commands use
 `podman exec -it odin …`.
@@ -218,7 +217,8 @@ backup or when ODIN has gone quiet.
 
 - **Force a new registration.** signal-cli-rest-api does not pass signal-cli's `reregister`
   flag, so registering an account that is still in the volume fails with *Signal says the
-  account is already registered*. `--reregister` therefore only gets as far as that message.
+  account is already registered*. The wizard therefore skips registration for a registered
+  number and has no option to force it.
   Really starting over means removing ODIN's account data from the Signal volume first, which
   throws away its keys — make an extra backup copy before (see below), and do not do this while
   the registration lock might still hold: see the next point.
