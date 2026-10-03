@@ -336,12 +336,18 @@ podman exec odin odin --version
   podman volume rm odin-signal
   podman volume create odin-signal
   podman volume import odin-signal odin-signal-2026-10-04.tar
+  podman unshare chown 1000:1000 "$(podman volume inspect -f '{{.Mountpoint}}' odin-signal)"
   systemctl --user start odin-pod
   ```
 
-  The same works for `odin-data` (the database: what was sent, reactions, chosen groups).
-  Without it, ODIN would ask for the groups again (`odin setup`) and could repeat this week's
-  messages.
+  The tarball does not record who owns the volume's root directory, so after the import it
+  belongs to root inside the containers. The `chown` gives it back to uid 1000, which both
+  containers run as; without it, creating a new file at the top of the volume would fail with
+  *Permission denied*. Everything inside the volume keeps the owner from the tarball.
+
+  The same works for `odin-data` (the database: what was sent, reactions, chosen groups),
+  including the `chown`. Without it, ODIN would ask for the groups again (`odin setup`) and could
+  repeat this week's messages.
 
 **Never run a second copy of the deployment** (e.g. a restored VM next to the original): two
 signal-cli instances on the same account break it.
