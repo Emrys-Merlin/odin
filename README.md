@@ -49,5 +49,8 @@ image presets `ODIN_CONFIG=/config/config.toml` and `ODIN_DB=/data/odin.db`; mou
 
 One-time and operational tasks that need the real bot are in [docs/runbooks](docs/runbooks):
 
+- [deploy.md](docs/runbooks/deploy.md) — run ODIN on a Debian 13 VM on Proxmox with rootless
+  podman and the Quadlet units in [deploy/quadlet](deploy/quadlet): install, auto-update,
+  upgrade, rollback, restore from backup.
 - [signal-registration.md](docs/runbooks/signal-registration.md) — set up ODIN's Signal account
   with `odin setup`: what each step asks, `--status`, the options, backups and troubleshooting.

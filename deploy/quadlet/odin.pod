@@ -1,0 +1,17 @@
+# The pod that holds ODIN's two containers: signal-api and odin. Containers in a pod share one
+# network namespace, so odin reaches the Signal API at http://localhost:8080 and nothing is
+# published to the VM's network.
+#
+# Quadlet turns this file into odin-pod.service. Needs podman >= 5.0 (Debian 13 has 5.4).
+# Install: see docs/runbooks/deploy.md.
+
+[Unit]
+Description=ODIN pod (Signal API + bot)
+
+[Pod]
+# Not "odin": pods and containers share one name space in podman, and the bot container is
+# called odin so that `podman exec -it odin odin setup` works.
+PodName=odin-pod
+
+[Install]
+WantedBy=default.target
