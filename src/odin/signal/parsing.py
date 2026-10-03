@@ -104,7 +104,13 @@ def parse_accounts(data: Any) -> list[str]:
 
 
 def parse_send_timestamp(data: Any) -> int:
-    """Parse the response of ``POST /v2/send``; the API returns the timestamp as a string."""
+    """Parse the response of ``POST /v2/send``; the API returns the timestamp as a string.
+
+    Newer API versions return a list with one response per recipient batch; ODIN always sends
+    to a single recipient, so the first entry carries the timestamp.
+    """
+    if isinstance(data, list):
+        data = data[0]
     return int(data["timestamp"])
 
 

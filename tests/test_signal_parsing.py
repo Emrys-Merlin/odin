@@ -99,6 +99,11 @@ def test_parse_send_timestamp() -> None:
     assert parse_send_timestamp(json.loads(fixture("send_response.json"))) == 1760454000000
 
 
+def test_parse_send_timestamp_from_list() -> None:
+    # signal-cli-rest-api returns one response per recipient batch since 6a225e6 (2026-07).
+    assert parse_send_timestamp(json.loads(fixture("send_response_list.json"))) == 1760454000000
+
+
 def test_parse_groups_without_member_field_counts_as_member() -> None:
     data = json.loads(fixture("groups.json"))
     for item in data:
