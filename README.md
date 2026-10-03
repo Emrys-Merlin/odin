@@ -26,8 +26,8 @@ and dinner group are stored in the database by `odin setup`; the env vars `FLAT_
   hello with the operator and lets them pick the flat and dinner group. Every finished step is
   skipped, so it can be stopped and run again at any time. `--status` only shows what is done
   (exit code 0 when fully set up; usable as a health check), `--pin` sets an own PIN,
-  `--redo pin|hello|groups|test` repeats a finished step, `--reregister` registers the number
-  again. While it runs, `odin run` pauses.
+  `--redo pin|hello|groups|test` repeats a finished step. It never registers an already
+  registered number again (see the registration runbook). While it runs, `odin run` pauses.
 - `odin list-groups` — print the groups ODIN is in with their IDs (for debugging, or for the
   `FLAT_GROUP_ID` / `DINNER_GROUP_ID` overrides). Needs only `SIGNAL_NUMBER` and `SIGNAL_API_URL`.
 - `odin check-config` — validate the config file and env vars, show the group IDs and where they
