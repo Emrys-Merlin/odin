@@ -1,0 +1,4 @@
+# Named volume for ODIN's state database (odin.db). Becomes odin-data-volume.service.
+
+[Volume]
+VolumeName=odin-data

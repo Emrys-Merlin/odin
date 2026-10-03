@@ -1,0 +1,23 @@
+# bbernhard/signal-cli-rest-api in json-rpc mode: ODIN's connection to Signal. Becomes
+# signal-api.service. Its data volume holds ODIN's Signal account keys — it must be backed up.
+
+[Unit]
+Description=ODIN Signal API (signal-cli-rest-api)
+
+[Container]
+ContainerName=signal-api
+Pod=odin.pod
+Image=docker.io/bbernhard/signal-cli-rest-api:latest
+# signal-cli must stay current: Signal stops accepting old clients after a few months.
+AutoUpdate=registry
+Environment=MODE=json-rpc
+Volume=odin-signal.volume:/home/.local/share/signal-cli
+
+[Service]
+Restart=always
+RestartSec=10
+# The first start pulls the image; the default 90 s can be too short for that.
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

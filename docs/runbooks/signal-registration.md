@@ -15,8 +15,8 @@ Allow 20 minutes.
 - **Your own phone with Signal**, which is in both groups.
 - A **desktop browser**, for the captcha.
 - Your **password manager**, for the PIN.
-- The **deployment is running** (deploy runbook `docs/runbooks/deploy.md`, #10): the pod with
-  the Signal API and the `odin` container. `odin.env` only needs `SIGNAL_NUMBER` (E.164: `+49…`,
+- The **deployment is running** ([deploy runbook](deploy.md)): the pod `odin-pod` with the
+  `signal-api` and `odin` containers. `odin.env` only needs `SIGNAL_NUMBER` (E.164: `+49…`,
   no spaces). Until setup is done, `odin run` waits and logs
   `ODIN is not set up yet (…) — run: podman exec -it odin odin setup`; that is expected, not a
   crash.
@@ -60,7 +60,7 @@ Checks that the Signal API is reachable and in json-rpc mode, and whether the nu
 registered. If it is, steps 1–3 are skipped.
 
 - *Cannot reach the Signal API* — the Signal API container is not running or still starting
-  (it takes 10–30 s). Check `systemctl --user status odin-pod` and its logs (see
+  (it takes 10–30 s). Check `systemctl --user status signal-api` and its logs (see
   [Troubleshooting](#troubleshooting)).
 - *runs in '…' mode; ODIN needs MODE=json-rpc* — fix the Signal API container's environment.
 
@@ -251,25 +251,25 @@ backup or when ODIN has gone quiet.
 
 ## Backing up the volume — mandatory
 
-The Signal API container's data volume holds ODIN's private keys. Find where it is on disk (the
-volume name is in the deployment's Quadlet units; `podman volume ls` lists it):
+The Signal API container's data volume, `odin-signal`, holds ODIN's private keys. Find where it
+is on disk:
 
 ```bash
-podman volume inspect <signal-volume> --format '{{.Mountpoint}}'
+podman volume inspect odin-signal --format '{{.Mountpoint}}'
 ```
 
-- **Primary backup:** the VM is part of the Proxmox backup job (set up in the deploy
-  runbook, #10). Check that the job includes the VM and that a backup has run *after* the setup.
+- **Primary backup:** the VM is part of the Proxmox backup job (set up in the
+  [deploy runbook](deploy.md#2-back-it-up--before-anything-else)). Check that the job includes the VM and that a backup has run *after* the setup.
 - **Optional extra copy** (e.g. before risky changes). The tarball contains the account keys —
   store it like a password (encrypted), never in the repo:
 
   ```bash
-  podman volume export <signal-volume> --output odin-signal-cli-$(date +%F).tar
+  podman volume export odin-signal --output odin-signal-cli-$(date +%F).tar
   ```
 
 Restoring an old backup is fine: Signal does not invalidate the keys over time. Messages received
-while the backup was offline are lost; that does not matter for ODIN. After a restore, check with
-`odin setup --status`.
+while the backup was offline are lost; that does not matter for ODIN. After a restore ([how](deploy.md#restore-from-backup)), check
+with `odin setup --status`.
 
 **Never run two signal-cli instances on the same account data at the same time**, and never
 register the number on another machine while the deployment holds the account — a new
@@ -294,9 +294,8 @@ registration replaces ODIN's keys and the volume becomes useless.
 
 ## Troubleshooting
 
-- **Anything fails in the Signal API:** its logs show signal-cli's own error messages. Find the
-  container with `podman ps` (the Signal API container of the `odin` pod), then
-  `podman logs <container>`, or `journalctl --user -u signal-api` for its Quadlet unit.
+- **Anything fails in the Signal API:** its logs show signal-cli's own error messages:
+  `journalctl --user -u signal-api` (or `podman logs signal-api`).
 - **The wizard stops with *The Signal API call failed: …*:** the message is signal-cli's. Fix the
   cause (often: API restarting, network) and run `odin setup` again — it continues where it
   stopped.

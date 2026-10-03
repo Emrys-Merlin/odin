@@ -1,0 +1,6 @@
+# Named volume for signal-cli's data: ODIN's Signal account keys. Losing it means registering
+# the number again (needs the SIM). Becomes odin-signal-volume.service, which creates the volume
+# on first start; it is never deleted by stopping or removing the containers.
+
+[Volume]
+VolumeName=odin-signal

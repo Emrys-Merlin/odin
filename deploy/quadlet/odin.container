@@ -1,0 +1,31 @@
+# The bot. Becomes odin.service. While ODIN is not set up, `odin run` waits (it does not exit),
+# so the container keeps running and `podman exec -it odin odin setup` works.
+
+[Unit]
+Description=ODIN bot
+Wants=signal-api.service
+After=signal-api.service
+
+[Container]
+ContainerName=odin
+Pod=odin.pod
+# The major tag: auto-update follows 0.x releases but never pulls a breaking major release.
+# Going live (1.0.0) means changing this to :1 by hand.
+Image=ghcr.io/emrys-merlin/odin:0
+AutoUpdate=registry
+# SIGNAL_NUMBER, optionally FLAT_GROUP_ID / DINNER_GROUP_ID / ODIN_LOG_LEVEL.
+# SIGNAL_API_URL keeps its default http://localhost:8080 (the signal-api container in the pod).
+EnvironmentFile=%h/odin/odin.env
+# config.toml (and an optional avatar next to it), read-only. The image sets
+# ODIN_CONFIG=/config/config.toml.
+Volume=%h/odin/config:/config:ro
+# The state database (ODIN_DB=/data/odin.db): sent actions, reactions, chosen group IDs.
+Volume=odin-data.volume:/data
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target
