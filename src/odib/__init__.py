@@ -1,5 +1,10 @@
 """ODIN — Open Dinner Invitation Notifier."""
 
+import sys
+
 
 def main() -> None:
-    print("Odin 🍽️ is not wired up yet.")
+    """Console script entry point: `odib <command>`."""
+    from odib.cli import main as cli_main
+
+    sys.exit(cli_main())

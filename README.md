@@ -13,6 +13,17 @@ come from env vars: `SIGNAL_NUMBER`, `FLAT_GROUP_ID`, `DINNER_GROUP_ID`, `SIGNAL
 (default `http://localhost:8080`), `ODIB_CONFIG` (path to the TOML file) and `ODIB_DB` (path to
 the SQLite database).
 
+## Commands
+
+- `odib run` — run the bot: consumes reactions and checks the weekly schedule every minute.
+  Stops cleanly on SIGTERM/SIGINT.
+- `odib list-groups` — print the groups ODIN is in with their IDs (for `FLAT_GROUP_ID` /
+  `DINNER_GROUP_ID`). Needs only `SIGNAL_NUMBER` and `SIGNAL_API_URL`.
+- `odib check-config` — validate the config file and env vars and print the next scheduled
+  actions. Does not contact Signal.
+
+Logs go to stdout; set the level with `ODIB_LOG_LEVEL` (default `INFO`).
+
 ## Container image
 
 `podman build -f Containerfile -t odib .` (docker works too). CI publishes
