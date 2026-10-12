@@ -5,7 +5,8 @@ Everything is keyed by the dinner week, identified by the date of its Sunday. Th
 - the **actions** performed per week (so nothing is ever sent twice),
 - the **tracked messages** whose reactions matter (flat poll, dinner announcement),
 - the current **reactions** on those messages,
-- **settings** chosen at setup time (e.g. the group IDs) and the **setup lock**.
+- **settings** chosen at setup time (e.g. the group IDs) and the **setup lock**,
+- config **overrides** made via chat, applied on top of the TOML config (see `odin.overrides`).
 
 A Signal message is identified by its author and its (millisecond) Signal timestamp, which is also
 how incoming reactions refer to their target message.
@@ -64,6 +65,16 @@ class Reaction:
     received_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class Override:
+    """A config value changed via chat; `key` and `value` are as in `odin.overrides`."""
+
+    key: str
+    value: str
+    changed_by: str  # the sender's name if known, else their number
+    changed_at: datetime
+
+
 # Migration i brings the schema from user_version i to i + 1. Only ever append.
 _MIGRATIONS: tuple[str, ...] = (
     """
@@ -100,6 +111,14 @@ _MIGRATIONS: tuple[str, ...] = (
     CREATE TABLE settings (
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE overrides (
+        key        TEXT PRIMARY KEY,
+        value      TEXT NOT NULL,
+        changed_by TEXT NOT NULL,
+        changed_at TEXT NOT NULL
     );
     """,
 )
@@ -280,6 +299,28 @@ class Store:
 
     def delete_setting(self, key: str) -> None:
         self._conn.execute("DELETE FROM settings WHERE key = ?", (key,))
+
+    # Config overrides
+
+    def set_override(self, key: str, value: str, changed_by: str, now: datetime) -> None:
+        """Store an override; it replaces an earlier one for the same key."""
+        self._conn.execute(
+            "INSERT INTO overrides (key, value, changed_by, changed_at) VALUES (?, ?, ?, ?)"
+            " ON CONFLICT (key) DO UPDATE SET value = excluded.value,"
+            " changed_by = excluded.changed_by, changed_at = excluded.changed_at",
+            (key, value, changed_by, _utc(now)),
+        )
+
+    def delete_override(self, key: str) -> bool:
+        """Drop the override for ``key``. Returns whether there was one."""
+        return self._conn.execute("DELETE FROM overrides WHERE key = ?", (key,)).rowcount == 1
+
+    def overrides(self) -> dict[str, Override]:
+        """All overrides by key, oldest change first."""
+        rows = self._conn.execute(
+            "SELECT key, value, changed_by, changed_at FROM overrides ORDER BY changed_at, key"
+        ).fetchall()
+        return {k: Override(k, v, by, datetime.fromisoformat(at)) for k, v, by, at in rows}
 
     # Setup lock: held by `odin setup` while it runs, so `odin run` stays out of its way. It is
     # a settings row "<token> <heartbeat>"; the holder refreshes the heartbeat, and a lock whose
