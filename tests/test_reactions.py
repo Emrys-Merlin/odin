@@ -7,7 +7,9 @@ import pytest
 
 from odin.clock import FixedClock
 from odin.config import Config, parse_config
-from odin.reactions import consume_reactions, count_confirmations, same_emoji
+from odin.engine import Account
+from odin.events import consume_events
+from odin.reactions import count_confirmations, same_emoji
 from odin.signal import FakeSignalClient, GroupMessage, ReactionEvent
 from odin.store import MessageKind, Store, TrackedMessage
 
@@ -26,6 +28,7 @@ BERLIN = CONFIG.timezone
 BOT = "+490000000000"
 FLAT = "group.flat="
 DINNER = "group.dinner="
+ACCOUNT = Account(number=BOT, flat_group_id=FLAT, dinner_group_id=DINNER)
 ANNA, BEN, CARL = "+4915100000001", "+4915100000002", "+4915100000003"
 
 WEEK = date(2026, 10, 11)
@@ -79,7 +82,7 @@ class World:
     def _drain(self) -> None:
         # Run the consumer over exactly the injected events: closing ends the stream.
         self.client.close()
-        asyncio.run(consume_reactions(self.client, self.store, CONFIG, self.clock))
+        asyncio.run(consume_events(self.client, self.store, CONFIG, ACCOUNT, self.clock))
 
     def count(self, message: TrackedMessage) -> int:
         return count_confirmations(self.store, message, CONFIG.emoji)

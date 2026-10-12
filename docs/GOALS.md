@@ -68,12 +68,14 @@ Flatmates can look at and change ODIN's settings from the chat with commands. A 
 message that starts with `/` or `!` followed by the command name (`/help` = `!help`; the name is
 English and case-insensitive). Replies are in German. A message that starts with `/` or `!` plus
 a letter but is no known command gets a short German error pointing to `/help`; everything else
-is ignored.
+is ignored. Commands are answered in the flat group only; in the dinner group (or any other
+group) ODIN ignores them.
 
 | Command | What it does |
 |---------|--------------|
 | `/help` | Lists all commands with a one-line description. |
 | `/schedule` | Shows the 7 schedule points (key, German description, weekday and time), whether the nudge is off, and who changed a value via chat. |
+| `/status` | This dinner week: each step (flat ask, nudge, decision, tally) as sent, skipped or pending, the 👍 counts on the flat poll and the announcement, and the next action. |
 
 ## Architecture
 

@@ -8,6 +8,7 @@ from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError, parse
 from odin.commands.help import HELP
 from odin.commands.schedule import SCHEDULE
+from odin.commands.status import STATUS
 
 __all__ = ["COMMANDS", "Command", "CommandContext", "CommandError", "handle"]
 
@@ -15,6 +16,7 @@ __all__ = ["COMMANDS", "Command", "CommandContext", "CommandError", "handle"]
 COMMANDS: list[Command] = [
     HELP,
     SCHEDULE,
+    STATUS,
 ]
 
 
