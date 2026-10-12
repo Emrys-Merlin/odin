@@ -57,6 +57,8 @@ select = [
     "SIM", # flake8-simplify
     "RUF", # ruff-specific
 ]
+# German UI strings (src/odin/commands/) use the en dash and the multiplication sign ("2× 👍").
+allowed-confusables = ["–", "×"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
