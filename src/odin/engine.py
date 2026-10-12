@@ -99,6 +99,52 @@ def upcoming_actions(config: Config, now: datetime) -> list[Upcoming]:
     return sorted(upcoming, key=lambda u: u.at.astimezone(UTC))
 
 
+@dataclass(frozen=True)
+class StepWindow:
+    """When a step of a dinner week is due: from `start` until before `end` (both UTC).
+
+    `end` is the step's expiry, cut short by the catch-up grace if one is configured.
+    """
+
+    name: str  # "flat_ask", "nudge", "decision", "tally"
+    actions: tuple[Action, ...]  # the step is done once any of these is recorded
+    start: datetime
+    end: datetime
+
+    def due(self, now: datetime) -> bool | None:
+        """None: not yet due. True: due and within its window. False: past its window."""
+        if now < self.start:
+            return None
+        return now < self.end
+
+
+def step_windows(config: Config, week: date) -> list[StepWindow]:
+    """The steps of dinner week `week` in schedule order, with when each is due.
+
+    The nudge is left out while it is disabled.
+    """
+    schedule = config.schedule
+
+    def at(point: WeeklyTime) -> datetime:
+        return config.when(point, week).astimezone(UTC)
+
+    def window(
+        name: str, actions: tuple[Action, ...], start: datetime, expiry: datetime
+    ) -> StepWindow:
+        end = expiry
+        if config.catch_up_grace is not None:
+            end = min(end, start + config.catch_up_grace)
+        return StepWindow(name, actions, start, end)
+
+    deadline, dinner = at(schedule.flat_deadline), at(schedule.dinner)
+    windows = [window("flat_ask", (Action.FLAT_ASK,), at(schedule.flat_ask), deadline)]
+    if schedule.nudge is not None:
+        windows.append(window("nudge", (Action.NUDGE,), at(schedule.nudge), deadline))
+    windows.append(window("decision", (Action.ANNOUNCEMENT, Action.CANCELLATION), deadline, dinner))
+    windows.append(window("tally", (Action.TALLY,), at(schedule.tally), dinner))
+    return windows
+
+
 async def reconcile(
     config: Config, store: Store, client: SignalClient, account: Account, now: datetime
 ) -> list[Step]:
@@ -134,13 +180,11 @@ class _Week:
     steps: list[Step] = field(default_factory=list)
 
     async def run(self) -> None:
-        schedule = self.config.schedule
-        deadline = self._at(schedule.flat_deadline)
-        dinner = self._at(schedule.dinner)
+        windows = {w.name: w for w in step_windows(self.config, self.week)}
 
         # 1. Flat ask.
         if not self._recorded(Action.FLAT_ASK):
-            due = self._due(self._at(schedule.flat_ask), deadline)
+            due = windows["flat_ask"].due(self.now)
             if due is None:
                 return
             if due:
@@ -150,8 +194,8 @@ class _Week:
         asked = self.store.action_outcome(self.week, Action.FLAT_ASK) is Outcome.SENT
 
         # 2. Nudge, if enabled.
-        if schedule.nudge is not None and not self._recorded(Action.NUDGE):
-            due = self._due(self._at(schedule.nudge), deadline)
+        if "nudge" in windows and not self._recorded(Action.NUDGE):
+            due = windows["nudge"].due(self.now)
             if due is None:
                 return
             if due and asked and self._confirmations() == 0:
@@ -161,7 +205,7 @@ class _Week:
 
         # 3. Decision: announcement or cancellation.
         if not (self._recorded(Action.ANNOUNCEMENT) or self._recorded(Action.CANCELLATION)):
-            due = self._due(deadline, dinner)
+            due = windows["decision"].due(self.now)
             if due is None:
                 return
             on = asked and self._confirmations() > 0
@@ -175,7 +219,7 @@ class _Week:
 
         # 4. Tally, if dinner is on.
         if not self._recorded(Action.TALLY):
-            due = self._due(self._at(schedule.tally), dinner)
+            due = windows["tally"].due(self.now)
             if due is None:
                 return
             if due and on:
@@ -190,18 +234,6 @@ class _Week:
                 await self._send(Action.TALLY, count=count)
             else:
                 self._skip(Action.TALLY)
-
-    def _at(self, point: WeeklyTime) -> datetime:
-        return self.config.when(point, self.week).astimezone(UTC)
-
-    def _due(self, start: datetime, expiry: datetime) -> bool | None:
-        """None: not yet due. True: due and within its window. False: past its window."""
-        if self.now < start:
-            return None
-        end = expiry
-        if self.config.catch_up_grace is not None:
-            end = min(end, start + self.config.catch_up_grace)
-        return self.now < end
 
     def _recorded(self, action: Action) -> bool:
         return self.store.has_action(self.week, action)
