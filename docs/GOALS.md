@@ -73,6 +73,7 @@ is ignored.
 | Command | What it does |
 |---------|--------------|
 | `/help` | Lists all commands with a one-line description. |
+| `/schedule` | Shows the 7 schedule points (key, German description, weekday and time), whether the nudge is off, and who changed a value via chat. |
 
 ## Architecture
 
