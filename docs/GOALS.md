@@ -58,7 +58,21 @@ anyone who wants to help cook (explicitly optional — helping is absolutely no 
 
 - Dinner group: **bilingual**, German first, then English, in one message.
 - Flat group: German.
-- All message texts are templates in the config (placeholders like `{deadline}`, `{cook_time}`).
+- The messages of the weekly cycle are templates in the config (placeholders like `{deadline}`,
+  `{cook_time}`).
+- Chat-command replies are German UI strings in code, not config templates.
+
+## Chat commands
+
+Flatmates can look at and change ODIN's settings from the chat with commands. A command is a
+message that starts with `/` or `!` followed by the command name (`/help` = `!help`; the name is
+English and case-insensitive). Replies are in German. A message that starts with `/` or `!` plus
+a letter but is no known command gets a short German error pointing to `/help`; everything else
+is ignored.
+
+| Command | What it does |
+|---------|--------------|
+| `/help` | Lists all commands with a one-line description. |
 
 ## Architecture
 
@@ -113,7 +127,7 @@ inside the pod.
 
 Tracked as separate issues where useful:
 
-- Chat commands (`!cancel`, `!status`) and changing config via chat.
-- Skip dates / holiday calendar.
-- Counting plus-ones automatically; guest names or lists.
+- Cancelling a single dinner via chat (`/cancel`, #11).
+- Skip dates / holiday calendar (#12).
+- Counting plus-ones automatically (#13); guest names or lists.
 - More than one dinner per week; reminders to guests.
