@@ -181,6 +181,56 @@ def test_reactions_are_consumed_while_ticking(store: Store) -> None:
     assert store.has_action(WEEK, Action.ANNOUNCEMENT)
 
 
+def test_overrides_apply_without_a_restart(store: Store) -> None:
+    client = FakeSignalClient(number=ACCOUNT.number)
+    clock = FixedClock(local(6, 18, 5))
+
+    async def scenario() -> None:
+        stop = asyncio.Event()
+        bot = asyncio.create_task(
+            run_bot(CONFIG, store, client, ACCOUNT, clock, stop, tick_interval=timedelta(0))
+        )
+        await until(lambda: len(client.sent) == 1)  # flat ask
+        poll = store.tracked_message(WEEK, MessageKind.FLAT_POLL)
+        assert poll is not None
+
+        # Mid-week, via chat: the flat deadline moves from Wednesday to Thursday 18:00.
+        store.set_override("schedule.flat_deadline", "thu 18:00", "Tim", clock.now())
+
+        # Wednesday 18:30: only the nudge (Wed 12:00) is due; no decision yet.
+        clock.set(local(7, 18, 30))
+        await until(lambda: len(client.sent) == 2)
+        for _ in range(50):
+            await asyncio.sleep(0)
+        assert len(client.sent) == 2
+        assert not store.has_action(WEEK, Action.CANCELLATION)
+
+        # A confirmation after the TOML deadline still counts under the new one.
+        client.inject(
+            ReactionEvent(
+                emoji="👍",
+                reactor=ANNA,
+                target_author=poll.author,
+                target_timestamp=poll.timestamp,
+                group_id=poll.group_id,
+                is_remove=False,
+                timestamp=int(local(7, 19).timestamp() * 1000),
+            )
+        )
+        await until(lambda: len(store.reactions_for(poll)) == 1)
+
+        clock.set(local(8, 18))
+        await until(lambda: len(client.sent) == 3)
+        stop.set()
+        await bot
+
+    asyncio.run(scenario())
+
+    assert client.sent[1].text.startswith("Bisher hat noch niemand")
+    assert client.sent[2].group_id == ACCOUNT.dinner_group_id
+    assert store.action_time(WEEK, Action.ANNOUNCEMENT) == local(8, 18)
+
+
 def test_a_failing_tick_does_not_stop_the_bot(store: Store) -> None:
     class FailOnce(FakeSignalClient):
         failed = False

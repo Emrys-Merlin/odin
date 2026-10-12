@@ -10,6 +10,7 @@ from odin.store import (
     Action,
     MessageKind,
     Outcome,
+    Override,
     Reaction,
     Store,
 )
@@ -256,3 +257,44 @@ def test_upgrade_from_version_2_adds_settings(tmp_path: Path) -> None:
     with Store(path) as store:
         store.set_setting("flat_group_id", "group.a=")
         assert store.get_setting("flat_group_id") == "group.a="
+
+
+# --- config overrides ----------------------------------------------------------------------------
+
+
+def test_overrides(store: Store) -> None:
+    assert store.overrides() == {}
+    store.set_override("schedule.tally", "sat 10:00", "Tim", TUE)
+    store.set_override("templates.nudge", "NUDGE", "+4915100000001", TUE + timedelta(hours=1))
+    assert store.overrides() == {
+        "schedule.tally": Override("schedule.tally", "sat 10:00", "Tim", TUE),
+        "templates.nudge": Override(
+            "templates.nudge", "NUDGE", "+4915100000001", TUE + timedelta(hours=1)
+        ),
+    }
+
+    # Setting it again replaces value, author and time.
+    store.set_override("schedule.tally", "sat 11:00", "Anna", TUE + timedelta(hours=2))
+    assert store.overrides()["schedule.tally"] == Override(
+        "schedule.tally", "sat 11:00", "Anna", TUE + timedelta(hours=2)
+    )
+    assert list(store.overrides()) == ["templates.nudge", "schedule.tally"]  # oldest first
+
+    assert store.delete_override("schedule.tally")
+    assert not store.delete_override("schedule.tally")
+    assert list(store.overrides()) == ["templates.nudge"]
+
+
+def test_upgrade_from_version_3_adds_overrides(tmp_path: Path) -> None:
+    from odin.store import _MIGRATIONS
+
+    path = tmp_path / "odin.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(f"{'; '.join(_MIGRATIONS[:3])}; PRAGMA user_version = 3;")
+    conn.execute("INSERT INTO settings VALUES ('flat_group_id', 'group.a=')")
+    conn.commit()
+    conn.close()
+    with Store(path) as store:
+        assert store.get_setting("flat_group_id") == "group.a="
+        store.set_override("schedule.tally", "sat 10:00", "Tim", TUE)
+        assert list(store.overrides()) == ["schedule.tally"]
