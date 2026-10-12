@@ -6,7 +6,11 @@ dispatches from it:
 - a `ReactionEvent` is applied to the store (`odin.reactions.handle_reaction`);
 - a `GroupMessage` in the flat group is handed to the chat commands (`odin.commands.handle`)
   and each reply is sent back to the flat group, in order;
-- a `GroupMessage` in any other group is ignored.
+- a `GroupMessage` in any other group, or sent from the bot's own number, is ignored.
+
+ODIN's own sends normally reach it only as sync messages, which are never parsed into events;
+ignoring its own number as well makes sure a reply such as `/text`'s ready-to-copy `/settext …`
+can never be taken for a command.
 
 Command replies are not recorded or retried: they are not part of the exactly-once weekly cycle.
 """
@@ -37,7 +41,11 @@ async def consume_events(
     async for event in client.events():
         if isinstance(event, ReactionEvent):
             handle_reaction(event, store, effective_config(config, store), clock.now())
-        elif isinstance(event, GroupMessage) and event.group_id == account.flat_group_id:
+        elif (
+            isinstance(event, GroupMessage)
+            and event.group_id == account.flat_group_id
+            and event.sender != account.number
+        ):
             await _answer(event, client, store, config, account, clock)
 
 

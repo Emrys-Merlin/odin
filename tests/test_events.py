@@ -39,9 +39,9 @@ def ms(moment: datetime) -> int:
     return int(moment.timestamp() * 1000)
 
 
-def message(text: str, group_id: str = FLAT) -> GroupMessage:
+def message(text: str, group_id: str = FLAT, sender: str = ANNA) -> GroupMessage:
     return GroupMessage(
-        sender=ANNA, sender_name="Anna", text=text, group_id=group_id, timestamp=ms(NOW)
+        sender=sender, sender_name="Anna", text=text, group_id=group_id, timestamp=ms(NOW)
     )
 
 
@@ -92,6 +92,11 @@ def test_commands_in_the_dinner_group_are_ignored(world: World) -> None:
 
 def test_commands_in_an_unknown_group_are_ignored(world: World) -> None:
     world.deliver(message("/help", group_id="group.other="))
+    assert world.client.sent == []
+
+
+def test_the_bots_own_messages_are_ignored(world: World) -> None:
+    world.deliver(message("/help", sender=BOT), message("/settext tally\n{count}", sender=BOT))
     assert world.client.sent == []
 
 
