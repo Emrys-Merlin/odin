@@ -65,6 +65,40 @@ def dinner_week(config: Config, now: datetime) -> date:
     return week
 
 
+@dataclass(frozen=True)
+class Upcoming:
+    """A scheduled action and when it happens next."""
+
+    name: str
+    at: datetime
+    note: str = ""
+
+
+def upcoming_actions(config: Config, now: datetime) -> list[Upcoming]:
+    """The next occurrence of each scheduled action at or after `now`, in time order.
+
+    Schedule only: whether an action is actually sent depends on the state at that time.
+    """
+    s = config.schedule
+    points: list[tuple[str, WeeklyTime, str]] = [
+        ("flat ask", s.flat_ask, "flat group"),
+    ]
+    if s.nudge is not None:
+        points.append(("nudge", s.nudge, "flat group, only if nobody confirmed"))
+    points += [
+        ("announcement / cancellation", s.flat_deadline, "dinner group"),
+        ("tally", s.tally, "flat group, only if dinner is on"),
+    ]
+    week = dinner_week(config, now)
+    upcoming = []
+    for name, point, note in points:
+        at = config.when(point, week)
+        if at < now:
+            at = config.when(point, week + timedelta(weeks=1))
+        upcoming.append(Upcoming(name, at, note))
+    return sorted(upcoming, key=lambda u: u.at.astimezone(UTC))
+
+
 async def reconcile(
     config: Config, store: Store, client: SignalClient, account: Account, now: datetime
 ) -> list[Step]:
