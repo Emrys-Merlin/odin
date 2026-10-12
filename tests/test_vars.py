@@ -68,6 +68,9 @@ def test_vars_lists_all_placeholders_with_current_values(store: Store) -> None:
         "Mittwoch / Wednesday"
     ) in lines
     assert "{dinner_time} – Essen (Uhrzeit): 18:00" in lines
+    assert (
+        "{flat_ask_day_de} / {flat_ask_day_en} – Frage an die WG (Wochentag): Dienstag / Tuesday"
+    ) in lines
     assert "{count} – Anzahl Zusagen auf die Ankündigung (nur in tally)" in lines
     assert lines[-2:] == [
         "{{ und }} schreiben für eine wörtliche Klammer.",
@@ -86,6 +89,12 @@ def test_a_schedule_override_changes_the_shown_value(store: Store) -> None:
     assert "{deadline} – Entscheidung der WG (Uhrzeit): 09:30" in reply
     assert "Donnerstag / Thursday" in reply
     assert "Mittwoch" not in reply
+
+
+def test_moving_the_flat_ask_changes_its_weekday(store: Store) -> None:
+    reply = vars_reply(store, "/vars", {schedule_key("flat_ask"): "mon 18:00"})
+    assert "Frage an die WG (Wochentag): Montag / Monday" in reply
+    assert "Dienstag" not in reply
 
 
 def test_vars_for_one_template(store: Store) -> None:

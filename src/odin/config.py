@@ -246,10 +246,13 @@ WEEKDAYS_DE = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samst
 WEEKDAYS_EN = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 # Placeholders every template may use. Times are rendered as "HH:MM"; each time has a German and
-# an English weekday name next to it, so the texts stay right when the schedule changes.
+# an English weekday name next to it, so the texts stay right when the schedule changes. The flat
+# ask has only the weekday ("jeden Dienstag" in flat_test).
 COMMON_PLACEHOLDERS = frozenset(
     {
         "emoji",
+        "flat_ask_day_de",
+        "flat_ask_day_en",
         "deadline",
         "deadline_day_de",
         "deadline_day_en",
@@ -408,6 +411,8 @@ class Config:
         s = self.schedule
         return {
             "emoji": self.emoji,
+            "flat_ask_day_de": WEEKDAYS_DE[s.flat_ask.weekday],
+            "flat_ask_day_en": WEEKDAYS_EN[s.flat_ask.weekday],
             "deadline": f"{s.flat_deadline.time:%H:%M}",
             "deadline_day_de": WEEKDAYS_DE[s.flat_deadline.weekday],
             "deadline_day_en": WEEKDAYS_EN[s.flat_deadline.weekday],
