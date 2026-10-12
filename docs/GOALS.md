@@ -80,6 +80,7 @@ group) ODIN ignores them.
 | `/text <name>` | Shows a template twice: raw as a ready-to-send `/settext <name>` command, and rendered with this week's values (for `tally` with the current 👍 count, or a sample count of 3). |
 | `/settext <name>` | Replaces template `<name>` (`flat_ask`, `nudge`, `announcement`, `cancellation`, `tally`) with the text on the following lines, after checking its placeholders; replies with a preview. |
 | `/resettext <name>` | Drops the chat change to template `<name>`, back to the config file's text; replies with a preview. |
+| `/vars [name]` | Lists the template placeholders with a German description and current value; with a template name only those allowed in it. |
 
 ## Architecture
 
