@@ -73,6 +73,9 @@ is ignored.
 | Command | What it does |
 |---------|--------------|
 | `/help` | Lists all commands with a one-line description. |
+| `/settime <point> <weekday> <HH:MM>` | Moves a schedule point (`flat_ask`, `nudge`, `flat_deadline`, `rsvp_by`, `tally`, `cook`, `dinner`); weekdays in English or German (`thu`, `do`, `donnerstag`). Takes effect at once, but is rejected if it breaks the schedule order, moves the current dinner week, or makes a not-yet-done step of this week due right now. |
+| `/nudge on\|off` | Turns the nudge on or off (also `an\|aus`); same guard. |
+| `/resettime <point>` | Drops the chat change of a point back to the config value (for `nudge` also on/off); same guard. |
 
 ## Architecture
 
