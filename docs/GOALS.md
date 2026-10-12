@@ -73,6 +73,8 @@ is ignored.
 | Command | What it does |
 |---------|--------------|
 | `/help` | Lists all commands with a one-line description. |
+| `/texts` | Lists the five editable weekly templates: group, short description, and who changed it when if overridden. |
+| `/text <name>` | Shows a template twice: raw as a ready-to-send `/settext <name>` command, and rendered with this week's values (for `tally` with the current 👍 count, or a sample count of 3). |
 
 ## Architecture
 
