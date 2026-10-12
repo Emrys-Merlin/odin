@@ -8,6 +8,7 @@ from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError, parse
 from odin.commands.help import HELP
 from odin.commands.schedule import SCHEDULE
+from odin.commands.settext import RESETTEXT, SETTEXT
 from odin.commands.status import STATUS
 from odin.commands.texts import TEXT, TEXTS
 
@@ -20,6 +21,8 @@ COMMANDS: list[Command] = [
     SCHEDULE,
     TEXTS,
     TEXT,
+    SETTEXT,
+    RESETTEXT,
 ]
 
 
