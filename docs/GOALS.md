@@ -69,11 +69,19 @@ message that starts with `/` or `!` followed by the command name (`/help` = `!he
 case-insensitive). Command names and their arguments are English only (`/nudge on`, weekdays as
 `thu`), never mixed with German; replies are in German. A message that starts with `/` or `!` plus
 a letter but is no known command gets a short German error pointing to `/help`; everything else
-is ignored.
+is ignored. Commands are answered in the flat group only; in the dinner group (or any other
+group) ODIN ignores them.
 
 | Command | What it does |
 |---------|--------------|
 | `/help` | Lists all commands with a one-line description. |
+| `/status` | This dinner week: each step (flat ask, nudge, decision, tally) as sent, skipped or pending, the 👍 counts on the flat poll and the announcement, and the next action. |
+| `/schedule` | Shows the 7 schedule points (key, German description, weekday and time), whether the nudge is off, and who changed a value via chat. |
+| `/texts` | Lists the five editable weekly templates: group, short description, and who changed it when if overridden. |
+| `/text <name>` | Shows a template twice: raw as a ready-to-send `/settext <name>` command, and rendered with this week's values (for `tally` with the current 👍 count, or a sample count of 3). |
+| `/settext <name>` | Replaces template `<name>` (`flat_ask`, `nudge`, `announcement`, `cancellation`, `tally`) with the text on the following lines, after checking its placeholders; replies with a preview. |
+| `/resettext <name>` | Drops the chat change to template `<name>`, back to the config file's text; replies with a preview. |
+| `/vars [name]` | Lists the template placeholders with a German description and current value; with a template name only those allowed in it. |
 | `/settime <point> <weekday> <HH:MM>` | Moves a schedule point (`flat_ask`, `nudge`, `flat_deadline`, `rsvp_by`, `tally`, `cook`, `dinner`); weekdays as in the config (`thu`, `thursday`). Takes effect at once, but is rejected if it breaks the schedule order, moves the current dinner week, or makes a not-yet-done step of this week due right now. |
 | `/nudge on\|off` | Turns the nudge on or off; same guard. |
 | `/resettime <point>` | Drops the chat change of a point back to the config value (for `nudge` also on/off); same guard. |
