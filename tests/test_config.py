@@ -1,11 +1,14 @@
 import datetime as dt
+import tomllib
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from odin.config import (
+    COMMON_PLACEHOLDERS,
     DEFAULT_SIGNAL_API_URL,
+    Config,
     ConfigError,
     WeeklyTime,
     load_config,
@@ -76,9 +79,69 @@ def test_example_config_loads_and_matches_defaults() -> None:
 def test_example_dinner_texts_are_bilingual() -> None:
     c = load_config(EXAMPLE)
     for template in (c.templates.announcement, c.templates.cancellation):
-        german, english = template.text.split("\n\n")
+        german, english = template.render(**c.placeholder_values()).split("\n\n")
         assert "Sonntag" in german
         assert "Sunday" in english
+
+
+def example_with_schedule(**points: dict[str, Any]) -> Config:
+    data = tomllib.loads(EXAMPLE.read_text())
+    data["schedule"].update(points)
+    return parse_config(data)
+
+
+def test_example_flat_texts_follow_the_deadline_weekday() -> None:
+    c = example_with_schedule(flat_deadline={"weekday": "thu", "time": "18:00"})
+    values = c.placeholder_values()
+    for template in (c.templates.flat_ask, c.templates.nudge):
+        text = template.render(**values)
+        assert "Donnerstag 18:00" in text
+        assert "Mittwoch" not in text
+
+
+def test_example_announcement_follows_the_rsvp_weekday() -> None:
+    # The announcement goes out at the deadline, so it names the RSVP day, not the deadline.
+    c = example_with_schedule(rsvp_by={"weekday": "thu", "time": "14:00"})
+    german, english = c.templates.announcement.render(**c.placeholder_values()).split("\n\n")
+    assert "Donnerstag 14:00" in german
+    assert "Thursday 14:00" in english
+    assert "Freitag" not in german
+    assert "Friday" not in english
+
+
+def test_example_texts_follow_the_dinner_weekday() -> None:
+    c = example_with_schedule(
+        flat_ask={"weekday": "fri", "time": "18:00"},
+        nudge={"weekday": "sat", "time": "12:00"},
+        flat_deadline={"weekday": "sat", "time": "18:00"},
+        rsvp_by={"weekday": "mon", "time": "14:00"},
+        tally={"weekday": "mon", "time": "14:00"},
+        cook={"weekday": "wed", "time": "17:00"},
+        dinner={"weekday": "wed", "time": "18:00"},
+    )
+    values = c.placeholder_values()
+    for name in ("flat_ask", "nudge", "cancellation", "announcement", "flat_test"):
+        text = getattr(c.templates, name).render(**values)
+        assert "Mittwoch" in text
+        assert "Sonntag" not in text
+        assert "Sunday" not in text
+    for name in ("cancellation", "announcement"):
+        assert "Wednesday" in getattr(c.templates, name).render(**values)
+
+
+def test_weekday_placeholders() -> None:
+    values = parse_config(config()).placeholder_values()
+    assert {name: values[name] for name in values if "_day_" in name} == {
+        "deadline_day_de": "Mittwoch",
+        "deadline_day_en": "Wednesday",
+        "rsvp_by_day_de": "Freitag",
+        "rsvp_by_day_en": "Friday",
+        "cook_day_de": "Sonntag",
+        "cook_day_en": "Sunday",
+        "dinner_day_de": "Sonntag",
+        "dinner_day_en": "Sunday",
+    }
+    assert set(values) == COMMON_PLACEHOLDERS
 
 
 def test_example_announcement_content() -> None:

@@ -227,8 +227,30 @@ def _check_order(s: Schedule) -> None:
 
 # --- Templates ----------------------------------------------------------------------------------
 
-# Placeholders every template may use. Times are rendered as "HH:MM".
-COMMON_PLACEHOLDERS = frozenset({"emoji", "deadline", "rsvp_by", "cook_time", "dinner_time"})
+# Weekday names for the `*_day_de` / `*_day_en` placeholders, 0 = Monday. A fixed table rather
+# than the locale, so the texts don't depend on the system the bot runs on.
+WEEKDAYS_DE = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
+WEEKDAYS_EN = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+# Placeholders every template may use. Times are rendered as "HH:MM"; each time has a German and
+# an English weekday name next to it, so the texts stay right when the schedule changes.
+COMMON_PLACEHOLDERS = frozenset(
+    {
+        "emoji",
+        "deadline",
+        "deadline_day_de",
+        "deadline_day_en",
+        "rsvp_by",
+        "rsvp_by_day_de",
+        "rsvp_by_day_en",
+        "cook_time",
+        "cook_day_de",
+        "cook_day_en",
+        "dinner_time",
+        "dinner_day_de",
+        "dinner_day_en",
+    }
+)
 
 # Template name -> placeholders it may use. Templates have no defaults: texts live in the config.
 TEMPLATE_PLACEHOLDERS: dict[str, frozenset[str]] = {
@@ -374,9 +396,17 @@ class Config:
         return {
             "emoji": self.emoji,
             "deadline": f"{s.flat_deadline.time:%H:%M}",
+            "deadline_day_de": WEEKDAYS_DE[s.flat_deadline.weekday],
+            "deadline_day_en": WEEKDAYS_EN[s.flat_deadline.weekday],
             "rsvp_by": f"{s.rsvp_by.time:%H:%M}",
+            "rsvp_by_day_de": WEEKDAYS_DE[s.rsvp_by.weekday],
+            "rsvp_by_day_en": WEEKDAYS_EN[s.rsvp_by.weekday],
             "cook_time": f"{s.cook.time:%H:%M}",
+            "cook_day_de": WEEKDAYS_DE[s.cook.weekday],
+            "cook_day_en": WEEKDAYS_EN[s.cook.weekday],
             "dinner_time": f"{s.dinner.time:%H:%M}",
+            "dinner_day_de": WEEKDAYS_DE[s.dinner.weekday],
+            "dinner_day_en": WEEKDAYS_EN[s.dinner.weekday],
         }
 
 
