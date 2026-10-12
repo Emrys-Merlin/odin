@@ -13,6 +13,7 @@ from enum import StrEnum
 from odin.clock import Clock
 from odin.config import Config, Env, WeeklyTime
 from odin.engine import Account, dinner_week, reconcile
+from odin.overrides import effective_config
 from odin.reactions import consume_reactions
 from odin.signal import SignalAdmin, SignalClient
 from odin.store import Store
@@ -217,6 +218,9 @@ async def run_bot(
 ) -> None:
     """Consume reactions and reconcile every `tick_interval` until `stop` is set.
 
+    `config` is the TOML config; each tick and each reaction use it with the overrides stored at
+    that moment (see `odin.overrides`), so a change made via chat applies by the next tick.
+
     The first tick runs right away. A tick in progress is finished before shutting down, so a
     sent message is always recorded. If the event stream ends or fails, the bot stops with an
     error: a container restart is the simplest way back to a working connection.
@@ -248,7 +252,7 @@ async def _tick(
     config: Config, store: Store, client: SignalClient, account: Account, clock: Clock
 ) -> None:
     try:
-        await reconcile(config, store, client, account, clock.now())
+        await reconcile(effective_config(config, store), store, client, account, clock.now())
     except Exception:
         logger.exception("reconcile tick failed; retrying next tick")
 

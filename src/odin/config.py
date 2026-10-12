@@ -119,12 +119,19 @@ class Schedule:
     """The weekly cycle. Every point belongs to the week that ends with `dinner`."""
 
     flat_ask: WeeklyTime
-    nudge: WeeklyTime | None  # None: nudge disabled
+    # The nudge keeps its time while disabled, so it can be enabled again (via chat) without one.
+    nudge_time: WeeklyTime
+    nudge_enabled: bool
     flat_deadline: WeeklyTime  # also when the dinner group is told (announcement/cancellation)
     rsvp_by: WeeklyTime
     tally: WeeklyTime
     cook: WeeklyTime
     dinner: WeeklyTime
+
+    @property
+    def nudge(self) -> WeeklyTime | None:
+        """When the nudge is sent; None if it is disabled."""
+        return self.nudge_time if self.nudge_enabled else None
 
 
 _DEFAULT_SCHEDULE: dict[str, tuple[str, str]] = {
@@ -165,38 +172,44 @@ def _parse_time(value: object, where: str) -> dt.time:
 
 def _parse_weekly_time(
     raw: object, default: tuple[str, str], where: str, *, can_disable: bool = False
-) -> WeeklyTime | None:
+) -> tuple[WeeklyTime, bool]:
+    """The point and whether it is enabled (always True unless `can_disable`)."""
     table = _table(raw, where)
     allowed = {"weekday", "time"} | ({"enabled"} if can_disable else set())
     _reject_unknown(table, allowed, where)
-    if can_disable:
-        enabled = table.get("enabled", True)
-        if not isinstance(enabled, bool):
-            raise ConfigError(f"{where}.enabled: must be true or false, got {enabled!r}")
-        if not enabled:
-            return None
-    return WeeklyTime(
+    enabled = table.get("enabled", True)
+    if not isinstance(enabled, bool):
+        raise ConfigError(f"{where}.enabled: must be true or false, got {enabled!r}")
+    point = WeeklyTime(
         weekday=_parse_weekday(table.get("weekday", default[0]), f"{where}.weekday"),
         time=_parse_time(table.get("time", default[1]), f"{where}.time"),
     )
+    return point, enabled
 
 
 def _parse_schedule(raw: object) -> Schedule:
     table = _table(raw, "schedule")
     _reject_unknown(table, set(_DEFAULT_SCHEDULE), "schedule")
-    points = {
-        name: _parse_weekly_time(
+    points: dict[str, WeeklyTime] = {}
+    nudge_enabled = True
+    for name, default in _DEFAULT_SCHEDULE.items():
+        point, enabled = _parse_weekly_time(
             table.get(name), default, f"schedule.{name}", can_disable=name == "nudge"
         )
-        for name, default in _DEFAULT_SCHEDULE.items()
-    }
-    schedule = Schedule(**points)  # ty: ignore[invalid-argument-type]
+        if name == "nudge":
+            points["nudge_time"], nudge_enabled = point, enabled
+        else:
+            points[name] = point
+    schedule = Schedule(**points, nudge_enabled=nudge_enabled)
     _check_order(schedule)
     return schedule
 
 
 def _check_order(s: Schedule) -> None:
-    """The points must follow each other within the week that ends with dinner."""
+    """The points must follow each other within the week that ends with dinner.
+
+    A disabled nudge is not checked. Raises ConfigError naming the first broken rule.
+    """
     dinner = s.dinner
 
     def before(a: WeeklyTime, b: WeeklyTime) -> bool:
