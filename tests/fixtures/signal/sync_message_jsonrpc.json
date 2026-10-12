@@ -1,0 +1,34 @@
+{
+  "jsonrpc": "2.0",
+  "method": "receive",
+  "params": {
+    "envelope": {
+      "source": "+4915100000001",
+      "sourceNumber": "+4915100000001",
+      "sourceUuid": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "sourceName": "Odin 🍽️",
+      "sourceDevice": 2,
+      "timestamp": 1760454600000,
+      "serverReceivedTimestamp": 1760454600100,
+      "serverDeliveredTimestamp": 1760454600140,
+      "syncMessage": {
+        "sentMessage": {
+          "destination": null,
+          "destinationNumber": null,
+          "destinationUuid": null,
+          "timestamp": 1760454600000,
+          "message": "/help",
+          "expiresInSeconds": 0,
+          "viewOnce": false,
+          "groupInfo": {
+            "groupId": "kDUPwaOoyWrT8vMJ5mB/s8GcFwVv8Gxe2jF3e9mIuO0=",
+            "groupName": "WG",
+            "revision": 7,
+            "type": "DELIVER"
+          }
+        }
+      }
+    },
+    "account": "+4915100000001"
+  }
+}

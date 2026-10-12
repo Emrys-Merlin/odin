@@ -12,6 +12,7 @@ from odin.signal import (
     DirectMessage,
     Event,
     Group,
+    GroupMessage,
     ReactionEvent,
     RestSignalClient,
     SignalAdmin,
@@ -253,7 +254,13 @@ def test_events_and_direct_messages_share_the_receive_stream(
 ) -> None:
     messages = [
         (FIXTURES / name).read_text()
-        for name in ("direct_message.json", "reaction_add.json", "receipt.json")
+        for name in (
+            "direct_message.json",
+            "reaction_add.json",
+            "receipt.json",
+            "text_message.json",
+            "sync_message_jsonrpc.json",
+        )
     ]
     messages.insert(1, "{not json")
     urls = receive_with(monkeypatch, messages)
@@ -265,7 +272,7 @@ def test_events_and_direct_messages_share_the_receive_stream(
         return events, dms
 
     events, dms = asyncio.run(collect())
-    assert [type(event) for event in events] == [ReactionEvent]
+    assert [type(event) for event in events] == [ReactionEvent, GroupMessage]
     assert dms == [
         DirectMessage(sender="+4915100000002", text="Ja, das bin ich.", timestamp=1760454500000)
     ]

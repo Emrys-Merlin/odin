@@ -4,7 +4,7 @@ import base64
 import json
 from typing import Any
 
-from odin.signal.models import ApiInfo, DirectMessage, Event, Group, ReactionEvent
+from odin.signal.models import ApiInfo, DirectMessage, Event, Group, GroupMessage, ReactionEvent
 
 
 def group_id_from_internal(internal_id: str) -> str:
@@ -20,16 +20,27 @@ def parse_event(raw: str | bytes) -> Event | None:
 
     Accepts both the bare ``{"envelope": ..., "account": ...}`` object that the REST API
     forwards in json-rpc mode and the full JSON-RPC ``receive`` notification wrapping it.
-    Returns ``None`` for anything that is not a group reaction. Raises ``ValueError`` if
-    ``raw`` is not valid JSON.
+    Returns a ``ReactionEvent`` for a group reaction, a ``GroupMessage`` for a group text
+    message and ``None`` for anything else: direct messages, ODIN's own sends seen from another
+    device (``syncMessage``), edits (``editMessage``), stories and messages without text.
+    Raises ``ValueError`` if ``raw`` is not valid JSON.
     """
     envelope = _envelope(raw)
     data_message = _dict(envelope.get("dataMessage"))
-    reaction = _dict(data_message.get("reaction"))
     group_info = _dict(data_message.get("groupInfo"))
-    if not reaction or not group_info:
+    if not group_info:
         return None
+    reaction = _dict(data_message.get("reaction"))
+    if reaction:
+        return _reaction_event(envelope, reaction, group_info)
+    if "reaction" in data_message:  # a malformed reaction, not a text message
+        return None
+    return _group_message(envelope, data_message, group_info)
 
+
+def _reaction_event(
+    envelope: dict[str, Any], reaction: dict[str, Any], group_info: dict[str, Any]
+) -> ReactionEvent | None:
     emoji = reaction.get("emoji")
     reactor = _author(envelope, "source")
     target_author = _author(reaction, "targetAuthor")
@@ -53,6 +64,32 @@ def parse_event(raw: str | bytes) -> Event | None:
         target_timestamp=target_timestamp,
         group_id=group_id_from_internal(internal_group_id),
         is_remove=bool(reaction.get("isRemove", False)),
+        timestamp=timestamp,
+    )
+
+
+def _group_message(
+    envelope: dict[str, Any], data_message: dict[str, Any], group_info: dict[str, Any]
+) -> GroupMessage | None:
+    text = data_message.get("message")
+    sender = _author(envelope, "source")
+    sender_name = envelope.get("sourceName")
+    internal_group_id = group_info.get("groupId")
+    timestamp = envelope.get("timestamp")
+    if not (
+        isinstance(text, str)
+        and text
+        and sender
+        and isinstance(internal_group_id, str)
+        and isinstance(timestamp, int)
+    ):
+        return None
+
+    return GroupMessage(
+        sender=sender,
+        sender_name=sender_name if isinstance(sender_name, str) and sender_name else None,
+        text=text,
+        group_id=group_id_from_internal(internal_group_id),
         timestamp=timestamp,
     )
 

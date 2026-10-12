@@ -16,4 +16,8 @@ differ:
   matches on; only the substrings matter.
 - `about.json`, `accounts.json` — `GET /v1/about`, `GET /v1/accounts`.
 - `direct_message.json` — a direct (non-group) text message as received on `/v1/receive`.
+- `text_message.json`, `group_reply_jsonrpc.json` — group text messages; the second is a reply
+  (`quote`) from a sender with a hidden number, wrapped in a JSON-RPC notification.
+- `sync_message_jsonrpc.json` — a group message sent from another device of ODIN's own account
+  (`syncMessage.sentMessage`); ODIN ignores it.
 - `groups.json` — the third group (`Buchclub`, `"member": false`) is one ODIN is only invited to.

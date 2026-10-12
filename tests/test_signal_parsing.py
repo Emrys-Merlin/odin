@@ -6,6 +6,7 @@ import pytest
 from odin.signal import (
     ApiInfo,
     DirectMessage,
+    GroupMessage,
     ReactionEvent,
     group_id_from_internal,
     parse_direct_message,
@@ -49,11 +50,76 @@ def test_bytes_payload() -> None:
     assert parse_event(fixture("reaction_add.json").encode()) is not None
 
 
+def test_group_message() -> None:
+    assert parse_event(fixture("text_message.json")) == GroupMessage(
+        sender="+4915100000002",
+        sender_name="Alex",
+        text="Ich bringe noch jemanden mit!",
+        group_id=FLAT_GROUP_ID,
+        timestamp=1760454300000,
+    )
+
+
+def test_group_reply_in_jsonrpc_envelope_with_hidden_number() -> None:
+    assert parse_event(fixture("group_reply_jsonrpc.json")) == GroupMessage(
+        sender="5c6a3e2b-1f0d-4c8e-9a7b-2d3e4f5a6b7c",
+        sender_name="Alex",
+        text="/status",
+        group_id=FLAT_GROUP_ID,
+        timestamp=1760454400000,
+    )
+
+
+@pytest.mark.parametrize("name", [None, ""])
+def test_group_message_without_sender_name(name: str | None) -> None:
+    data = json.loads(fixture("text_message.json"))
+    data["envelope"]["sourceName"] = name
+    message = parse_event(json.dumps(data))
+    assert isinstance(message, GroupMessage)
+    assert message.sender_name is None
+
+
 @pytest.mark.parametrize(
-    "name", ["text_message.json", "receipt.json", "direct_reaction.json", "direct_message.json"]
+    "name",
+    ["receipt.json", "direct_reaction.json", "direct_message.json", "sync_message_jsonrpc.json"],
 )
-def test_non_group_reactions_are_ignored(name: str) -> None:
+def test_non_group_events_are_ignored(name: str) -> None:
     assert parse_event(fixture(name)) is None
+
+
+def test_attachment_only_group_message_is_ignored() -> None:
+    data = json.loads(fixture("text_message.json"))
+    data_message = data["envelope"]["dataMessage"]
+    data_message["message"] = None
+    data_message["attachments"] = [{"contentType": "image/jpeg", "id": "a1b2c3.jpg", "size": 1}]
+    assert parse_event(json.dumps(data)) is None
+
+
+def test_edited_group_message_is_ignored() -> None:
+    data = json.loads(fixture("text_message.json"))
+    data_message = data["envelope"].pop("dataMessage")
+    data["envelope"]["editMessage"] = {
+        "targetSentTimestamp": 1760454300000,
+        "dataMessage": {**data_message, "message": "Ich bringe zwei Leute mit!"},
+    }
+    assert parse_event(json.dumps(data)) is None
+
+
+def test_group_story_is_ignored() -> None:
+    data = json.loads(fixture("text_message.json"))
+    del data["envelope"]["dataMessage"]
+    data["envelope"]["storyMessage"] = {
+        "allowsReplies": True,
+        "groupId": "kDUPwaOoyWrT8vMJ5mB/s8GcFwVv8Gxe2jF3e9mIuO0=",
+        "textAttachment": {"text": "Sonntag!"},
+    }
+    assert parse_event(json.dumps(data)) is None
+
+
+def test_group_message_missing_fields_is_ignored() -> None:
+    data = json.loads(fixture("text_message.json"))
+    del data["envelope"]["timestamp"]
+    assert parse_event(json.dumps(data)) is None
 
 
 @pytest.mark.parametrize("payload", ["[]", "null", '{"error": "boom"}', '{"envelope": 3}'])
@@ -131,6 +197,8 @@ def test_direct_message_in_jsonrpc_envelope_with_hidden_number() -> None:
     "name",
     [
         "text_message.json",
+        "group_reply_jsonrpc.json",
+        "sync_message_jsonrpc.json",
         "receipt.json",
         "direct_reaction.json",
         "reaction_add.json",
