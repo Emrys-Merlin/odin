@@ -66,7 +66,8 @@ anyone who wants to help cook (explicitly optional — helping is absolutely no 
 
 Flatmates can look at and change ODIN's settings from the chat with commands. A command is a
 message that starts with `/` or `!` followed by the command name (`/help` = `!help`; the name is
-English and case-insensitive). Replies are in German. A message that starts with `/` or `!` plus
+case-insensitive). Command names and their arguments are English only (`/nudge on`, weekdays as
+`thu`), never mixed with German; replies are in German. A message that starts with `/` or `!` plus
 a letter but is no known command gets a short German error pointing to `/help`; everything else
 is ignored. Commands are answered in the flat group only; in the dinner group (or any other
 group) ODIN ignores them.
@@ -81,6 +82,9 @@ group) ODIN ignores them.
 | `/settext <name>` | Replaces template `<name>` (`flat_ask`, `nudge`, `announcement`, `cancellation`, `tally`) with the text on the following lines, after checking its placeholders; replies with a preview. |
 | `/resettext <name>` | Drops the chat change to template `<name>`, back to the config file's text; replies with a preview. |
 | `/vars [name]` | Lists the template placeholders with a German description and current value; with a template name only those allowed in it. |
+| `/settime <point> <weekday> <HH:MM>` | Moves a schedule point (`flat_ask`, `nudge`, `flat_deadline`, `rsvp_by`, `tally`, `cook`, `dinner`); weekdays as in the config (`thu`, `thursday`). Takes effect at once, but is rejected if it breaks the schedule order, moves the current dinner week, or makes a not-yet-done step of this week due right now. |
+| `/nudge on\|off` | Turns the nudge on or off; same guard. |
+| `/resettime <point>` | Drops the chat change of a point back to the config value (for `nudge` also on/off); same guard. |
 
 ## Architecture
 
