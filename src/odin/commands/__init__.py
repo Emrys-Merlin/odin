@@ -7,12 +7,14 @@ Every command lives in its own module and is registered in `COMMANDS` below. The
 from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError, parse
 from odin.commands.help import HELP
+from odin.commands.status import STATUS
 
 __all__ = ["COMMANDS", "Command", "CommandContext", "CommandError", "handle"]
 
 # The registry, in the order /help lists the commands. One line per command.
 COMMANDS: list[Command] = [
     HELP,
+    STATUS,
 ]
 
 

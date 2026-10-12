@@ -74,6 +74,7 @@ group) ODIN ignores them.
 | Command | What it does |
 |---------|--------------|
 | `/help` | Lists all commands with a one-line description. |
+| `/status` | This dinner week: each step (flat ask, nudge, decision, tally) as sent, skipped or pending, the 👍 counts on the flat poll and the announcement, and the next action. |
 
 ## Architecture
 
