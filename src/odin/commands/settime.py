@@ -46,13 +46,13 @@ STEP_LABELS = {
 
 POINT_LIST = ", ".join(SCHEDULE_POINTS)
 SETTIME_USAGE = (
-    "So geht's: /settime <punkt> <tag> <HH:MM>, z. B. /settime flat_deadline do 12:00.\n"
+    "So geht's: /settime <punkt> <tag> <HH:MM>, z. B. /settime flat_deadline thu 12:00.\n"
     f"Punkte: {POINT_LIST}"
 )
 RESETTIME_USAGE = f"So geht's: /resettime <punkt>, z. B. /resettime tally.\nPunkte: {POINT_LIST}"
-NUDGE_USAGE = "So geht's: /nudge an oder /nudge aus."
+NUDGE_USAGE = "So geht's: /nudge on oder /nudge off."
 UNKNOWN_POINT = "Den Zeitpunkt {point} kenne ich nicht. Punkte: " + POINT_LIST
-UNKNOWN_WEEKDAY = "Den Wochentag {day} kenne ich nicht – nimm z. B. mo, di, … oder montag, …"
+UNKNOWN_WEEKDAY = "Den Wochentag {day} kenne ich nicht – nimm z. B. mon, tue, … oder monday, …"
 BAD_TIME = "Die Uhrzeit {time} verstehe ich nicht – bitte als HH:MM, z. B. 18:00."
 
 ORDER_RULE = (
@@ -96,16 +96,14 @@ HARDCODED_WEEKDAY = (
 
 # --- Parsing ------------------------------------------------------------------------------------
 
-# Accepted weekday spellings → 0 = Monday … 6 = Sunday: what the config accepts (mon, monday)
-# plus German (mo, montag).
+# Accepted weekday spellings → 0 = Monday … 6 = Sunday: what the config accepts (mon, monday).
+# Commands and their arguments are English only, like the command names.
 WEEKDAY_NAMES: dict[str, int] = {
-    name.lower(): i
-    for i, (de, en) in enumerate(zip(WEEKDAYS_DE, WEEKDAYS_EN, strict=True))
-    for name in (en, en[:3], de, de[:2])
+    name.lower(): i for i, en in enumerate(WEEKDAYS_EN) for name in (en, en[:3])
 }
 
 _TIME = re.compile(r"(\d{1,2}):(\d{2})")
-_ON = {"on": True, "an": True, "off": False, "aus": False}
+_ON = {"on": True, "off": False}
 _ORDER_ERROR = re.compile(r"schedule: (\w+) \(.*\) must come before (\w+) ")
 _HARDCODED_DAY = re.compile(r"\b(" + "|".join(WEEKDAYS_DE + WEEKDAYS_EN) + r")\b", re.IGNORECASE)
 
@@ -343,7 +341,7 @@ SETTIME = Command(
 )
 NUDGE = Command(
     name="nudge",
-    usage="/nudge an|aus",
+    usage="/nudge on|off",
     summary="Schaltet die Erinnerung an die WG an oder aus.",
     run=run_nudge,
 )

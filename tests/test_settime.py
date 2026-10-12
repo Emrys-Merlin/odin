@@ -114,9 +114,7 @@ def test_changed_by_falls_back_to_the_number(store: Store) -> None:
     assert store.overrides()["schedule.tally"].changed_by == "+4915100000001"
 
 
-@pytest.mark.parametrize(
-    "day", ["thu", "thursday", "THU", "do", "Do", "donnerstag", "DONNERSTAG", "Thursday"]
-)
+@pytest.mark.parametrize("day", ["thu", "thursday", "THU", "Thu", "Thursday", "THURSDAY"])
 def test_weekday_forms(store: Store, day: str) -> None:
     send(store, f"/settime flat_deadline {day} 12:00", local(5, 10))
     assert values(store) == {"schedule.flat_deadline": "thu 12:00"}
@@ -125,16 +123,15 @@ def test_weekday_forms(store: Store, day: str) -> None:
 @pytest.mark.parametrize(
     ("words", "expected"),
     [
-        ("mo 9:05", WeeklyTime(0, time(9, 5))),
-        ("di 18:00", WeeklyTime(1, time(18))),
-        ("mi 6:00", WeeklyTime(2, time(6))),
-        ("Do 0:00", WeeklyTime(3, time(0))),
-        ("fr 23:59", WeeklyTime(4, time(23, 59))),
-        ("SA 10:00", WeeklyTime(5, time(10))),
-        ("so 10:00", WeeklyTime(6, time(10))),
-        ("Montag 07:00", WeeklyTime(0, time(7))),
-        ("mittwoch 7:00", WeeklyTime(2, time(7))),
-        ("sonntag 7:00", WeeklyTime(6, time(7))),
+        ("mon 9:05", WeeklyTime(0, time(9, 5))),
+        ("tue 18:00", WeeklyTime(1, time(18))),
+        ("wed 6:00", WeeklyTime(2, time(6))),
+        ("Thu 0:00", WeeklyTime(3, time(0))),
+        ("fri 23:59", WeeklyTime(4, time(23, 59))),
+        ("SAT 10:00", WeeklyTime(5, time(10))),
+        ("Monday 07:00", WeeklyTime(0, time(7))),
+        ("wednesday 7:00", WeeklyTime(2, time(7))),
+        ("sunday 7:00", WeeklyTime(6, time(7))),
         ("sun 7:00", WeeklyTime(6, time(7))),
         ("Tuesday 7:00", WeeklyTime(1, time(7))),
     ],
@@ -144,7 +141,7 @@ def test_parse_weekly_time(words: str, expected: WeeklyTime) -> None:
 
 
 def test_short_time_is_stored_zero_padded(store: Store) -> None:
-    send(store, "/settime tally sa 9:05", local(5, 10))
+    send(store, "/settime tally sat 9:05", local(5, 10))
     assert values(store) == {"schedule.tally": "sat 09:05"}
 
 
@@ -156,7 +153,7 @@ def test_bad_time(store: Store, clock: str) -> None:
     assert values(store) == {}
 
 
-@pytest.mark.parametrize("day", ["xy", "mont", "d", "samstagabend"])
+@pytest.mark.parametrize("day", ["xy", "mont", "d", "samstagabend", "do", "donnerstag", "sa"])
 def test_bad_weekday(store: Store, day: str) -> None:
     reply = send(store, f"/settime tally {day} 10:00", local(5, 10))
     assert reply.startswith(f"Den Wochentag {day} kenne ich nicht")
@@ -198,9 +195,9 @@ def test_order_takes_the_other_overrides_into_account(store: Store) -> None:
 
 def test_nudge_on_rejected_when_its_time_breaks_the_order(store: Store) -> None:
     # The nudge keeps its Wed 12:00 while off; the deadline moves before it.
-    send(store, "/nudge aus", local(5, 10))
+    send(store, "/nudge off", local(5, 10))
     send(store, "/settime flat_deadline wed 10:00", local(5, 10))
-    reply = send(store, "/nudge an", local(5, 10))
+    reply = send(store, "/nudge on", local(5, 10))
     assert reply.startswith("Das passt nicht: nudge muss vor flat_deadline liegen.")
     assert values(store)[NUDGE_ENABLED_KEY] == "false"
 
@@ -375,7 +372,7 @@ def test_harmless_changes_are_accepted(
 
 def test_nudge_on_within_its_window_is_rejected(store: Store) -> None:
     record(store, Action.FLAT_ASK, at=local(6, 18))
-    reply = send(store, "/nudge an", local(7, 13), base=NO_NUDGE)
+    reply = send(store, "/nudge on", local(7, 13), base=NO_NUDGE)
     assert reply == "Dann wäre die Erinnerung sofort fällig – das geht nicht über den Chat."
     assert values(store) == {}
 
@@ -383,7 +380,7 @@ def test_nudge_on_within_its_window_is_rejected(store: Store) -> None:
 def test_nudge_on_after_the_deadline_is_accepted(store: Store) -> None:
     # The nudge would only be recorded as skipped, nothing is sent.
     record(store, Action.FLAT_ASK, Action.ANNOUNCEMENT, at=local(7, 18))
-    reply = send(store, "/nudge an", local(8, 10), base=NO_NUDGE)
+    reply = send(store, "/nudge on", local(8, 10), base=NO_NUDGE)
     assert reply.startswith(SAVED)
     assert values(store) == {NUDGE_ENABLED_KEY: "true"}
 
@@ -400,13 +397,13 @@ def test_reset_goes_through_the_guard(store: Store) -> None:
 # --- /nudge and /resettime ----------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(("word", "value"), [("off", "false"), ("AUS", "false"), ("an", "true")])
+@pytest.mark.parametrize(("word", "value"), [("off", "false"), ("OFF", "false"), ("on", "true")])
 def test_nudge_words(store: Store, word: str, value: str) -> None:
     send(store, f"/nudge {word}", local(5, 10))
     assert values(store) == {NUDGE_ENABLED_KEY: value}
 
 
-@pytest.mark.parametrize("args", ["", "vielleicht", "an aus"])
+@pytest.mark.parametrize("args", ["", "vielleicht", "on off", "an", "aus"])
 def test_nudge_usage(store: Store, args: str) -> None:
     assert send(store, f"/nudge {args}", local(5, 10)) == NUDGE_USAGE
 
