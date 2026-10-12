@@ -153,11 +153,9 @@ def test_help_lists_every_registered_command_in_order(ctx: CommandContext) -> No
     [reply] = handle("!HELP", ctx)
     lines = reply.splitlines()
     listed = [line for line in lines if line.startswith("/")]
-    assert listed == [
-        "/help – Zeigt alle Befehle.",
-        "/echo <text> – Wiederholt den Text.",
-        "/fail – Schlägt fehl.",
-    ]
+    assert listed == [f"{c.usage} – {c.summary}" for c in odin.commands.COMMANDS]
+    assert listed[0] == "/help – Zeigt alle Befehle."
+    assert listed[-2:] == ["/echo <text> – Wiederholt den Text.", "/fail – Schlägt fehl."]
 
 
 # --- Shared UI strings --------------------------------------------------------------------------

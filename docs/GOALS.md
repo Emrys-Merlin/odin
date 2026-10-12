@@ -73,6 +73,7 @@ is ignored.
 | Command | What it does |
 |---------|--------------|
 | `/help` | Lists all commands with a one-line description. |
+| `/vars [name]` | Lists the template placeholders with a German description and current value; with a template name only those allowed in it. |
 
 ## Architecture
 
