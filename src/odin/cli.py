@@ -12,9 +12,10 @@ from collections.abc import Mapping, Sequence
 import httpx
 
 import odin
-from odin.app import SETUP_HINT, Source, resolve_account, serve, upcoming_actions
+from odin.app import SETUP_HINT, Source, resolve_account, serve
 from odin.clock import Clock, SystemClock
 from odin.config import ConfigError, Settings, load_settings, load_signal_env
+from odin.engine import upcoming_actions
 from odin.setup import REDO_STEPS, SetupOptions, run_setup, setup_status
 from odin.signal import RestSignalClient, SignalApiError
 from odin.store import Store

@@ -15,12 +15,11 @@ from odin.app import (
     resolve_account,
     run_bot,
     serve,
-    upcoming_actions,
 )
 from odin.cli import main
 from odin.clock import FixedClock
 from odin.config import load_config, load_env
-from odin.engine import Account
+from odin.engine import Account, upcoming_actions
 from odin.signal import FakeSignalAdmin, FakeSignalClient, ReactionEvent
 from odin.store import Action, MessageKind, Store
 
