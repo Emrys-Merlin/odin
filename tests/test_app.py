@@ -20,7 +20,7 @@ from odin.cli import main
 from odin.clock import FixedClock
 from odin.config import load_config, load_env
 from odin.engine import Account, upcoming_actions
-from odin.signal import FakeSignalAdmin, FakeSignalClient, ReactionEvent
+from odin.signal import FakeSignalAdmin, FakeSignalClient, GroupMessage, ReactionEvent
 from odin.store import Action, MessageKind, Store
 
 EXAMPLE = Path(__file__).parent.parent / "config.example.toml"
@@ -178,6 +178,33 @@ def test_reactions_are_consumed_while_ticking(store: Store) -> None:
     assert announcement.group_id == ACCOUNT.dinner_group_id
     assert announcement.text.startswith("Diesen Sonntag gibt es offenes Abendessen!")
     assert store.has_action(WEEK, Action.ANNOUNCEMENT)
+
+
+def test_commands_are_answered_while_ticking(store: Store) -> None:
+    client = FakeSignalClient(number=ACCOUNT.number)
+    clock = FixedClock(local(6, 12))  # nothing due
+
+    def message(text: str, group_id: str) -> GroupMessage:
+        return GroupMessage(ANNA, "Anna", text, group_id, int(clock.now().timestamp() * 1000))
+
+    async def scenario() -> None:
+        stop = asyncio.Event()
+        bot = asyncio.create_task(
+            run_bot(CONFIG, store, client, ACCOUNT, clock, stop, tick_interval=timedelta(0))
+        )
+        client.inject(message("/help", ACCOUNT.dinner_group_id))
+        client.inject(message("/help", ACCOUNT.flat_group_id))
+        await until(lambda: len(client.sent) == 1)
+        for _ in range(50):
+            await asyncio.sleep(0)
+        stop.set()
+        await bot
+
+    asyncio.run(scenario())
+
+    [reply] = client.sent
+    assert reply.group_id == ACCOUNT.flat_group_id
+    assert reply.text.startswith("Das kann ich:")
 
 
 def test_overrides_apply_without_a_restart(store: Store) -> None:
