@@ -46,10 +46,12 @@ name = "Odin 🍽️"
 #   {emoji}
 #   {deadline} {rsvp_by} {cook_time} {dinner_time}   — times from [schedule], as HH:MM
 #                                                      (deadline = flat_deadline, cook_time = cook)
-#   {deadline_day_de} {rsvp_by_day_de} {cook_day_de} {dinner_day_de}
-#                                                    — their weekdays in German: Mittwoch, …
-#   {deadline_day_en} {rsvp_by_day_en} {cook_day_en} {dinner_day_en}
-#                                                    — their weekdays in English: Wednesday, …
+#   {flat_ask_day_de} {deadline_day_de} {rsvp_by_day_de} {cook_day_de} {dinner_day_de}
+#                                                    — weekdays in German: Dienstag, Mittwoch, …
+#   {flat_ask_day_en} {deadline_day_en} {rsvp_by_day_en} {cook_day_en} {dinner_day_en}
+#                                                    — weekdays in English: Tuesday, Wednesday, …
+#                                                      (flat_ask_day = the day of flat_ask, which
+#                                                      has no time placeholder)
 #   {count}                                          — tally only
 # Unknown placeholders are rejected at startup. Write {{ and }} for literal braces.
 # Use the weekday placeholders instead of writing weekday names, so the texts stay right when
@@ -106,6 +108,6 @@ weitergehen kann.
 
 # Optional test message to the flat group at the end of `odin setup`.
 flat_test = """
-Hallo, ich bin Odin 🍽️! Ab jetzt frage ich jeden Dienstag, ob am {dinner_day_de} das \
-offene Abendessen stattfindet. Bestätigt wird mit {emoji}.
+Hallo, ich bin Odin 🍽️! Ab jetzt frage ich jeden {flat_ask_day_de}, ob am {dinner_day_de} \
+das offene Abendessen stattfindet. Bestätigt wird mit {emoji}.
 """
