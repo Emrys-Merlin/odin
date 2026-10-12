@@ -1,4 +1,4 @@
-"""Wiring: the running bot is the reaction consumer and a periodic reconcile tick, side by side.
+"""Wiring: the running bot is the event consumer and a periodic reconcile tick, side by side.
 
 `serve` supervises it: the bot only runs while ODIN is set up and `odin setup` is not running.
 """
@@ -13,8 +13,8 @@ from enum import StrEnum
 from odin.clock import Clock
 from odin.config import Config, Env, WeeklyTime
 from odin.engine import Account, dinner_week, reconcile
+from odin.events import consume_events
 from odin.overrides import effective_config
-from odin.reactions import consume_reactions
 from odin.signal import SignalAdmin, SignalClient
 from odin.store import Store
 
@@ -216,16 +216,19 @@ async def run_bot(
     stop: asyncio.Event,
     tick_interval: timedelta = TICK_INTERVAL,
 ) -> None:
-    """Consume reactions and reconcile every `tick_interval` until `stop` is set.
+    """Consume events (reactions, commands) and reconcile every `tick_interval` until stopped.
 
-    `config` is the TOML config; each tick and each reaction use it with the overrides stored at
-    that moment (see `odin.overrides`), so a change made via chat applies by the next tick.
+    `config` is the TOML config; each tick, reaction and command use it with the overrides stored
+    at that moment (see `odin.overrides`), so a change made via chat applies by the next tick.
+    Ticks and commands share the store on one event loop. A tick computes its config once and
+    keeps it across the sends it awaits, so a command handled meanwhile cannot change a tick in
+    progress; the store writes on either side are sync and never span an await.
 
     The first tick runs right away. A tick in progress is finished before shutting down, so a
     sent message is always recorded. If the event stream ends or fails, the bot stops with an
     error: a container restart is the simplest way back to a working connection.
     """
-    consumer = asyncio.create_task(consume_reactions(client, store, config, clock))
+    consumer = asyncio.create_task(consume_events(client, store, config, account, clock))
     stopped = asyncio.create_task(stop.wait())
     try:
         while True:
