@@ -15,8 +15,8 @@ __all__ = ["COMMANDS", "Command", "CommandContext", "CommandError", "handle"]
 # The registry, in the order /help lists the commands. One line per command.
 COMMANDS: list[Command] = [
     HELP,
-    SCHEDULE,
     STATUS,
+    SCHEDULE,
 ]
 
 
