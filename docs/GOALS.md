@@ -76,6 +76,8 @@ group) ODIN ignores them.
 | `/help` | Lists all commands with a one-line description. |
 | `/status` | This dinner week: each step (flat ask, nudge, decision, tally) as sent, skipped or pending, the 👍 counts on the flat poll and the announcement, and the next action. |
 | `/schedule` | Shows the 7 schedule points (key, German description, weekday and time), whether the nudge is off, and who changed a value via chat. |
+| `/texts` | Lists the five editable weekly templates: group, short description, and who changed it when if overridden. |
+| `/text <name>` | Shows a template twice: raw as a ready-to-send `/settext <name>` command, and rendered with this week's values (for `tally` with the current 👍 count, or a sample count of 3). |
 
 ## Architecture
 
