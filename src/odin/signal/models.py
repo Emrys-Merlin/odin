@@ -55,4 +55,20 @@ class ReactionEvent:
     timestamp: int
 
 
-type Event = ReactionEvent
+@dataclass(frozen=True, slots=True)
+class GroupMessage:
+    """A text message someone wrote in a group the bot is in.
+
+    ``sender`` is the phone number, or the UUID if the sender hides their number (as for
+    ``ReactionEvent.reactor``); ``sender_name`` is their Signal profile name, if known.
+    ``group_id`` is the ``group.<base64>`` form, ``timestamp`` the sent time (ms since epoch).
+    """
+
+    sender: str
+    sender_name: str | None
+    text: str
+    group_id: str
+    timestamp: int
+
+
+type Event = ReactionEvent | GroupMessage

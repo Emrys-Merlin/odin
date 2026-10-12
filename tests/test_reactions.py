@@ -8,7 +8,7 @@ import pytest
 from odin.clock import FixedClock
 from odin.config import Config, parse_config
 from odin.reactions import consume_reactions, count_confirmations, same_emoji
-from odin.signal import FakeSignalClient, ReactionEvent
+from odin.signal import FakeSignalClient, GroupMessage, ReactionEvent
 from odin.store import MessageKind, Store, TrackedMessage
 
 TEMPLATES = {
@@ -196,3 +196,19 @@ def test_reaction_on_untracked_message_ignored(world: World) -> None:
 def test_reaction_from_another_group_ignored(world: World) -> None:
     world.react(world.poll, ANNA, at=after_ask(minutes=5), group_id=DINNER)
     assert world.count(world.poll) == 0
+
+
+def test_group_messages_are_ignored(world: World) -> None:
+    # A text message that happens to share the poll's author and timestamp must not count.
+    world.client.inject(
+        GroupMessage(
+            sender=world.poll.author,
+            sender_name="Odin",
+            text="👍",
+            group_id=FLAT,
+            timestamp=world.poll.timestamp,
+        )
+    )
+    world.react(world.poll, ANNA, at=after_ask(minutes=5))
+    assert world.count(world.poll) == 1
+    assert [r.reactor for r in world.store.reactions_for(world.poll)] == [ANNA]
