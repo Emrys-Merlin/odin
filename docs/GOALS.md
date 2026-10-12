@@ -73,6 +73,8 @@ is ignored.
 | Command | What it does |
 |---------|--------------|
 | `/help` | Lists all commands with a one-line description. |
+| `/settext <name>` | Replaces template `<name>` (`flat_ask`, `nudge`, `announcement`, `cancellation`, `tally`) with the text on the following lines, after checking its placeholders; replies with a preview. |
+| `/resettext <name>` | Drops the chat change to template `<name>`, back to the config file's text; replies with a preview. |
 
 ## Architecture
 
