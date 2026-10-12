@@ -42,45 +42,54 @@ name = "Odin 🍽️"
 # Optional about text, shown under the name. Leave it out to keep what Signal has; "" clears it.
 # about = "Ich organisiere das Sonntagsessen · I organise the Sunday dinner"
 
-# Message texts. Placeholders (times as HH:MM):
-#   {emoji} {deadline} {rsvp_by} {cook_time} {dinner_time}   — in every template
-#   {count}                                                  — tally only
+# Message texts. Placeholders, in every template unless noted:
+#   {emoji}
+#   {deadline} {rsvp_by} {cook_time} {dinner_time}   — times from [schedule], as HH:MM
+#                                                      (deadline = flat_deadline, cook_time = cook)
+#   {deadline_day_de} {rsvp_by_day_de} {cook_day_de} {dinner_day_de}
+#                                                    — their weekdays in German: Mittwoch, …
+#   {deadline_day_en} {rsvp_by_day_en} {cook_day_en} {dinner_day_en}
+#                                                    — their weekdays in English: Wednesday, …
+#   {count}                                          — tally only
 # Unknown placeholders are rejected at startup. Write {{ and }} for literal braces.
-# Weekday names are part of the text: update them when you change the schedule.
+# Use the weekday placeholders instead of writing weekday names, so the texts stay right when
+# the schedule changes.
 # Flat-group texts are German; dinner-group texts are German, blank line, English.
 # hello and flat_test are only sent by `odin setup`.
 [templates]
 flat_ask = """
-Findet am Sonntag das offene Abendessen statt? 🍽️
-Wer da ist und das Abendessen ausrichtet, reagiert bitte bis Mittwoch {deadline} mit {emoji} \
-auf diese Nachricht. Ein {emoji} reicht – ohne {emoji} sage ich das Abendessen am Mittwoch \
-um {deadline} ab.
+Findet am {dinner_day_de} das offene Abendessen statt? 🍽️
+Wer da ist und das Abendessen ausrichtet, reagiert bitte bis {deadline_day_de} {deadline} mit \
+{emoji} auf diese Nachricht. Ein {emoji} reicht – ohne {emoji} sage ich das Abendessen am \
+{deadline_day_de} um {deadline} ab.
 """
 
 nudge = """
-Bisher hat noch niemand mit {emoji} bestätigt, dass das Abendessen am Sonntag stattfindet. \
-Wenn bis heute {deadline} kein {emoji} auf meine Frage von gestern kommt, sage ich es ab.
+Bisher hat noch niemand mit {emoji} bestätigt, dass das Abendessen am {dinner_day_de} \
+stattfindet. Wenn bis {deadline_day_de} {deadline} kein {emoji} auf meine Frage kommt, sage \
+ich es ab.
 """
 
 cancellation = """
-Diesen Sonntag findet leider kein offenes Abendessen statt. Bis zum nächsten Mal!
+Diesen {dinner_day_de} findet leider kein offenes Abendessen statt. Bis zum nächsten Mal!
 
-Unfortunately, there is no open dinner this Sunday. See you next time!
+Unfortunately, there is no open dinner this {dinner_day_en}. See you next time!
 """
 
 announcement = """
-Diesen Sonntag gibt es offenes Abendessen! 🍽️
+Diesen {dinner_day_de} gibt es offenes Abendessen! 🍽️
 Essen gibt es um {dinner_time}. Wer mag, kann schon um {cook_time} kommen und beim Kochen \
 helfen – das ist völlig freiwillig und überhaupt keine Voraussetzung.
-Wenn du kommst, reagiere bitte mit {emoji} auf diese Nachricht, am besten bis Freitag \
-{rsvp_by} – dann bestellen wir das Essen. Bringst du jemanden mit? Dann schreib das bitte \
-als Antwort auf diese Nachricht.
+Wenn du kommst, reagiere bitte mit {emoji} auf diese Nachricht, am besten bis \
+{rsvp_by_day_de} {rsvp_by} – dann bestellen wir das Essen. Bringst du jemanden mit? Dann \
+schreib das bitte als Antwort auf diese Nachricht.
 
-Open dinner this Sunday! 🍽️
+Open dinner this {dinner_day_en}! 🍽️
 Dinner is at {dinner_time}. If you like, come at {cook_time} and help cook – that is entirely \
 optional and absolutely no requirement.
-If you are coming, please react with {emoji} to this message, ideally by Friday {rsvp_by} – \
-that is when we order the food. Bringing someone? Please say so in a reply to this message.
+If you are coming, please react with {emoji} to this message, ideally by {rsvp_by_day_en} \
+{rsvp_by} – that is when we order the food. Bringing someone? Please say so in a reply to this \
+message.
 """
 
 tally = """
@@ -97,6 +106,6 @@ weitergehen kann.
 
 # Optional test message to the flat group at the end of `odin setup`.
 flat_test = """
-Hallo, ich bin Odin 🍽️! Ab jetzt frage ich jeden Dienstag, ob am Sonntag das offene \
-Abendessen stattfindet. Bestätigt wird mit {emoji}.
+Hallo, ich bin Odin 🍽️! Ab jetzt frage ich jeden Dienstag, ob am {dinner_day_de} das \
+offene Abendessen stattfindet. Bestätigt wird mit {emoji}.
 """
