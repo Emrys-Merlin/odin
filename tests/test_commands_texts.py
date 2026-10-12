@@ -36,7 +36,7 @@ def store() -> Iterator[Store]:
 def context(store: Store) -> CommandContext:
     return CommandContext(
         base=CONFIG,
-        config=effective_config(CONFIG, store),
+        config=effective_config(CONFIG, store, NOW),
         store=store,
         now=NOW,
         sender="+4915100000002",

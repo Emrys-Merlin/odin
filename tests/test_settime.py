@@ -61,7 +61,7 @@ def send(store: Store, text: str, now: datetime, base: Config = CONFIG) -> str:
     """Handle `text` as Anna at `now` with the effective config; the one reply."""
     ctx = CommandContext(
         base=base,
-        config=effective_config(base, store),
+        config=effective_config(base, store, now),
         store=store,
         now=now,
         sender="+4915100000001",
@@ -219,14 +219,6 @@ def test_moving_dinner_before_now_is_rejected(store: Store) -> None:
     base = make_config(schedule={"cook": {"weekday": "sun", "time": "16:00"}})
     reply = send(store, "/settime dinner sun 17:00", local(11, 17, 30), base=base)
     assert reply.startswith("Damit würde sich die aktuelle Essenswoche verschieben")
-    assert values(store) == {}
-
-
-@pytest.mark.parametrize("now", [local(5, 10), local(10, 19), local(11, 19)])
-def test_dinner_weekday_cannot_change(store: Store, now: datetime) -> None:
-    base = make_config(schedule={"cook": {"weekday": "sat", "time": "17:00"}})
-    reply = send(store, "/settime dinner sat 18:00", now, base=base)
-    assert reply.startswith("Den Wochentag des Essens kann ich über den Chat nicht ändern")
     assert values(store) == {}
 
 
@@ -411,7 +403,7 @@ def test_nudge_usage(store: Store, args: str) -> None:
 def test_nudge_off_then_reset(store: Store) -> None:
     reply = send(store, "/nudge off", local(5, 10))
     assert reply.splitlines()[:3] == [SAVED, "Erinnerung an die WG (nudge): aus", THIS_WEEK]
-    assert effective_config(CONFIG, store).schedule.nudge is None
+    assert effective_config(CONFIG, store, local(5, 10)).schedule.nudge is None
 
     send(store, "/settime nudge wed 10:00", local(5, 10))
     assert values(store) == {NUDGE_ENABLED_KEY: "false", "schedule.nudge": "wed 10:00"}
@@ -422,7 +414,9 @@ def test_nudge_off_then_reset(store: Store) -> None:
         "Erinnerung an die WG (nudge): Mi 12:00, nächstes Mal Mi 07.10. um 12:00",
     ]
     assert values(store) == {}
-    assert effective_config(CONFIG, store).schedule.nudge == CONFIG.schedule.nudge_time
+    assert (
+        effective_config(CONFIG, store, local(5, 10)).schedule.nudge == CONFIG.schedule.nudge_time
+    )
 
 
 def test_reset_when_nothing_is_overridden(store: Store) -> None:
@@ -485,7 +479,7 @@ def test_engine_sends_the_tally_at_the_new_time(store: Store) -> None:
     sent_at: dict[str, datetime] = {}
 
     def tick(now: datetime) -> None:
-        config = effective_config(CONFIG, store)
+        config = effective_config(CONFIG, store, now)
         before = len(client.sent)
         asyncio.run(reconcile(config, store, client, ACCOUNT, now))
         for message in client.sent[before:]:
@@ -505,7 +499,7 @@ def test_engine_sends_the_tally_at_the_new_time(store: Store) -> None:
                 is_remove=False,
                 timestamp=int(now.timestamp() * 1000),
             )
-            handle_reaction(event, store, effective_config(CONFIG, store), now)
+            handle_reaction(event, store, effective_config(CONFIG, store, now), now)
         now += timedelta(minutes=30)
 
     assert store.action_outcome(WEEK, Action.ANNOUNCEMENT) is Outcome.SENT

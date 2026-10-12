@@ -255,6 +255,7 @@ async def _tick(
     config: Config, store: Store, client: SignalClient, account: Account, clock: Clock
 ) -> None:
     try:
-        await reconcile(effective_config(config, store), store, client, account, clock.now())
+        now = clock.now()
+        await reconcile(effective_config(config, store, now), store, client, account, now)
     except Exception:
         logger.exception("reconcile tick failed; retrying next tick")
