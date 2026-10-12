@@ -40,7 +40,8 @@ async def consume_events(
     """
     async for event in client.events():
         if isinstance(event, ReactionEvent):
-            handle_reaction(event, store, effective_config(config, store), clock.now())
+            now = clock.now()
+            handle_reaction(event, store, effective_config(config, store, now), now)
         elif (
             isinstance(event, GroupMessage)
             and event.group_id == account.flat_group_id
@@ -58,11 +59,12 @@ async def _answer(
     clock: Clock,
 ) -> None:
     """Run the command in `message`, if it is one, and send its replies to the flat group."""
+    now = clock.now()
     ctx = CommandContext(
         base=config,
-        config=effective_config(config, store),
+        config=effective_config(config, store, now),
         store=store,
-        now=clock.now(),
+        now=now,
         sender=message.sender,
         sender_name=message.sender_name,
     )

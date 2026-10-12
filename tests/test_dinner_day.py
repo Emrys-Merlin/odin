@@ -1,0 +1,573 @@
+"""Changing the dinner weekday from chat (#77): never inside the running dinner week."""
+
+import asyncio
+import logging
+import sqlite3
+from collections.abc import Iterator
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, time, timedelta
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from odin.commands import CommandContext, handle
+from odin.commands.settime import RESET, SAVED
+from odin.config import Config, ConfigError, WeeklyTime, parse_config
+from odin.engine import Account, dinner_week, reconcile, step_windows, transition
+from odin.overrides import (
+    DINNER_KEY,
+    PENDING_DINNER_KEY,
+    apply_overrides,
+    effective_config,
+    format_weekly_time,
+    pending_dinner,
+)
+from odin.reactions import handle_reaction
+from odin.signal import FakeSignalClient, ReactionEvent
+from odin.store import _MIGRATIONS, Action, MessageKind, Outcome, Store
+
+TEMPLATES = {
+    "flat_ask": "ASK {dinner_day_de}",
+    "nudge": "NUDGE",
+    "cancellation": "ABGESAGT {dinner_day_de}\n\nCANCELLED {dinner_day_en}",
+    "announcement": "ESSEN {dinner_day_de}\n\nDINNER {dinner_day_en}",
+    "tally": "TALLY {count}",
+    "hello": "HELLO",
+    "flat_test": "TEST",
+}
+
+
+def make_config(**data: Any) -> Config:
+    return parse_config({"templates": TEMPLATES, **data})
+
+
+# Default schedule (flat ask Tue 18:00, nudge Wed 12:00, deadline Wed 18:00, tally Fri 14:00,
+# cook Sun 17:00, dinner Sun 18:00). Sun → Mon fits it as it is.
+CONFIG = make_config()
+# For Sun → Sat, cooking has to move off Sunday first.
+SAT_COOK = make_config(schedule={"cook": {"weekday": "sat", "time": "17:00"}})
+BERLIN = CONFIG.timezone
+ACCOUNT = Account(number="+490000000000", flat_group_id="group.flat=", dinner_group_id="group.d=")
+ANNA, BEN = "+4915100000001", "+4915100000002"
+
+
+def local(month: int, day: int, hour: int, minute: int = 0) -> datetime:
+    return datetime(2026, month, day, hour, minute, tzinfo=BERLIN)
+
+
+def oct(day: int, hour: int, minute: int = 0) -> datetime:
+    return local(10, day, hour, minute)
+
+
+# October 2026: Sun 11., Tue 13., Thu 15., Sat 17., Sun 18., Mon 19., Sat 24., Sun 25., Mon 26.
+SUN_18, MON_19, SAT_24, SUN_25, MON_26 = (date(2026, 10, d) for d in (18, 19, 24, 25, 26))
+
+
+@pytest.fixture
+def store() -> Iterator[Store]:
+    with Store(":memory:") as store:
+        yield store
+
+
+def send(store: Store, text: str, now: datetime, base: Config = CONFIG) -> str:
+    ctx = CommandContext(
+        base=base,
+        config=effective_config(base, store, now),
+        store=store,
+        now=now,
+        sender=ANNA,
+        sender_name="Anna",
+    )
+    return handle(text, ctx)[0]  # /settext adds a preview as a second reply
+
+
+def stored(store: Store) -> dict[str, tuple[str, date | None]]:
+    return {key: (o.value, o.after_week) for key, o in store.overrides().items()}
+
+
+# --- When the change applies --------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("now", [oct(13, 19), oct(15, 12), oct(17, 20), oct(18, 17, 59)])
+def test_change_during_a_started_week_waits_for_its_dinner(store: Store, now: datetime) -> None:
+    reply = send(store, "/settime dinner sat 18:00", now, SAT_COOK)
+    assert reply == "\n".join(
+        [
+            SAVED,
+            "Essen (dinner): So 18:00 → Sa 18:00",
+            "Das gilt ab dem Essen am Sa 24.10. um 18:00. "
+            "Diese Woche bleibt es beim Essen am So 18.10. um 18:00.",
+        ]
+    )
+    assert stored(store) == {PENDING_DINNER_KEY: ("sat 18:00", SUN_18)}
+
+    # The running week is untouched until its dinner starts …
+    before = effective_config(SAT_COOK, store, oct(18, 17, 59))
+    assert before == SAT_COOK
+    assert dinner_week(before, oct(18, 17, 59)) == SUN_18
+    # … and from then on the new weekday applies, stored as a plain override.
+    after = effective_config(SAT_COOK, store, oct(18, 18))
+    assert after.schedule.dinner == WeeklyTime(5, time(18, 0))
+    assert dinner_week(after, oct(18, 18)) == SAT_24
+    assert stored(store) == {DINNER_KEY: ("sat 18:00", None)}
+
+
+def test_change_on_tuesday_before_the_flat_ask_applies_this_week(store: Store) -> None:
+    # Nothing of the week of Sun 18. has happened yet, so it is simply replaced.
+    reply = send(store, "/settime dinner sat 18:00", oct(13, 10), SAT_COOK)
+    assert reply.splitlines()[1:] == [
+        "Essen (dinner): So 18:00 → Sa 18:00",
+        "Das gilt schon ab dieser Woche: nächstes Essen am Sa 17.10. um 18:00.",
+    ]
+    assert stored(store) == {DINNER_KEY: ("sat 18:00", None)}
+    assert dinner_week(effective_config(SAT_COOK, store, oct(13, 10)), oct(13, 10)) == date(
+        2026, 10, 17
+    )
+
+
+def test_change_after_dinner_applies_at_once_from_the_new_week(store: Store) -> None:
+    reply = send(store, "/settime dinner sat 18:00", oct(11, 19), SAT_COOK)
+    assert reply.splitlines()[2] == (
+        "Das gilt schon ab dieser Woche: nächstes Essen am Sa 17.10. um 18:00."
+    )
+    assert stored(store) == {DINNER_KEY: ("sat 18:00", None)}
+
+
+def test_a_recorded_step_counts_as_started(store: Store) -> None:
+    # The flat ask is not due yet, but something is recorded for the week (e.g. a catch-up).
+    store.record_action(SUN_18, Action.FLAT_ASK, oct(13, 9))
+    send(store, "/settime dinner sat 18:00", oct(13, 10), SAT_COOK)
+    assert stored(store) == {PENDING_DINNER_KEY: ("sat 18:00", SUN_18)}
+
+
+def test_sun_to_mon_drops_the_cut_short_week(store: Store) -> None:
+    reply = send(store, "/settime dinner mon 18:00", oct(15, 12))
+    assert reply == "\n".join(
+        [
+            SAVED,
+            "Essen (dinner): So 18:00 → Mo 18:00",
+            "Das gilt ab dem Essen am Mo 26.10. um 18:00. "
+            "Diese Woche bleibt es beim Essen am So 18.10. um 18:00.",
+            "Achtung: Am Mo 19.10. gibt es kein Essen – diese Woche fällt beim Wechsel aus, weil "
+            "ihre Frage an die WG schon vor dem Wechsel dran gewesen wäre. Sag am besten in der "
+            "Essensgruppe Bescheid.",
+        ]
+    )
+    pending = pending_dinner(CONFIG, store, oct(15, 12))
+    assert pending is not None
+    assert (pending.transition.first_week, pending.transition.dropped_week) == (MON_26, MON_19)
+
+
+def test_sun_to_mon_right_after_dinner_drops_tomorrows_week(store: Store) -> None:
+    reply = send(store, "/settime dinner mon 18:00", oct(11, 19))
+    assert reply.splitlines()[2:] == [
+        "Das gilt schon ab dieser Woche: nächstes Essen am Mo 19.10. um 18:00.",
+        "Achtung: Am Mo 12.10. gibt es kein Essen – diese Woche fällt beim Wechsel aus, weil "
+        "ihre Frage an die WG schon vor dem Wechsel dran gewesen wäre. Sag am besten in der "
+        "Essensgruppe Bescheid.",
+    ]
+
+
+def test_order_is_checked_for_the_new_weekday(store: Store) -> None:
+    # Cooking on Sunday 17:00 would lie before the deadline of a Saturday dinner.
+    reply = send(store, "/settime dinner sat 18:00", oct(15, 12))
+    assert reply.startswith("Das passt nicht: flat_deadline muss vor cook liegen.")
+    assert stored(store) == {}
+
+
+def test_hardcoded_weekday_warning(store: Store) -> None:
+    send(store, "/settext nudge\nBis Mittwoch!", oct(12, 10), SAT_COOK)
+    reply = send(store, "/settime dinner sat 18:00", oct(15, 12), SAT_COOK)
+    assert reply.splitlines()[-1].startswith("Achtung: Die Vorlage nudge nennt einen Wochentag")
+
+
+# --- Pending changes: /schedule, /resettime, later changes --------------------------------------
+
+
+def test_schedule_shows_the_pending_change(store: Store) -> None:
+    send(store, "/settime dinner sat 18:00", oct(15, 12), SAT_COOK)
+    lines = send(store, "/schedule", oct(15, 13), SAT_COOK).splitlines()
+    assert lines[6] == "dinner – Essen: So 18:00 → ab 24.10.: Sa 18:00 ✏️ 15.10. von Anna"
+    assert lines[5] == "cook – Mitkochen: Sa 17:00"
+
+
+def test_schedule_shows_a_dropped_week(store: Store) -> None:
+    send(store, "/settime dinner mon 18:00", oct(15, 12))
+    lines = send(store, "/schedule", oct(15, 13)).splitlines()
+    assert lines[6] == (
+        "dinner – Essen: So 18:00 → ab 26.10.: Mo 18:00 (Mo 19.10. entfällt) ✏️ 15.10. von Anna"
+    )
+
+
+def test_schedule_after_the_switch(store: Store) -> None:
+    send(store, "/settime dinner sat 18:00", oct(15, 12), SAT_COOK)
+    lines = send(store, "/schedule", oct(19, 10), SAT_COOK).splitlines()
+    assert lines[6] == "dinner – Essen: Sa 18:00 ✏️ 15.10. von Anna"
+
+
+def test_resettime_cancels_a_pending_change(store: Store) -> None:
+    send(store, "/settime dinner sun 19:00", oct(15, 11), SAT_COOK)
+    send(store, "/settime dinner sat 18:00", oct(15, 12), SAT_COOK)
+    reply = send(store, "/resettime dinner", oct(16, 9), SAT_COOK)
+    assert reply == "\n".join(
+        [
+            "Verworfen ✅ Der geplante Wechsel auf Sa 18:00 (ab Sa 24.10.) fällt weg.",
+            "Essen (dinner): So 19:00, nächstes Mal So 18.10. um 19:00",
+        ]
+    )
+    # Only the pending change is gone; this week's new time stays.
+    assert stored(store) == {DINNER_KEY: ("sun 19:00", None)}
+    assert effective_config(SAT_COOK, store, oct(20, 9)).schedule.dinner.weekday == 6
+
+
+def test_a_new_time_on_the_current_weekday_discards_a_pending_change(store: Store) -> None:
+    send(store, "/settime dinner sat 18:00", oct(15, 12), SAT_COOK)
+    reply = send(store, "/settime dinner sun 19:00", oct(15, 13), SAT_COOK)
+    assert reply.splitlines()[0] == SAVED
+    assert reply.splitlines()[-1] == (
+        "Der geplante Wechsel auf Sa 18:00 (ab Sa 24.10.) ist damit verworfen."
+    )
+    assert stored(store) == {DINNER_KEY: ("sun 19:00", None)}
+
+
+def test_another_weekday_replaces_a_pending_change(store: Store) -> None:
+    send(store, "/settime dinner sat 18:00", oct(15, 12), SAT_COOK)
+    send(store, "/settime dinner mon 18:00", oct(15, 13), SAT_COOK)
+    assert stored(store) == {PENDING_DINNER_KEY: ("mon 18:00", SUN_18)}
+
+
+def test_later_changes_must_fit_the_pending_weekday_too(store: Store) -> None:
+    send(store, "/settime dinner sat 18:00", oct(15, 12), SAT_COOK)
+    # Fine for this Sunday, but not for the Saturdays to come.
+    reply = send(store, "/settime cook sun 17:00", oct(15, 13), SAT_COOK)
+    assert reply.startswith(
+        "Mit dem neuen Essenstag (Sa 18:00, ab Sa 24.10.): "
+        "Das passt nicht: flat_deadline muss vor cook liegen."
+    )
+    assert stored(store) == {PENDING_DINNER_KEY: ("sat 18:00", SUN_18)}
+    # Something that fits both is accepted, and the pending change stays.
+    assert send(store, "/settime cook sat 16:00", oct(15, 13), SAT_COOK).startswith(SAVED)
+    assert PENDING_DINNER_KEY in stored(store)
+
+
+def test_other_commands_ignore_the_pending_key(store: Store) -> None:
+    send(store, "/settime dinner sat 18:00", oct(15, 12), SAT_COOK)
+    assert send(store, "/nudge off", oct(15, 13), SAT_COOK).startswith(SAVED)
+    assert send(store, "/settext nudge\nNoch keiner", oct(15, 13), SAT_COOK).startswith(
+        "Gespeichert"
+    )
+    assert send(store, "/resettime nudge", oct(15, 13), SAT_COOK).startswith(RESET)
+
+
+def test_resettime_back_to_the_config_weekday_waits_too(store: Store) -> None:
+    send(store, "/settime dinner sat 18:00", oct(11, 19), SAT_COOK)  # at once
+    assert stored(store) == {DINNER_KEY: ("sat 18:00", None)}
+    reply = send(store, "/resettime dinner", oct(15, 12), SAT_COOK)  # Sat 17. week is running
+    assert reply.splitlines()[:3] == [
+        RESET,
+        "Essen (dinner): Sa 18:00 → So 18:00",
+        "Das gilt ab dem Essen am So 25.10. um 18:00. "
+        "Diese Woche bleibt es beim Essen am Sa 17.10. um 18:00.",
+    ]
+    assert stored(store)[PENDING_DINNER_KEY] == ("sun 18:00", date(2026, 10, 17))
+    # Once it applies, nothing is overridden any more.
+    assert effective_config(SAT_COOK, store, oct(17, 18)) == SAT_COOK
+    assert stored(store) == {}
+
+
+def test_resettime_back_to_the_config_weekday_at_once(store: Store) -> None:
+    send(store, "/settime dinner sat 18:00", oct(11, 19), SAT_COOK)
+    send(store, "/resettime dinner", oct(12, 10), SAT_COOK)  # Sat 17. week has not started
+    assert stored(store) == {}
+
+
+# --- effective_config ---------------------------------------------------------------------------
+
+
+def test_pending_change_is_dropped_when_the_toml_weekday_changes(
+    store: Store, caplog: pytest.LogCaptureFixture
+) -> None:
+    send(store, "/settime dinner sat 18:00", oct(15, 12), SAT_COOK)
+    moved = make_config(
+        schedule={
+            "cook": {"weekday": "sat", "time": "17:00"},
+            "dinner": {"weekday": "sat", "time": "19:00"},
+        }
+    )
+    with caplog.at_level(logging.WARNING):
+        assert effective_config(moved, store, oct(15, 13)) == moved
+    assert PENDING_DINNER_KEY in caplog.text
+    assert stored(store) == {}
+
+
+def test_pending_change_is_dropped_when_it_no_longer_fits(store: Store) -> None:
+    send(store, "/settime dinner sat 18:00", oct(15, 12), SAT_COOK)
+    # The TOML moves cooking back to Sunday, which no Saturday dinner allows.
+    assert effective_config(CONFIG, store, oct(15, 13)) == CONFIG
+    assert stored(store) == {}
+
+
+# --- The engine across the switch ---------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Sent:
+    at: datetime
+    text: str
+
+
+class Bot:
+    """The running bot as `odin.app` drives it: each tick with the effective config of its time."""
+
+    def __init__(self, store: Store, base: Config) -> None:
+        self.store = store
+        self.base = base
+        self.client = FakeSignalClient(number=ACCOUNT.number)
+        self.log: list[Sent] = []
+
+    def tick(self, now: datetime) -> None:
+        before = len(self.client.sent)
+        config = effective_config(self.base, self.store, now)
+        asyncio.run(reconcile(config, self.store, self.client, ACCOUNT, now))
+        for message in self.client.sent[before:]:
+            self.log.append(Sent(now.astimezone(BERLIN), message.text.split("\n")[0]))
+
+    def react(self, now: datetime) -> None:
+        """Ben confirms on this week's flat poll and announcement, if they are out."""
+        config = effective_config(self.base, self.store, now)
+        week = dinner_week(config, now)
+        for kind in MessageKind:
+            message = self.store.tracked_message(week, kind)
+            if message is None or self.store.reactions_for(message):
+                continue
+            event = ReactionEvent(
+                emoji="👍",
+                reactor=BEN,
+                target_author=message.author,
+                target_timestamp=message.timestamp,
+                group_id=message.group_id,
+                is_remove=False,
+                timestamp=int(now.timestamp() * 1000),
+            )
+            handle_reaction(event, self.store, config, now)
+
+    def run(
+        self,
+        start: datetime,
+        end: datetime,
+        commands: dict[datetime, str] | None = None,
+        every: timedelta = timedelta(minutes=30),
+    ) -> None:
+        commands = dict(commands or {})
+        now = start
+        while now < end:
+            for at in [at for at in commands if at <= now]:
+                send(self.store, commands.pop(at), at, self.base)
+            self.tick(now)
+            self.react(now)
+            now += every
+        assert not commands
+
+    def sent(self) -> list[tuple[str, str]]:
+        return [(f"{s.at:%a %d.%m. %H:%M}", s.text) for s in self.log]
+
+    def outcomes(self, week: date) -> dict[Action, Outcome]:
+        found = {action: self.store.action_outcome(week, action) for action in Action}
+        return {action: outcome for action, outcome in found.items() if outcome is not None}
+
+
+ALL_SENT = {
+    Action.FLAT_ASK: Outcome.SENT,
+    Action.NUDGE: Outcome.SKIPPED,  # Ben confirmed right away
+    Action.ANNOUNCEMENT: Outcome.SENT,
+    Action.TALLY: Outcome.SENT,
+}
+ALL_SKIPPED = {
+    Action.FLAT_ASK: Outcome.SKIPPED,
+    Action.NUDGE: Outcome.SKIPPED,
+    Action.CANCELLATION: Outcome.SKIPPED,
+    Action.TALLY: Outcome.SKIPPED,
+}
+
+
+def test_sun_to_sat_across_the_switch_sends_everything_once(store: Store) -> None:
+    bot = Bot(store, SAT_COOK)
+    bot.run(oct(12, 9), local(11, 1, 9), {oct(15, 12): "/settime dinner sat 18:00"})
+    assert bot.sent() == [
+        ("Tue 13.10. 18:00", "ASK Sonntag"),
+        ("Wed 14.10. 18:00", "ESSEN Sonntag"),
+        ("Fri 16.10. 14:00", "TALLY 1"),
+        ("Tue 20.10. 18:00", "ASK Samstag"),
+        ("Wed 21.10. 18:00", "ESSEN Samstag"),
+        ("Fri 23.10. 14:00", "TALLY 1"),
+        ("Tue 27.10. 18:00", "ASK Samstag"),
+        ("Wed 28.10. 18:00", "ESSEN Samstag"),
+        ("Fri 30.10. 14:00", "TALLY 1"),
+    ]
+    for week in (SUN_18, SAT_24, date(2026, 10, 31)):
+        assert bot.outcomes(week) == ALL_SENT
+    # The Saturday "before" the switch never existed and is never touched.
+    assert bot.outcomes(date(2026, 10, 17)) == {}
+    assert bot.outcomes(SUN_25) == {}
+
+
+def test_sun_to_mon_drops_one_week_and_never_asks_twice(store: Store) -> None:
+    bot = Bot(store, CONFIG)
+    bot.run(oct(12, 9), local(11, 3, 9), {oct(15, 12): "/settime dinner mon 18:00"})
+    assert bot.sent() == [
+        ("Tue 13.10. 18:00", "ASK Sonntag"),
+        ("Wed 14.10. 18:00", "ESSEN Sonntag"),
+        ("Fri 16.10. 14:00", "TALLY 1"),
+        # Mon 19.: its flat ask would have been Tue 13. — dropped, nothing sent for it.
+        ("Tue 20.10. 18:00", "ASK Montag"),
+        ("Wed 21.10. 18:00", "ESSEN Montag"),
+        ("Fri 23.10. 14:00", "TALLY 1"),
+        ("Tue 27.10. 18:00", "ASK Montag"),
+        ("Wed 28.10. 18:00", "ESSEN Montag"),
+        ("Fri 30.10. 14:00", "TALLY 1"),
+    ]
+    assert bot.outcomes(SUN_18) == ALL_SENT
+    assert bot.outcomes(MON_19) == ALL_SKIPPED
+    assert bot.outcomes(MON_26) == ALL_SENT
+    assert bot.outcomes(date(2026, 10, 12)) == {}
+
+
+def test_sun_to_mon_right_after_dinner(store: Store) -> None:
+    bot = Bot(store, CONFIG)
+    bot.run(oct(5, 9), oct(27, 9), {oct(11, 19): "/settime dinner mon 18:00"})
+    assert [text for _, text in bot.sent()] == [
+        "ASK Sonntag",  # Tue 6.
+        "ESSEN Sonntag",
+        "TALLY 1",
+        "ASK Montag",  # Tue 13., for Mon 19.
+        "ESSEN Montag",
+        "TALLY 1",
+        "ASK Montag",  # Tue 20., for Mon 26.
+        "ESSEN Montag",
+        "TALLY 1",
+    ]
+    assert bot.outcomes(date(2026, 10, 12)) == ALL_SKIPPED
+    assert bot.outcomes(MON_19) == ALL_SENT
+
+
+def test_the_bot_down_over_the_switch_finishes_the_old_week(store: Store) -> None:
+    bot = Bot(store, CONFIG)
+    bot.run(oct(12, 9), oct(16, 12), {oct(15, 12): "/settime dinner mon 18:00"})
+    assert bot.outcomes(SUN_18) == {
+        Action.FLAT_ASK: Outcome.SENT,
+        Action.NUDGE: Outcome.SKIPPED,
+        Action.ANNOUNCEMENT: Outcome.SENT,
+    }
+    # Down from Fri 16. 12:00 until Mon 19. 10:00: the tally of Sun 18. was missed.
+    bot.run(oct(19, 10), oct(19, 11))
+    assert bot.outcomes(SUN_18)[Action.TALLY] is Outcome.SKIPPED
+    assert bot.outcomes(MON_19) == ALL_SKIPPED
+    assert len(bot.log) == 2  # flat ask and announcement; nothing caught up
+    assert bot.outcomes(date(2026, 10, 12)) == {}
+
+
+def test_late_reaction_on_the_old_poll_is_ignored(store: Store) -> None:
+    bot = Bot(store, CONFIG)
+    bot.run(oct(12, 9), oct(14, 12), {oct(13, 19): "/settime dinner mon 18:00"})
+    poll = store.tracked_message(SUN_18, MessageKind.FLAT_POLL)
+    assert poll is not None
+    event = ReactionEvent(
+        emoji="👍",
+        reactor=ANNA,
+        target_author=poll.author,
+        target_timestamp=poll.timestamp,
+        group_id=poll.group_id,
+        is_remove=False,
+        timestamp=int(oct(14, 11).timestamp() * 1000),  # sent in time, delivered late
+    )
+    later = oct(20, 9)
+    assert not handle_reaction(event, store, effective_config(CONFIG, store, later), later)
+
+
+# --- transition ---------------------------------------------------------------------------------
+
+# Every 3 hours of the week, as new dinner times.
+_GRID = [WeeklyTime(day, time(hour, 0)) for day in range(7) for hour in range(0, 24, 3)]
+_LAYOUTS = [
+    {},
+    {"cook": {"weekday": "wed", "time": "20:00"}},
+    {
+        "flat_ask": {"weekday": "sat", "time": "10:00"},
+        "nudge": {"weekday": "sat", "time": "20:00"},
+        "flat_deadline": {"weekday": "sun", "time": "10:00"},
+        "rsvp_by": {"weekday": "sun", "time": "12:00"},
+        "tally": {"weekday": "sun", "time": "12:00"},
+        "cook": {"weekday": "sun", "time": "14:00"},
+        "dinner": {"weekday": "mon", "time": "19:00"},
+    },
+    {"nudge": {"enabled": False}, "cook": {"weekday": "thu", "time": "18:00"}},
+]
+
+
+@pytest.mark.parametrize("layout", range(len(_LAYOUTS)))
+def test_no_week_is_ever_cut_in_half(layout: int) -> None:
+    """For every new dinner time that fits the schedule, switching at an old dinner (or at a
+    moment before the next flat ask) never starts a week whose steps lie on both sides."""
+    old = make_config(schedule=_LAYOUTS[layout])
+    old_week = dinner_week(old, oct(12, 0))
+    old_dinner = old.when(old.schedule.dinner, old_week)
+    previous_dinner = old.when(old.schedule.dinner, old_week - timedelta(weeks=1))
+    flat_ask = old.when(old.schedule.flat_ask, old_week)
+    checked = 0
+    for point in _GRID:
+        try:
+            new = apply_overrides(old, {DINNER_KEY: format_weekly_time(point)})
+        except ConfigError:
+            continue
+        checked += 1
+        transition(new, old_dinner)  # raises if a week would be cut in half
+        hours = int((flat_ask - previous_dinner).total_seconds() // 3600)
+        for hour in range(0, hours, 5):
+            moment = previous_dinner + timedelta(hours=hour)
+            weeks = transition(new, moment)
+            for window in step_windows(new, weeks.first_week):
+                assert window.start > moment.astimezone(UTC)
+    assert checked > 10
+
+
+def test_a_switch_inside_a_week_is_refused() -> None:
+    with pytest.raises(ValueError, match="would start before"):
+        transition(CONFIG, oct(13, 19))  # between the flat ask and the deadline of Sun 18.
+
+
+# --- Store --------------------------------------------------------------------------------------
+
+
+def test_upgrade_from_version_4_keeps_overrides(tmp_path: Path) -> None:
+    path = tmp_path / "odin.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(f"{'; '.join(_MIGRATIONS[:4])}; PRAGMA user_version = 4;")
+    conn.execute(
+        "INSERT INTO overrides VALUES ('schedule.tally', 'sat 10:00', 'Tim', ?)",
+        (oct(12, 10).astimezone(UTC).isoformat(),),
+    )
+    conn.commit()
+    conn.close()
+    with Store(path) as store:
+        [override] = store.overrides().values()
+        assert (override.key, override.value, override.after_week) == (
+            "schedule.tally",
+            "sat 10:00",
+            None,
+        )
+        store.set_override(PENDING_DINNER_KEY, "sat 18:00", "Tim", oct(12, 11), SUN_18)
+        assert store.overrides()[PENDING_DINNER_KEY].after_week == SUN_18
+        # Setting it again without a week clears it.
+        store.set_override(PENDING_DINNER_KEY, "sat 18:00", "Tim", oct(12, 12))
+        assert store.overrides()[PENDING_DINNER_KEY].after_week is None
+
+
+def test_latest_week_before(store: Store) -> None:
+    assert store.latest_week_before(SUN_18) is None
+    store.record_action(date(2026, 10, 11), Action.FLAT_ASK, oct(6, 18))
+    store.record_action(SUN_18, Action.FLAT_ASK, oct(13, 18))
+    assert store.latest_week_before(SUN_18) == date(2026, 10, 11)
+    assert store.latest_week_before(MON_19) == SUN_18
+    assert store.has_any_action(SUN_18)
+    assert not store.has_any_action(MON_19)

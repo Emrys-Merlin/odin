@@ -8,7 +8,8 @@ On the flat poll, reactions sent at or after the flat deadline are ignored (addi
 removing), so the vote the decision was based on stays as it was. Whether a reaction is late is
 judged by its Signal timestamp — when the reactor sent it — not by when ODIN received it: a
 reaction sent in time but delivered late (ODIN was down over the deadline) still counts for the
-catch-up decision. The dinner announcement has no deadline.
+catch-up decision. The dinner announcement has no deadline. A flat poll of a week under an earlier
+dinner weekday is long decided, so all reactions on it are ignored.
 """
 
 import logging
@@ -23,9 +24,12 @@ logger = logging.getLogger(__name__)
 
 def reaction_deadline(config: Config, message: TrackedMessage) -> datetime | None:
     """From when on reactions on ``message`` are ignored; None if they never are."""
-    if message.kind is MessageKind.FLAT_POLL:
-        return config.when(config.schedule.flat_deadline, message.week)
-    return None
+    if message.kind is not MessageKind.FLAT_POLL:
+        return None
+    if message.week.weekday() != config.schedule.dinner.weekday:
+        # A week under an earlier dinner weekday: over before the new weekday took effect.
+        return datetime.min.replace(tzinfo=UTC)
+    return config.when(config.schedule.flat_deadline, message.week)
 
 
 def handle_reaction(

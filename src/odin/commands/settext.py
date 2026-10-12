@@ -10,7 +10,13 @@ from odin.commands.core import Command, CommandContext, CommandError
 from odin.commands.preview import render_preview
 from odin.config import TEMPLATE_PLACEHOLDERS, Config, ConfigError
 from odin.engine import dinner_week
-from odin.overrides import EDITABLE_TEMPLATES, apply_overrides, effective_config, template_key
+from odin.overrides import (
+    EDITABLE_TEMPLATES,
+    apply_overrides,
+    current_values,
+    effective_config,
+    template_key,
+)
 from odin.store import Action
 
 NAMES = ", ".join(EDITABLE_TEMPLATES)
@@ -99,7 +105,7 @@ def settext(ctx: CommandContext, args: str) -> list[str]:
         raise CommandError(EMPTY_TEXT)
 
     key = template_key(name)
-    current = {k: override.value for k, override in ctx.store.overrides().items()}
+    current = current_values(ctx.store)
     try:
         config = apply_overrides(ctx.base, current | {key: text})
     except ConfigError as error:
@@ -119,7 +125,7 @@ def resettext(ctx: CommandContext, args: str) -> list[str]:
         raise CommandError(RESET_EXTRA)
     if not ctx.store.delete_override(template_key(name)):
         return [NOT_CHANGED.format(name=name)]
-    config = effective_config(ctx.base, ctx.store)
+    config = effective_config(ctx.base, ctx.store, ctx.now)
     return _replies(RESET.format(name=name), config, ctx, name)
 
 

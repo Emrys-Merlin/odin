@@ -3,6 +3,11 @@
 A change takes effect at once, but it is guarded: it is rejected (and nothing is stored) if it
 breaks the order of the schedule, moves the current dinner week, or makes a step of the current
 week that has not happened yet due right now. See `check_change`.
+
+A new dinner weekday is the exception (see `set_dinner_day`): it never touches the running dinner
+week. Once that week has started (its flat ask is due or anything of it is recorded), the change
+waits until the week's dinner; before that, it applies at once. A week of the new weekday whose
+steps would all lie before the switch is dropped, and the reply says so.
 """
 
 import re
@@ -12,14 +17,19 @@ from datetime import date, datetime, time, timedelta
 from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError
 from odin.config import WEEKDAYS_DE, WEEKDAYS_EN, Config, ConfigError, WeeklyTime
-from odin.engine import dinner_week, step_windows
+from odin.engine import dinner_week, step_windows, transition
 from odin.overrides import (
+    DINNER_KEY,
     EDITABLE_TEMPLATES,
     NUDGE_ENABLED_KEY,
+    PENDING_DINNER_KEY,
     SCHEDULE_POINTS,
+    PendingDinner,
     apply_overrides,
+    current_values,
     format_bool,
     format_weekly_time,
+    pending_dinner,
     schedule_key,
 )
 from odin.store import Action, Outcome
@@ -62,14 +72,16 @@ ORDER_RULE = (
 )
 ORDER_BROKEN = "Das passt nicht: {first} muss vor {second} liegen. " + ORDER_RULE
 ORDER_BROKEN_GENERIC = "Das passt nicht in den Wochenplan. " + ORDER_RULE
+# The prefix when a change does not fit the schedule under a pending new dinner weekday.
+WITH_NEW_DINNER = "Mit dem neuen Essenstag ({when}, ab {first}): "
 WEEK_MOVES = (
     "Damit würde sich die aktuelle Essenswoche verschieben (Essen am {old} → {new}) – "
     "das geht nicht über den Chat."
 )
-# A dinner on another weekday is always another dinner week (weeks are named by their dinner date).
-DINNER_DAY = (
-    "Den Wochentag des Essens kann ich über den Chat nicht ändern, nur die Uhrzeit – "
-    "sonst wäre es eine andere Essenswoche. Das geht nur in der Config."
+# Should not happen (see `odin.engine.transition`); refused rather than half-running a week.
+DINNER_DAY_UNSAFE = (
+    "Dieser Wechsel des Essenstags würde eine Essenswoche mittendrin abschneiden – "
+    "das geht nicht über den Chat."
 )
 STEP_DUE = "Dann wäre {step} sofort fällig – das geht nicht über den Chat."
 
@@ -90,6 +102,15 @@ ANNOUNCEMENT_ALREADY_SENT = (
     "Achtung: Die Ankündigung ist diese Woche schon raus und nennt noch die alte Zeit für "
     "{point} ({old}). Sag am besten in der Essensgruppe Bescheid, dass jetzt {new} gilt."
 )
+DINNER_MOVED = "Essen (dinner): {old} → {new}"
+DINNER_FROM_NEXT = "Das gilt ab dem Essen am {first}. Diese Woche bleibt es beim Essen am {this}."
+DINNER_FROM_NOW = "Das gilt schon ab dieser Woche: nächstes Essen am {first}."
+DINNER_WEEK_DROPPED = (
+    "Achtung: Am {day} gibt es kein Essen – diese Woche fällt beim Wechsel aus, weil ihre Frage "
+    "an die WG schon vor dem Wechsel dran gewesen wäre. Sag am besten in der Essensgruppe Bescheid."
+)
+PENDING_DISCARDED = "Der geplante Wechsel auf {new} (ab {first}) ist damit verworfen."
+PENDING_CANCELLED = "Verworfen ✅ Der geplante Wechsel auf {new} (ab {first}) fällt weg."
 HARDCODED_WEEKDAY = (
     "Achtung: Die Vorlage {name} nennt einen Wochentag fest – prüfe sie mit /text {name}."
 )
@@ -132,33 +153,44 @@ def parse_weekly_time(day: str, clock: str) -> WeeklyTime:
 # --- The guard ----------------------------------------------------------------------------------
 
 
-def _stored(ctx: CommandContext) -> dict[str, str]:
-    return {key: override.value for key, override in ctx.store.overrides().items()}
+def _apply(ctx: CommandContext, overrides: Mapping[str, str], prefix: str = "") -> Config:
+    """`ctx.base` with `overrides`; CommandError (in German) if the schedule order breaks."""
+    try:
+        return apply_overrides(ctx.base, overrides)
+    except ConfigError as error:
+        match = _ORDER_ERROR.match(str(error))
+        if match is None:
+            raise CommandError(prefix + ORDER_BROKEN_GENERIC) from None
+        raise CommandError(prefix + ORDER_BROKEN.format(first=match[1], second=match[2])) from None
 
 
-def check_change(ctx: CommandContext, overrides: Mapping[str, str]) -> Config:
+def check_change(
+    ctx: CommandContext, overrides: Mapping[str, str], *, keep_pending: bool = True
+) -> Config:
     """The effective config under `overrides`, if the change from `ctx.config` is allowed.
 
-    Raises CommandError (in German) if
-    1. the schedule order breaks,
+    `overrides` are those in effect right away (see `current_values`). Raises CommandError (in
+    German) if
+    1. the schedule order breaks — also under a pending new dinner weekday, unless the change
+       discards it (`keep_pending=False`),
     2. the current dinner week changes, or
     3. a step of the current week that is not recorded yet is due at `now` under the new config
        but was not under the old one. Exception: a nudge that would already be past its window
        (it would only be recorded as skipped, nothing is sent).
     """
     old = ctx.config
-    try:
-        new = apply_overrides(ctx.base, overrides)
-    except ConfigError as error:
-        match = _ORDER_ERROR.match(str(error))
-        if match is None:
-            raise CommandError(ORDER_BROKEN_GENERIC) from None
-        raise CommandError(ORDER_BROKEN.format(first=match[1], second=match[2])) from None
+    new = _apply(ctx, overrides)
+    pending = pending_dinner(ctx.base, ctx.store, ctx.now) if keep_pending else None
+    if pending is not None:
+        prefix = WITH_NEW_DINNER.format(when=ui.weekly_time(pending.point), first=_first(pending))
+        future = _apply(ctx, {**overrides, DINNER_KEY: format_weekly_time(pending.point)}, prefix)
+        try:
+            transition(future, pending.switch)
+        except ValueError:
+            raise CommandError(prefix + DINNER_DAY_UNSAFE) from None
 
     week, new_week = dinner_week(old, ctx.now), dinner_week(new, ctx.now)
     if new_week != week:
-        if new.schedule.dinner.weekday != old.schedule.dinner.weekday:
-            raise CommandError(DINNER_DAY)
         raise CommandError(WEEK_MOVES.format(old=_date(week), new=_date(new_week)))
 
     old_windows = {w.name: w for w in step_windows(old, week)}
@@ -182,6 +214,21 @@ def check_change(ctx: CommandContext, overrides: Mapping[str, str]) -> Config:
 
 def _date(day: date) -> str:
     return f"{day:%d.%m.}"
+
+
+def _day(day: date) -> str:
+    """``Mo 19.10.``"""
+    return f"{ui.WEEKDAYS_SHORT[day.weekday()]} {day:%d.%m.}"
+
+
+def _moment(moment: datetime) -> str:
+    """``Sa 24.10. um 18:00``"""
+    return f"{ui.WEEKDAYS_SHORT[moment.weekday()]} {moment:%d.%m. um %H:%M}"
+
+
+def _first(pending: PendingDinner) -> str:
+    """The first dinner under a pending dinner weekday: ``Sa 24.10.``."""
+    return _day(pending.transition.first_week)
 
 
 def _point(config: Config, point: str) -> WeeklyTime:
@@ -266,10 +313,15 @@ def _warnings(ctx: CommandContext, new: Config) -> list[str]:
                         new=ui.weekly_time(getattr(after, point)),
                     )
                 )
-    for name in EDITABLE_TEMPLATES:
-        if _HARDCODED_DAY.search(getattr(new.templates, name).text):
-            lines.append(HARDCODED_WEEKDAY.format(name=name))
-    return lines
+    return lines + _hardcoded_weekdays(new)
+
+
+def _hardcoded_weekdays(config: Config) -> list[str]:
+    return [
+        HARDCODED_WEEKDAY.format(name=name)
+        for name in EDITABLE_TEMPLATES
+        if _HARDCODED_DAY.search(getattr(config.templates, name).text)
+    ]
 
 
 def _reply(ctx: CommandContext, new: Config, point: str, headline: str) -> list[str]:
@@ -292,16 +344,87 @@ def _changed_by(ctx: CommandContext) -> str:
 # --- Commands -----------------------------------------------------------------------------------
 
 
+def set_dinner_day(ctx: CommandContext, value: str | None, headline: str) -> list[str]:
+    """Move dinner to another weekday: to `value`, or back to the config file's (None).
+
+    Never touches the running dinner week. If it has started (its flat ask is due, or anything of
+    it is recorded), the change is stored as pending until the week's dinner; else it applies at
+    once. Either way, the first week of the new weekday starts cleanly after the switch, or is
+    dropped as a whole (see `odin.engine.transition`); the reply names the first dinner and warns
+    about a dropped one.
+    """
+    stored = current_values(ctx.store)
+    if value is None:
+        stored.pop(DINNER_KEY, None)
+        new = _apply(ctx, stored)
+    else:
+        new = _apply(ctx, stored | {DINNER_KEY: value})
+    old = ctx.config
+    week = dinner_week(old, ctx.now)
+    started = ctx.store.has_any_action(week) or old.when(old.schedule.flat_ask, week) <= ctx.now
+    switch = old.when(old.schedule.dinner, week) if started else ctx.now
+    try:
+        weeks = transition(new, switch)
+    except ValueError:
+        raise CommandError(DINNER_DAY_UNSAFE) from None
+    if any(
+        ctx.store.has_any_action(w) for w in (weeks.first_week, weeks.dropped_week) if w is not None
+    ):
+        raise CommandError(DINNER_DAY_UNSAFE)  # an earlier weekday change left records there
+
+    target = format_weekly_time(new.schedule.dinner)
+    with ctx.store.transaction():
+        if started:
+            ctx.store.set_override(
+                PENDING_DINNER_KEY, target, _changed_by(ctx), ctx.now, after_week=week
+            )
+        else:
+            ctx.store.delete_override(PENDING_DINNER_KEY)
+            if value is None:
+                ctx.store.delete_override(DINNER_KEY)
+            else:
+                ctx.store.set_override(DINNER_KEY, target, _changed_by(ctx), ctx.now)
+
+    first = _moment(new.when(new.schedule.dinner, weeks.first_week))
+    lines = [
+        headline,
+        DINNER_MOVED.format(
+            old=ui.weekly_time(old.schedule.dinner), new=ui.weekly_time(new.schedule.dinner)
+        ),
+    ]
+    if started:
+        this = _moment(old.when(old.schedule.dinner, week))
+        lines.append(DINNER_FROM_NEXT.format(first=first, this=this))
+    else:
+        lines.append(DINNER_FROM_NOW.format(first=first))
+    if weeks.dropped_week is not None:
+        lines.append(DINNER_WEEK_DROPPED.format(day=_day(weeks.dropped_week)))
+    lines += _hardcoded_weekdays(new)
+    return ["\n".join(lines)]
+
+
 def run_settime(ctx: CommandContext, args: str) -> list[str]:
     words = args.split()
     if len(words) != 3:
         raise CommandError(SETTIME_USAGE)
     point = parse_point(words[0])
-    value = format_weekly_time(parse_weekly_time(words[1], words[2]))
+    when = parse_weekly_time(words[1], words[2])
+    value = format_weekly_time(when)
+    if point == "dinner" and when.weekday != ctx.config.schedule.dinner.weekday:
+        return set_dinner_day(ctx, value, SAVED)
     key = schedule_key(point)
-    new = check_change(ctx, _stored(ctx) | {key: value})
-    ctx.store.set_override(key, value, _changed_by(ctx), ctx.now)
-    return _reply(ctx, new, point, SAVED)
+    # The latest /settime dinner wins: a new time on today's weekday discards a pending one.
+    pending = pending_dinner(ctx.base, ctx.store, ctx.now) if point == "dinner" else None
+    new = check_change(ctx, current_values(ctx.store) | {key: value}, keep_pending=pending is None)
+    with ctx.store.transaction():
+        ctx.store.set_override(key, value, _changed_by(ctx), ctx.now)
+        if pending is not None:
+            ctx.store.delete_override(PENDING_DINNER_KEY)
+    [reply] = _reply(ctx, new, point, SAVED)
+    if pending is None:
+        return [reply]
+    discarded = PENDING_DISCARDED.format(new=ui.weekly_time(pending.point), first=_first(pending))
+    return [f"{reply}\n{discarded}"]
 
 
 def run_nudge(ctx: CommandContext, args: str) -> list[str]:
@@ -309,7 +432,7 @@ def run_nudge(ctx: CommandContext, args: str) -> list[str]:
     if len(words) != 1 or words[0].lower() not in _ON:
         raise CommandError(NUDGE_USAGE)
     value = format_bool(_ON[words[0].lower()])
-    new = check_change(ctx, _stored(ctx) | {NUDGE_ENABLED_KEY: value})
+    new = check_change(ctx, current_values(ctx.store) | {NUDGE_ENABLED_KEY: value})
     ctx.store.set_override(NUDGE_ENABLED_KEY, value, _changed_by(ctx), ctx.now)
     return _reply(ctx, new, "nudge", SAVED)
 
@@ -319,8 +442,22 @@ def run_resettime(ctx: CommandContext, args: str) -> list[str]:
     if len(words) != 1:
         raise CommandError(RESETTIME_USAGE)
     point = parse_point(words[0])
+    if point == "dinner":
+        pending = pending_dinner(ctx.base, ctx.store, ctx.now)
+        if pending is not None:
+            ctx.store.delete_override(PENDING_DINNER_KEY)
+            headline = PENDING_CANCELLED.format(
+                new=ui.weekly_time(pending.point), first=_first(pending)
+            )
+            return [f"{headline}\n{_point_line(ctx, ctx.config, point)}"]
     keys = [schedule_key(point)] + ([NUDGE_ENABLED_KEY] if point == "nudge" else [])
-    stored = _stored(ctx)
+    stored = current_values(ctx.store)
+    if (
+        point == "dinner"
+        and DINNER_KEY in stored
+        and ctx.base.schedule.dinner.weekday != ctx.config.schedule.dinner.weekday
+    ):
+        return set_dinner_day(ctx, None, RESET)
     if not any(key in stored for key in keys):
         when = ui.weekly_time(_point(ctx.config, point))
         if point == "nudge":
