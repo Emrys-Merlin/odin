@@ -43,8 +43,11 @@ The prek hook is installed in cloud sessions by `scripts/session-start.sh`.
   no test may touch the network or the real time.
 - The scheduler is a reconcile loop over (config, state, now) — never "sleep until Tuesday".
   Every sent action is recorded so nothing is sent twice.
-- Message texts live in the config as templates, not in code. Dinner-group texts are bilingual
-  (German, then English).
+- The messages of the weekly cycle live in the config as templates, not in code. Dinner-group
+  texts are bilingual (German, then English).
+- Chat-command replies (help, errors, previews) are German UI strings in code, in
+  `src/odin/commands/`, not config templates. Strings shared by several commands go in
+  `commands/ui.py`. Each command is its own module, registered in `commands/__init__.py`.
 - No secrets in the repo. The phone number comes from an env var; the group IDs are stored in the
   state DB by `odin setup` and can be overridden by env vars.
 
