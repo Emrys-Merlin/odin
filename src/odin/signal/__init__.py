@@ -20,7 +20,7 @@ from odin.signal.fake import (
     SentDirectMessage,
     SentMessage,
 )
-from odin.signal.models import ApiInfo, DirectMessage, Event, Group, ReactionEvent
+from odin.signal.models import ApiInfo, DirectMessage, Event, Group, GroupMessage, ReactionEvent
 from odin.signal.parsing import group_id_from_internal, parse_direct_message, parse_event
 from odin.signal.rest import RestSignalClient
 
@@ -34,6 +34,7 @@ __all__ = [
     "FakeSignalAdmin",
     "FakeSignalClient",
     "Group",
+    "GroupMessage",
     "NotRegistered",
     "RateLimited",
     "ReactionEvent",

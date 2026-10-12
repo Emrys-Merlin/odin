@@ -7,9 +7,11 @@ from odin.signal import (
     AlreadyRegistered,
     ApiInfo,
     DirectMessage,
+    Event,
     FakeSignalAdmin,
     FakeSignalClient,
     Group,
+    GroupMessage,
     ReactionEvent,
     SentDirectMessage,
     SentMessage,
@@ -55,19 +57,20 @@ def test_lists_configured_groups() -> None:
 
 def test_yields_injected_events_until_closed() -> None:
     fake = FakeSignalClient()
-    events = [reaction(), reaction(is_remove=True), reaction("❤️")]
+    message = GroupMessage("+4915100000002", "Alex", "/help", "group.flat=", 1760454300000)
+    events = [reaction(), message, reaction(is_remove=True), reaction("❤️")]
     for event in events:
         fake.inject(event)
     fake.close()
 
-    async def collect() -> list[ReactionEvent]:
+    async def collect() -> list[Event]:
         return [event async for event in fake.events()]
 
     assert asyncio.run(collect()) == events
 
 
 def test_events_wait_for_injection() -> None:
-    async def scenario() -> ReactionEvent:
+    async def scenario() -> Event:
         fake = FakeSignalClient()
         stream = fake.events()
         pending = asyncio.ensure_future(anext(stream))
@@ -177,7 +180,7 @@ def test_yields_injected_direct_messages_until_closed() -> None:
     fake.inject(reaction())
     fake.close()
 
-    async def collect() -> tuple[list[DirectMessage], list[ReactionEvent]]:
+    async def collect() -> tuple[list[DirectMessage], list[Event]]:
         return (
             [message async for message in fake.direct_messages()],
             [event async for event in fake.events()],
