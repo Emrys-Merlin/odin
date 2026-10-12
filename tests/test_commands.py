@@ -7,6 +7,7 @@ import pytest
 import odin.commands
 from odin.commands import COMMANDS, Command, CommandContext, CommandError, handle, ui
 from odin.commands.core import parse
+from odin.commands.help import HELP
 from odin.config import WeeklyTime, parse_config
 from odin.store import Store
 
@@ -148,8 +149,11 @@ def test_help(ctx: CommandContext) -> None:
     assert "/help – Zeigt alle Befehle." in reply.splitlines()
 
 
-@pytest.mark.usefixtures("test_commands")
-def test_help_lists_every_registered_command_in_order(ctx: CommandContext) -> None:
+def test_help_lists_every_registered_command_in_order(
+    ctx: CommandContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A fixed registry, so the test does not change with every command added.
+    monkeypatch.setattr(odin.commands, "COMMANDS", [HELP, ECHO, FAIL])
     [reply] = handle("!HELP", ctx)
     lines = reply.splitlines()
     listed = [line for line in lines if line.startswith("/")]
