@@ -78,6 +78,8 @@ group) ODIN ignores them.
 | `/schedule` | Shows the 7 schedule points (key, German description, weekday and time), whether the nudge is off, and who changed a value via chat. |
 | `/texts` | Lists the five editable weekly templates: group, short description, and who changed it when if overridden. |
 | `/text <name>` | Shows a template twice: raw as a ready-to-send `/settext <name>` command, and rendered with this week's values (for `tally` with the current 👍 count, or a sample count of 3). |
+| `/settext <name>` | Replaces template `<name>` (`flat_ask`, `nudge`, `announcement`, `cancellation`, `tally`) with the text on the following lines, after checking its placeholders; replies with a preview. |
+| `/resettext <name>` | Drops the chat change to template `<name>`, back to the config file's text; replies with a preview. |
 
 ## Architecture
 
