@@ -68,11 +68,16 @@ Flatmates can look at and change ODIN's settings from the chat with commands. A 
 message that starts with `/` or `!` followed by the command name (`/help` = `!help`; the name is
 English and case-insensitive). Replies are in German. A message that starts with `/` or `!` plus
 a letter but is no known command gets a short German error pointing to `/help`; everything else
-is ignored.
+is ignored. Commands are answered in the flat group only; in the dinner group (or any other
+group) ODIN ignores them.
 
 | Command | What it does |
 |---------|--------------|
 | `/help` | Lists all commands with a one-line description. |
+| `/status` | This dinner week: each step (flat ask, nudge, decision, tally) as sent, skipped or pending, the 👍 counts on the flat poll and the announcement, and the next action. |
+| `/schedule` | Shows the 7 schedule points (key, German description, weekday and time), whether the nudge is off, and who changed a value via chat. |
+| `/texts` | Lists the five editable weekly templates: group, short description, and who changed it when if overridden. |
+| `/text <name>` | Shows a template twice: raw as a ready-to-send `/settext <name>` command, and rendered with this week's values (for `tally` with the current 👍 count, or a sample count of 3). |
 | `/settext <name>` | Replaces template `<name>` (`flat_ask`, `nudge`, `announcement`, `cancellation`, `tally`) with the text on the following lines, after checking its placeholders; replies with a preview. |
 | `/resettext <name>` | Drops the chat change to template `<name>`, back to the config file's text; replies with a preview. |
 

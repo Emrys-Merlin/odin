@@ -14,10 +14,8 @@ catch-up decision. The dinner announcement has no deadline.
 import logging
 from datetime import UTC, datetime
 
-from odin.clock import Clock
 from odin.config import Config
-from odin.overrides import effective_config
-from odin.signal import ReactionEvent, SignalClient
+from odin.signal import ReactionEvent
 from odin.store import MessageKind, Store, TrackedMessage
 
 logger = logging.getLogger(__name__)
@@ -53,18 +51,6 @@ def handle_reaction(
     else:
         store.set_reaction(message, event.reactor, event.emoji, received_at)
     return True
-
-
-async def consume_reactions(
-    client: SignalClient, store: Store, config: Config, clock: Clock
-) -> None:
-    """Apply incoming reaction events until the client's event stream ends.
-
-    `config` is the TOML config; each event is judged by it with the overrides stored right then.
-    """
-    async for event in client.events():
-        if isinstance(event, ReactionEvent):
-            handle_reaction(event, store, effective_config(config, store), clock.now())
 
 
 # Skin-tone modifiers and emoji/text variation selectors: 👍🏽 and 👍️ count as 👍.
