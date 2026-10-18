@@ -221,20 +221,24 @@ async def reconcile(
 ) -> list[Step]:
     """Perform what is due by `now` and not yet recorded. Returns what was recorded.
 
-    Also finishes the previous week, so that a step missed there (the bot was down over dinner)
-    is recorded as skipped instead of staying open forever. Normally that is the week before
-    `current`; right after a new dinner weekday took over, it is the last week recorded under
-    the old one (its dinner is the latest before now). The week before `current` under the new
-    weekday then never existed and is left alone.
+    Also finishes the earlier weeks, oldest first, so that a step missed there (the bot was down
+    over dinner) is recorded as skipped instead of staying open forever: every week before
+    `current` that was started or dropped but is not finished yet (see
+    `Store.unfinished_weeks_before`) — after a new dinner weekday took over, that can be weeks of
+    both weekdays, e.g. the last old week and a dropped one — and the week before `current`,
+    even if nothing of it was recorded. Right after a new dinner weekday took over, a week is
+    recorded after that one, so it never existed and is left alone.
     """
     now = _utc(now)
     current = dinner_week(config, now)
+    earlier = set(store.unfinished_weeks_before(current))
     previous = current - timedelta(weeks=1)
     latest = store.latest_week_before(current)
-    if latest is not None and latest > previous:
-        previous = latest
+    if latest is None or latest <= previous:
+        earlier.add(previous)
     steps: list[Step] = []
-    for week, over in ((previous, True), (current, False)):
+    weeks = [(week, True) for week in sorted(earlier)] + [(current, False)]
+    for week, over in weeks:
         cycle = _Week(config, store, client, account, week, over, now, steps)
         try:
             await cycle.run()

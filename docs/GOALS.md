@@ -47,6 +47,15 @@ name). Like any late action it is skipped after the dropped week's dinner start,
 catch-up grace counted from the switch has passed. The dropped week is stored in the state DB
 when the switch is applied, so a restart neither loses nor repeats it.
 
+The same holds when the dinner weekday is changed **in the config file** and ODIN is restarted.
+ODIN stores the dinner the weeks run on. If the config file names another weekday while a dinner
+week is running (anything of it already recorded), that week keeps its weekday, and the new one
+takes over at its dinner, exactly like a chat change (logged as a warning at startup and at the
+switch; `/schedule` and `/status` show it, `odin check-config` mentions it). Between weeks it
+applies at once. A chat change wins over the config file, as every override does. After a switch,
+every week that was started or dropped and is not finished yet is finished (late steps recorded as
+skipped), so nothing stays open even if ODIN was down over the switch.
+
 ### Reaction rules
 
 - A 👍 (configurable emoji) from **anyone** in the flat group counts. No member list.

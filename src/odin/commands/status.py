@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from odin import reactions
 from odin.commands import ui
 from odin.commands.core import Command, CommandContext
-from odin.commands.schedule import DROPPED
+from odin.commands.schedule import DROPPED, FROM_CONFIG
 from odin.config import WEEKDAYS_DE, Config, WeeklyTime
 from odin.store import Action, MessageKind, Outcome, Store
 
@@ -165,6 +165,8 @@ def _pending_line(pending: PendingDinner) -> str:
     if dropped is not None:
         weekday = ui.WEEKDAYS_SHORT[dropped.weekday()]
         line += " " + DROPPED.format(weekday=weekday, day=dropped)
+    if pending.from_config:
+        line += " " + FROM_CONFIG
     return line + "."
 
 
