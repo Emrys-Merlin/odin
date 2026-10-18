@@ -75,7 +75,7 @@ group) ODIN ignores them.
 | Command | What it does |
 |---------|--------------|
 | `/help` | Lists all commands with a one-line description. |
-| `/status` | This dinner week: each step (flat ask, nudge, decision, tally) as sent, skipped or pending, the 👍 counts on the flat poll and the announcement, and the next action. |
+| `/status` | This dinner week: each step (flat ask, nudge, decision, tally) as sent, skipped or pending, the 👍 counts on the flat poll and the announcement, a pending dinner weekday change, and the next action. |
 | `/schedule` | Shows the 7 schedule points (key, German description, weekday and time), whether the nudge is off, and who changed a value via chat. |
 | `/texts` | Lists the five editable weekly templates: group, short description, and who changed it when if overridden. |
 | `/text <name>` | Shows a template twice: raw as a ready-to-send `/settext <name>` command, and rendered with this week's values (for `tally` with the current 👍 count, or a sample count of 3). |
@@ -83,7 +83,7 @@ group) ODIN ignores them.
 | `/resettext <name>` | Drops the chat change to template `<name>`, back to the config file's text; replies with a preview. |
 | `/vars [name]` | Lists the template placeholders with a German description and current value; with a template name only those allowed in it. |
 | `/settime <point> <weekday> <HH:MM>` | Moves a schedule point (`flat_ask`, `nudge`, `flat_deadline`, `rsvp_by`, `tally`, `cook`, `dinner`); weekdays as in the config (`thu`, `thursday`). Takes effect at once, but is rejected if it breaks the schedule order, moves the current dinner week, or makes a not-yet-done step of this week due right now. |
-| `/settime dinner <weekday> <HH:MM>` (other weekday) | Moves dinner to another weekday. Never touches the running dinner week: once it has started (flat ask due or anything recorded) the change waits until that week's dinner, else it applies at once. A week of the new weekday whose steps would all lie before the switch (e.g. Sun → Mon) is dropped — no dinner, nothing sent; the reply names the first new dinner and warns about a dropped one. `/schedule` shows a pending change; a new time on the current weekday or `/resettime dinner` discards it. |
+| `/settime dinner <weekday> <HH:MM>` (other weekday) | Moves dinner to another weekday. Never touches the running dinner week: once it has started (flat ask due or anything recorded) the change waits until that week's dinner, else it applies at once. A week of the new weekday whose steps would all lie before the switch (e.g. Sun → Mon) is dropped — no dinner, nothing sent; the reply names the first new dinner and warns about a dropped one. `/schedule` and `/status` show a pending change; a new time on the current weekday or `/resettime dinner` discards it. |
 | `/nudge on\|off` | Turns the nudge on or off; same guard. |
 | `/resettime <point>` | Drops the chat change of a point back to the config value (for `nudge` also on/off); same guard. For `dinner` it first discards a pending weekday change; going back to the config's weekday waits like `/settime dinner`. |
 

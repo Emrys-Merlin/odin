@@ -1,18 +1,27 @@
 """/status: where the current dinner week stands, and what ODIN does next.
 
-Reads the store only; never writes. Works on the effective config (`ctx.config`).
+Reads the store only; never writes. Works on the effective config (`ctx.config`), plus a pending
+dinner weekday change (`odin.overrides.pending_dinner`), which takes over at this week's dinner.
 """
 
+import dataclasses
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
-# odin.engine is imported inside the functions and odin.reactions as a module: engine imports
-# reactions, whose event consumer dispatches to odin.commands, which imports this module, so
-# importing engine or names from reactions here would close an import cycle.
+# odin.engine (and odin.overrides, which imports it) is imported inside the functions and
+# odin.reactions as a module: engine imports reactions, whose event consumer dispatches to
+# odin.commands, which imports this module, so importing engine or names from reactions here
+# would close an import cycle.
 from odin import reactions
 from odin.commands import ui
 from odin.commands.core import Command, CommandContext
+from odin.commands.schedule import DROPPED
 from odin.config import WEEKDAYS_DE, Config, WeeklyTime
 from odin.store import Action, MessageKind, Outcome, Store
+
+if TYPE_CHECKING:
+    from odin.engine import Upcoming
+    from odin.overrides import PendingDinner
 
 # German labels for the steps, keyed by the names `upcoming_actions` uses.
 FLAT_ASK = "Frage an die WG"
@@ -33,19 +42,27 @@ PENDING = "⏳"
 OFF = "–"
 ONLY_IF_UNCONFIRMED = "nur falls noch kein {emoji}"
 NO_DINNER = "kein Essen"
+PENDING_DINNER = "Ab {weekday} {first:%d.%m.} ist das Essen {weekdays} um {time:%H:%M}"
 
 
 def run(ctx: CommandContext, args: str) -> list[str]:
-    return [status(ctx.config, ctx.store, ctx.now)]
+    from odin.overrides import pending_dinner
+
+    pending = pending_dinner(ctx.base, ctx.store, ctx.now)
+    return [status(ctx.config, ctx.store, ctx.now, pending)]
 
 
-def status(config: Config, store: Store, now: datetime) -> str:
+def status(
+    config: Config, store: Store, now: datetime, pending: PendingDinner | None = None
+) -> str:
     from odin import engine
 
     week = engine.dinner_week(config, now)
     week_status = _WeekStatus(config, store, week)
     lines = [f"{WEEKDAYS_DE[week.weekday()]}, {week:%d.%m.}", *week_status.lines()]
-    following = _next_action(config, week_status, now)
+    if pending is not None:
+        lines.append(_pending_line(pending))
+    following = _next_action(config, week_status, now, pending)
     if following:
         lines.append(f"Nächste Aktion: {following}")
     return "\n".join(lines)
@@ -135,11 +152,51 @@ class _WeekStatus:
         return reactions.count_confirmations(self.store, message, self.config.emoji)
 
 
-def _next_action(config: Config, current: _WeekStatus, now: datetime) -> str | None:
+def _pending_line(pending: PendingDinner) -> str:
+    """``Ab Sa 24.10. ist das Essen samstags um 18:00.``, with a dropped week as in /schedule."""
+    first = pending.transition.first_week
+    line = PENDING_DINNER.format(
+        weekday=ui.WEEKDAYS_SHORT[first.weekday()],
+        first=first,
+        weekdays=WEEKDAYS_DE[pending.point.weekday].lower() + "s",
+        time=pending.point.time,
+    )
+    dropped = pending.transition.dropped_week
+    if dropped is not None:
+        weekday = ui.WEEKDAYS_SHORT[dropped.weekday()]
+        line += " " + DROPPED.format(weekday=weekday, day=dropped)
+    return line + "."
+
+
+def _upcoming(config: Config, now: datetime, pending: PendingDinner | None) -> list[Upcoming]:
+    """The scheduled actions from `now` on, in time order, across a pending weekday change.
+
+    Before the switch they come from the current schedule, from it on from the new schedule's
+    first week. A week dropped by the switch has all its steps before it, so none is listed.
+    """
+    from odin import engine
+
+    upcoming = engine.upcoming_actions(config, now)
+    if pending is None:
+        return upcoming
+    new = dataclasses.replace(
+        config, schedule=dataclasses.replace(config.schedule, dinner=pending.point)
+    )
+    # The flat ask opens a week, so from it on the next occurrences are that week's steps.
+    first_ask = new.when(new.schedule.flat_ask, pending.transition.first_week)
+    return [u for u in upcoming if u.at < pending.switch] + engine.upcoming_actions(new, first_ask)
+
+
+def _next_action(
+    config: Config, current: _WeekStatus, now: datetime, pending: PendingDinner | None
+) -> str | None:
     """The first scheduled action that will (or may) still happen, in German."""
     from odin import engine
 
-    for upcoming in engine.upcoming_actions(config, now):
+    flat_ask_missed = current.outcome(Action.FLAT_ASK) is None and (
+        engine.step_windows(config, current.week)[0].due(now) is False
+    )
+    for upcoming in _upcoming(config, now, pending):
         note = ""
         if engine.dinner_week(config, upcoming.at) == current.week:
             match upcoming.name:
@@ -160,8 +217,9 @@ def _next_action(config: Config, current: _WeekStatus, now: datetime) -> str | N
                         current.decided and not current.dinner_on
                     ):
                         continue
-            # Without a flat ask nobody can confirm: the rest of the week is skipped.
-            if current.outcome(Action.FLAT_ASK) is Outcome.SKIPPED:
+            # Without a flat ask nobody can confirm: the rest of the week is skipped. That is also
+            # so for a flat ask past its window, e.g. of a week dropped by a weekday change.
+            if current.outcome(Action.FLAT_ASK) is Outcome.SKIPPED or flat_ask_missed:
                 continue
         elif upcoming.name == "nudge":
             note = ONLY_IF_UNCONFIRMED.format(emoji=config.emoji)
