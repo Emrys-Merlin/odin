@@ -19,6 +19,11 @@ time until the catch-up grace has passed, but never after its expiry — the fla
 flat ask and the nudge (after it, confirmations no longer count), dinner start for the decision
 and the tally. A step past its window is recorded as skipped. Without a flat ask nobody can confirm,
 so a skipped flat ask skips the rest of the week, including the dinner-group message.
+
+**A new dinner weekday** (see `transition`) makes the dinner weeks named by another weekday. The
+change never takes over in the middle of a running week; the first week under the new weekday
+either starts cleanly after the switch, or all of its steps lie before the switch and it is
+skipped as a whole, like any week whose flat ask was missed. Nothing of it is ever sent.
 """
 
 import logging
@@ -145,19 +150,58 @@ def step_windows(config: Config, week: date) -> list[StepWindow]:
     return windows
 
 
+@dataclass(frozen=True)
+class Transition:
+    """How the dinner weeks of a new schedule begin when it takes over at a given moment."""
+
+    first_week: date  # the first dinner week that is run under the new schedule
+    dropped_week: date | None  # the week before it, if all its steps lie before the switch
+
+
+def transition(new: Config, switch: datetime) -> Transition:
+    """How the weeks of `new` begin when `new` becomes the effective config at `switch`.
+
+    Takes the first week of `new` whose dinner is after `switch`. If all its steps start after
+    the switch, it is run normally. If all of them start at or before it, it is dropped: the
+    engine records its steps as skipped (its flat ask is past its window), sends nothing, and the
+    next week is the first one run. A week whose steps lie on both sides of the switch would be
+    half-run; raises ValueError then.
+
+    When `switch` is a dinner of the old schedule and both schedules are in order (see
+    `odin.config`), that cannot happen: before the old dinner its steps run flat ask … tally in
+    that order, so the new week's steps before the switch are the *last* ones of that order;
+    within the new week they would have to be the *first* ones — so it is all of them or none.
+    """
+    switch = _utc(switch)
+    week = dinner_week(new, switch)
+    starts = [window.start for window in step_windows(new, week)]
+    if all(start > switch for start in starts):
+        return Transition(week, None)
+    if all(start <= switch for start in starts):
+        return Transition(week + timedelta(weeks=1), week)
+    raise ValueError(f"the dinner week {week} would start before {switch} and end after it")
+
+
 async def reconcile(
     config: Config, store: Store, client: SignalClient, account: Account, now: datetime
 ) -> list[Step]:
     """Perform what is due by `now` and not yet recorded. Returns what was recorded.
 
     Also finishes the previous week, so that a step missed there (the bot was down over dinner)
-    is recorded as skipped instead of staying open forever.
+    is recorded as skipped instead of staying open forever. Normally that is the week before
+    `current`; right after a new dinner weekday took over, it is the last week recorded under
+    the old one (its dinner is the latest before now). The week before `current` under the new
+    weekday then never existed and is left alone.
     """
     now = _utc(now)
     current = dinner_week(config, now)
+    previous = current - timedelta(weeks=1)
+    latest = store.latest_week_before(current)
+    if latest is not None and latest > previous:
+        previous = latest
     steps: list[Step] = []
-    for week in (current - timedelta(weeks=1), current):
-        cycle = _Week(config, store, client, account, week, now, steps)
+    for week, over in ((previous, True), (current, False)):
+        cycle = _Week(config, store, client, account, week, over, now, steps)
         try:
             await cycle.run()
         except _SendFailed:
@@ -176,41 +220,47 @@ class _Week:
     client: SignalClient
     account: Account
     week: date
+    # The week's dinner has started: every step still open is past its window. Its windows are
+    # not computed, since the week may belong to an earlier dinner weekday.
+    over: bool
     now: datetime
     steps: list[Step] = field(default_factory=list)
 
     async def run(self) -> None:
-        windows = {w.name: w for w in step_windows(self.config, self.week)}
+        windows = {} if self.over else {w.name: w for w in step_windows(self.config, self.week)}
+
+        def due(name: str) -> bool | None:
+            return False if self.over else windows[name].due(self.now)
 
         # 1. Flat ask.
         if not self._recorded(Action.FLAT_ASK):
-            due = windows["flat_ask"].due(self.now)
-            if due is None:
+            due_now = due("flat_ask")
+            if due_now is None:
                 return
-            if due:
+            if due_now:
                 await self._send(Action.FLAT_ASK, track=MessageKind.FLAT_POLL)
             else:
                 self._skip(Action.FLAT_ASK)
         asked = self.store.action_outcome(self.week, Action.FLAT_ASK) is Outcome.SENT
 
         # 2. Nudge, if enabled.
-        if "nudge" in windows and not self._recorded(Action.NUDGE):
-            due = windows["nudge"].due(self.now)
-            if due is None:
+        if self.config.schedule.nudge is not None and not self._recorded(Action.NUDGE):
+            due_now = due("nudge")
+            if due_now is None:
                 return
-            if due and asked and self._confirmations() == 0:
+            if due_now and asked and self._confirmations() == 0:
                 await self._send(Action.NUDGE)
             else:
                 self._skip(Action.NUDGE)
 
         # 3. Decision: announcement or cancellation.
         if not (self._recorded(Action.ANNOUNCEMENT) or self._recorded(Action.CANCELLATION)):
-            due = windows["decision"].due(self.now)
-            if due is None:
+            due_now = due("decision")
+            if due_now is None:
                 return
             on = asked and self._confirmations() > 0
             decision = Action.ANNOUNCEMENT if on else Action.CANCELLATION
-            if due and asked:
+            if due_now and asked:
                 track = MessageKind.DINNER_ANNOUNCEMENT if on else None
                 await self._send(decision, track=track)
             else:
@@ -219,10 +269,10 @@ class _Week:
 
         # 4. Tally, if dinner is on.
         if not self._recorded(Action.TALLY):
-            due = windows["tally"].due(self.now)
-            if due is None:
+            due_now = due("tally")
+            if due_now is None:
                 return
-            if due and on:
+            if due_now and on:
                 announcement = self.store.tracked_message(
                     self.week, MessageKind.DINNER_ANNOUNCEMENT
                 )

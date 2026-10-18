@@ -83,8 +83,9 @@ group) ODIN ignores them.
 | `/resettext <name>` | Drops the chat change to template `<name>`, back to the config file's text; replies with a preview. |
 | `/vars [name]` | Lists the template placeholders with a German description and current value; with a template name only those allowed in it. |
 | `/settime <point> <weekday> <HH:MM>` | Moves a schedule point (`flat_ask`, `nudge`, `flat_deadline`, `rsvp_by`, `tally`, `cook`, `dinner`); weekdays as in the config (`thu`, `thursday`). Takes effect at once, but is rejected if it breaks the schedule order, moves the current dinner week, or makes a not-yet-done step of this week due right now. |
+| `/settime dinner <weekday> <HH:MM>` (other weekday) | Moves dinner to another weekday. Never touches the running dinner week: once it has started (flat ask due or anything recorded) the change waits until that week's dinner, else it applies at once. A week of the new weekday whose steps would all lie before the switch (e.g. Sun → Mon) is dropped — no dinner, nothing sent; the reply names the first new dinner and warns about a dropped one. `/schedule` shows a pending change; a new time on the current weekday or `/resettime dinner` discards it. |
 | `/nudge on\|off` | Turns the nudge on or off; same guard. |
-| `/resettime <point>` | Drops the chat change of a point back to the config value (for `nudge` also on/off); same guard. |
+| `/resettime <point>` | Drops the chat change of a point back to the config value (for `nudge` also on/off); same guard. For `dinner` it first discards a pending weekday change; going back to the config's weekday waits like `/settime dinner`. |
 
 ## Architecture
 

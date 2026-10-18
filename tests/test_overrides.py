@@ -169,13 +169,13 @@ def test_nudge_time_override() -> None:
 
 
 def test_effective_config_without_overrides_is_the_base(store: Store) -> None:
-    assert effective_config(BASE, store) is BASE
+    assert effective_config(BASE, store, NOW) is BASE
 
 
 def test_effective_config_applies_stored_overrides(store: Store) -> None:
     store.set_override("schedule.tally", "sat 10:00", "Tim", NOW)
     store.set_override("templates.cancellation", "AUS\n\nOFF", "Tim", NOW)
-    config = effective_config(BASE, store)
+    config = effective_config(BASE, store, NOW)
     assert config.schedule.tally == WeeklyTime(5, dt.time(10, 0))
     assert config.templates.cancellation.text == "AUS\n\nOFF"
 
@@ -192,7 +192,7 @@ def test_invalid_stored_overrides_are_dropped(
     # The TOML changes underneath: the tally moves before the overridden deadline.
     base = make_config(schedule={"tally": {"weekday": "thu", "time": "12:00"}})
     with caplog.at_level(logging.WARNING):
-        config = effective_config(base, store)
+        config = effective_config(base, store, NOW)
 
     assert config.schedule.flat_deadline == base.schedule.flat_deadline
     assert config.schedule.rsvp_by == WeeklyTime(4, dt.time(12, 0))
@@ -206,7 +206,7 @@ def test_invalid_stored_overrides_are_dropped(
 
     # Dropped for good: no warnings on the next call.
     caplog.clear()
-    assert effective_config(base, store) == config
+    assert effective_config(base, store, NOW) == config
     assert not caplog.records
 
 
@@ -214,7 +214,7 @@ def test_of_two_conflicting_overrides_the_newer_is_dropped(store: Store) -> None
     # Each is valid on its own against the TOML, but not together.
     store.set_override("schedule.flat_deadline", "thu 18:00", "Tim", NOW)
     store.set_override("schedule.rsvp_by", "thu 12:00", "Anna", NOW + timedelta(minutes=1))
-    config = effective_config(BASE, store)
+    config = effective_config(BASE, store, NOW)
     assert config.schedule.flat_deadline == WeeklyTime(3, dt.time(18, 0))
     assert config.schedule.rsvp_by == BASE.schedule.rsvp_by
     assert set(store.overrides()) == {"schedule.flat_deadline"}
@@ -223,6 +223,6 @@ def test_of_two_conflicting_overrides_the_newer_is_dropped(store: Store) -> None
 def test_unknown_stored_key_is_dropped(store: Store, caplog: pytest.LogCaptureFixture) -> None:
     store.set_override("emoji", "❤️", "Tim", NOW)
     with caplog.at_level(logging.WARNING):
-        assert effective_config(BASE, store) == BASE
+        assert effective_config(BASE, store, NOW) == BASE
     assert "emoji" in caplog.text
     assert store.overrides() == {}

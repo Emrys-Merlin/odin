@@ -73,6 +73,9 @@ class Override:
     value: str
     changed_by: str  # the sender's name if known, else their number
     changed_at: datetime
+    # Set for a change that waits for a dinner week to end (a new dinner weekday): it takes effect
+    # once the dinner of week `after_week` has started. None: in effect right away.
+    after_week: date | None = None
 
 
 # Migration i brings the schema from user_version i to i + 1. Only ever append.
@@ -120,6 +123,9 @@ _MIGRATIONS: tuple[str, ...] = (
         changed_by TEXT NOT NULL,
         changed_at TEXT NOT NULL
     );
+    """,
+    """
+    ALTER TABLE overrides ADD COLUMN after_week TEXT;
     """,
 )
 
@@ -208,6 +214,18 @@ class Store:
             (week.isoformat(), action.value),
         ).fetchone()
         return None if row is None else datetime.fromisoformat(row[0])
+
+    def latest_week_before(self, week: date) -> date | None:
+        """The latest week before ``week`` with a recorded action; None if there is none."""
+        (latest,) = self._conn.execute(
+            "SELECT max(week) FROM actions WHERE week < ?", (week.isoformat(),)
+        ).fetchone()
+        return None if latest is None else date.fromisoformat(latest)
+
+    def has_any_action(self, week: date) -> bool:
+        """Whether anything is recorded for ``week``."""
+        row = self._conn.execute("SELECT 1 FROM actions WHERE week = ?", (week.isoformat(),))
+        return row.fetchone() is not None
 
     def action_outcome(self, week: date, action: Action) -> Outcome | None:
         """Whether ``action`` was sent or skipped for ``week``; None if not recorded yet."""
@@ -302,13 +320,28 @@ class Store:
 
     # Config overrides
 
-    def set_override(self, key: str, value: str, changed_by: str, now: datetime) -> None:
+    def set_override(
+        self,
+        key: str,
+        value: str,
+        changed_by: str,
+        now: datetime,
+        after_week: date | None = None,
+    ) -> None:
         """Store an override; it replaces an earlier one for the same key."""
         self._conn.execute(
-            "INSERT INTO overrides (key, value, changed_by, changed_at) VALUES (?, ?, ?, ?)"
+            "INSERT INTO overrides (key, value, changed_by, changed_at, after_week)"
+            " VALUES (?, ?, ?, ?, ?)"
             " ON CONFLICT (key) DO UPDATE SET value = excluded.value,"
-            " changed_by = excluded.changed_by, changed_at = excluded.changed_at",
-            (key, value, changed_by, _utc(now)),
+            " changed_by = excluded.changed_by, changed_at = excluded.changed_at,"
+            " after_week = excluded.after_week",
+            (
+                key,
+                value,
+                changed_by,
+                _utc(now),
+                None if after_week is None else after_week.isoformat(),
+            ),
         )
 
     def delete_override(self, key: str) -> bool:
@@ -318,9 +351,19 @@ class Store:
     def overrides(self) -> dict[str, Override]:
         """All overrides by key, oldest change first."""
         rows = self._conn.execute(
-            "SELECT key, value, changed_by, changed_at FROM overrides ORDER BY changed_at, key"
+            "SELECT key, value, changed_by, changed_at, after_week FROM overrides"
+            " ORDER BY changed_at, key"
         ).fetchall()
-        return {k: Override(k, v, by, datetime.fromisoformat(at)) for k, v, by, at in rows}
+        return {
+            k: Override(
+                k,
+                v,
+                by,
+                datetime.fromisoformat(at),
+                None if after is None else date.fromisoformat(after),
+            )
+            for k, v, by, at, after in rows
+        }
 
     # Setup lock: held by `odin setup` while it runs, so `odin run` stays out of its way. It is
     # a settings row "<token> <heartbeat>"; the holder refreshes the heartbeat, and a lock whose
