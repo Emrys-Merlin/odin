@@ -1,6 +1,7 @@
 """/schedule: the weekly schedule, one line per point, with overridden values marked.
 
-A pending new dinner weekday is shown on the dinner line, with its first dinner and a dropped week.
+A pending new dinner weekday is shown on the dinner line, with its first dinner and a dropped week,
+also one that comes from the config file.
 """
 
 from odin.commands import ui
@@ -28,6 +29,7 @@ POINT_DESCRIPTIONS: dict[str, str] = {
 NUDGE_OFF = "(aus)"
 PENDING = "→ ab {first:%d.%m.}: {when}"
 DROPPED = "({weekday} {day:%d.%m.} entfällt)"
+FROM_CONFIG = "(laut Config-Datei)"
 FOOTER = "Ändern: /settime <punkt> <tag> <HH:MM> · Zurücksetzen: /resettime <punkt>"
 
 
@@ -56,6 +58,8 @@ def run(ctx: CommandContext, args: str) -> list[str]:
             if dropped is not None:
                 weekday = ui.WEEKDAYS_SHORT[dropped.weekday()]
                 line += " " + DROPPED.format(weekday=weekday, day=dropped)
+            if pending.from_config:
+                line += " " + FROM_CONFIG
             keys.append(PENDING_DINNER_KEY)
         # The nudge has two overridable values (time, on/off), dinner a current and a pending one;
         # the latest change is shown.

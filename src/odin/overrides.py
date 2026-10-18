@@ -34,8 +34,8 @@ from odin.config import (
     _parse_time,
     _parse_weekday,
 )
-from odin.engine import Transition, record_transition, transition
-from odin.store import Override, Store
+from odin.engine import Transition, dinner_week, record_transition, transition
+from odin.store import AppliedDinner, Override, Store
 
 logger = logging.getLogger(__name__)
 
@@ -130,8 +130,14 @@ class PendingDinner:
     after_week: date  # the running week when it was set
     switch: datetime  # when it takes effect: the dinner of `after_week`
     transition: Transition  # the first dinner week under it, and a week dropped on the way
-    changed_by: str
-    changed_at: datetime
+    # Who set it via chat, and when; both None for a change made in the config file.
+    changed_by: str | None = None
+    changed_at: datetime | None = None
+
+    @property
+    def from_config(self) -> bool:
+        """Whether the change comes from the config file rather than from the chat."""
+        return self.changed_by is None
 
 
 def current_values(store: Store) -> dict[str, str]:
@@ -157,33 +163,220 @@ def effective_config(base: Config, store: Store, now: datetime) -> Config:
     switch, not the time of the call, so a late first call still counts the grace from it). It is
     dropped with a warning if it no longer fits (its week is no dinner week under the current
     config, or the schedule with it is out of order).
+
+    **A new dinner weekday in the config file** waits the same way. The store remembers the dinner
+    the weeks run on (`Store.applied_dinner`). When the TOML with the overrides in effect names
+    another weekday, that is detected here:
+
+    - If the running dinner week (the one whose dinner is next under the applied dinner) has
+      started — its flat ask is due, anything of it is recorded, or a pending chat change waits
+      for it; the same rule as for a chat change (`/settime dinner`) — the weeks keep
+      the applied dinner until that week's dinner starts. The week is stored as held, so the
+      decision survives restarts. At the switch the new weekday takes over like a pending chat
+      change: `odin.engine.transition` at the scheduled dinner and `record_transition`, in the
+      same transaction as storing the new applied dinner.
+    - Else (between weeks: after dinner and before the next flat ask) it applies at once, with
+      `record_transition` at `now`.
+    - A pending chat change wins over the config file, as every override does: at the switch it
+      becomes the ``schedule.dinner`` override, which hides the config file's dinner.
+    - If the schedule is out of order with the applied dinner, the new weekday applies at once.
     """
     return _resolve(base, store, now)[0]
 
 
 def pending_dinner(base: Config, store: Store, now: datetime) -> PendingDinner | None:
-    """The dinner weekday change waiting at `now`, if there is one (see `effective_config`)."""
+    """The dinner weekday change waiting at `now`, if there is one (see `effective_config`).
+
+    A pending chat change is returned rather than a waiting change from the config file: it wins.
+    """
     return _resolve(base, store, now)[1]
+
+
+def config_dinner_change(base: Config, store: Store) -> tuple[WeeklyTime, WeeklyTime] | None:
+    """The applied dinner and the config file's dinner, if the config file moved dinner to another
+    weekday that has not taken over yet. Only reads the store (for `odin check-config`)."""
+    applied = store.applied_dinner()
+    if applied is None:
+        return None
+    try:
+        target = apply_overrides(base, current_values(store)).schedule.dinner
+        point = _parse_weekly_time(applied.point, "applied dinner")
+    except ConfigError:
+        return None
+    return None if point.weekday == target.weekday else (point, target)
 
 
 def _resolve(base: Config, store: Store, now: datetime) -> tuple[Config, PendingDinner | None]:
     stored = store.overrides()
     pending = stored.pop(PENDING_DINNER_KEY, None)
-    config, valid = _apply_valid(base, store, stored)
+    target, valid = _apply_valid(base, store, stored)
+    applied = _applied_dinner(store, target, now)
+    point = _parse_weekly_time(applied.point, "applied dinner")
+    held = applied.held_week
+
+    # A new weekday from the config file: decide whether it waits for the running week.
+    config = target
+    if point.weekday == target.schedule.dinner.weekday:
+        if held is not None:
+            logger.warning(
+                "the config file's dinner (%s) is back on the weekday the dinner weeks run on; "
+                "the waiting change of the dinner weekday is gone",
+                target.schedule.dinner,
+            )
+        current = AppliedDinner(format_weekly_time(target.schedule.dinner))
+        if applied != current:
+            store.set_applied_dinner(current.point)
+        held = None
+    else:
+        running = _with_dinner(target, point)
+        if running is None:
+            logger.error(
+                "the config file moves dinner from %s to %s, but its schedule is out of order "
+                "with dinner on %s; the new weekday applies at once",
+                point,
+                target.schedule.dinner,
+                point,
+            )
+            _switch_config(store, target, now, point)
+            held = None
+        elif held is None:
+            week = dinner_week(running, now)
+            started = (
+                store.has_any_action(week)
+                or running.when(running.schedule.flat_ask, week) <= now
+                or (pending is not None and pending.after_week == week)
+            )
+            if started:
+                store.set_applied_dinner(applied.point, week)
+                held = week
+                config = running
+                logger.warning(
+                    "the config file moves dinner from %s to %s; the running dinner week of %s "
+                    "keeps %s, the new weekday takes over at its dinner (%s)",
+                    point,
+                    target.schedule.dinner,
+                    week,
+                    point,
+                    running.when(point, week),
+                )
+            else:
+                _switch_config(store, target, now, point)
+        else:
+            config = running
+
+    # A pending chat change, on top of what the dinner weeks run on now.
+    config, waiting, switched = _resolve_pending(base, store, now, config, valid, pending)
+    if switched or held is None:
+        return config, waiting
+
+    # The config file's new weekday waits for week `held`.
+    try:
+        switch = config.when(config.schedule.dinner, held)
+    except ValueError:  # cannot happen: `held` is a dinner week of the applied dinner
+        switch = now
+    if now >= switch:
+        _switch_config(store, target, switch, point)
+        return target, None
+    if waiting is not None:
+        return config, waiting  # the chat change wins: it is what takes over at the switch
+    try:
+        weeks = transition(target, switch)
+    except ValueError:  # cannot happen: the switch is a dinner of an in-order schedule
+        weeks = Transition(switch, dinner_week(target, switch), None)
+    return config, PendingDinner(
+        point=target.schedule.dinner, after_week=held, switch=switch, transition=weeks
+    )
+
+
+def _applied_dinner(store: Store, target: Config, now: datetime) -> AppliedDinner:
+    """The dinner the weeks run on; stored on first use.
+
+    For a database from before it was stored: the effective dinner `target`, unless the latest
+    week with records is on another weekday and its dinner is still to come. Then the config file
+    changed the weekday in the middle of that week, and the week keeps its weekday (at `target`'s
+    time, since the old one is not known).
+    """
+    applied = store.applied_dinner()
+    if applied is not None:
+        return applied
+    point = target.schedule.dinner
+    latest = store.latest_week_before(date.max)
+    if latest is not None and latest.weekday() != point.weekday:
+        guess = WeeklyTime(latest.weekday(), point.time)
+        running = _with_dinner(target, guess)
+        if running is not None and running.when(guess, latest) > now:
+            logger.warning(
+                "the dinner week of %s was started on another weekday than the config file's "
+                "dinner (%s); assuming dinner on %s for it",
+                latest,
+                point,
+                guess,
+            )
+            point = guess
+    applied = AppliedDinner(format_weekly_time(point))
+    store.set_applied_dinner(applied.point)
+    return applied
+
+
+def _with_dinner(config: Config, point: WeeklyTime) -> Config | None:
+    """`config` with dinner at `point`; None if its schedule is out of order with it."""
+    schedule = dataclasses.replace(config.schedule, dinner=point)
+    try:
+        _check_order(schedule)
+    except ConfigError:
+        return None
+    return dataclasses.replace(config, schedule=schedule)
+
+
+def _switch_config(store: Store, target: Config, switch: datetime, old: WeeklyTime) -> None:
+    """Let the config file's new dinner weekday take over at `switch` (see `effective_config`)."""
+    try:
+        weeks: Transition | None = transition(target, switch)
+    except ValueError:
+        # Only when it applies at once although the new weekday's week has begun: nothing is
+        # recorded for the running week, so the new week runs like one the bot was down for
+        # (late steps caught up within their windows), and no week is dropped.
+        weeks = None
+    with store.transaction():
+        store.set_applied_dinner(format_weekly_time(target.schedule.dinner))
+        if weeks is not None:
+            record_transition(store, weeks)
+    first = dinner_week(target, switch) if weeks is None else weeks.first_week
+    dropped = None if weeks is None else weeks.dropped_week
+    logger.warning(
+        "dinner moves from %s to %s as the config file says, from the dinner week of %s on%s",
+        old,
+        target.schedule.dinner,
+        first,
+        "" if dropped is None else f"; the week of {dropped} is dropped (cancellation only)",
+    )
+
+
+def _resolve_pending(
+    base: Config,
+    store: Store,
+    now: datetime,
+    config: Config,
+    valid: Mapping[str, str],
+    pending: Override | None,
+) -> tuple[Config, PendingDinner | None, bool]:
+    """Apply a pending chat change of the dinner weekday on top of `config`, the config the weeks
+    run on now. Returns the effective config, the change if it still waits, and whether it took
+    over just now."""
     if pending is None:
-        return config, None
+        return config, None, False
     try:
         if pending.after_week is None:
             raise ConfigError("no dinner week to wait for")
-        new = apply_overrides(base, valid | {DINNER_KEY: pending.value})
+        new = apply_overrides(base, {**valid, DINNER_KEY: pending.value})
         # ValueError if `after_week` is no dinner week of `config`; or if a week would straddle.
         switch = config.when(config.schedule.dinner, pending.after_week)
         weeks = transition(new, switch)
     except ValueError as e:
         _drop(store, pending, e)
-        return config, None
+        return config, None, False
     if now < switch:
-        return config, PendingDinner(
+        waiting = PendingDinner(
             point=new.schedule.dinner,
             after_week=pending.after_week,
             switch=switch,
@@ -191,6 +384,7 @@ def _resolve(base: Config, store: Store, now: datetime) -> tuple[Config, Pending
             changed_by=pending.changed_by,
             changed_at=pending.changed_at,
         )
+        return config, waiting, False
     with store.transaction():
         store.delete_override(PENDING_DINNER_KEY)
         if pending.value == format_weekly_time(base.schedule.dinner):
@@ -198,8 +392,9 @@ def _resolve(base: Config, store: Store, now: datetime) -> tuple[Config, Pending
         else:
             store.set_override(DINNER_KEY, pending.value, pending.changed_by, pending.changed_at)
         record_transition(store, weeks)
+        store.set_applied_dinner(format_weekly_time(new.schedule.dinner))
     logger.info("dinner is now on %s, from the week of %s", pending.value, weeks.first_week)
-    return new, None
+    return new, None, True
 
 
 def _apply_valid(

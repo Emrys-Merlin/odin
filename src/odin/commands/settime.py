@@ -116,6 +116,10 @@ DROPPED_CANCELLATION_LATER = (
 DROPPED_CANCELLATION_NOW = "Die Absage für den {day} schicke ich der Essensgruppe gleich."
 PENDING_DISCARDED = "Der geplante Wechsel auf {new} (ab {first}) ist damit verworfen."
 PENDING_CANCELLED = "Verworfen ✅ Der geplante Wechsel auf {new} (ab {first}) fällt weg."
+PENDING_FROM_CONFIG = (
+    "Der Wechsel auf {new} (ab {first}) steht so in der Config-Datei. "
+    "Um bei {old} zu bleiben: /settime dinner {command}"
+)
 HARDCODED_WEEKDAY = (
     "Achtung: Die Vorlage {name} nennt einen Wochentag fest – prüfe sie mit /text {name}."
 )
@@ -185,6 +189,10 @@ def check_change(
     """
     old = ctx.config
     new = _apply(ctx, overrides)
+    if DINNER_KEY not in overrides and new.schedule.dinner.weekday != old.schedule.dinner.weekday:
+        # A new dinner weekday from the config file waits for the running week (see
+        # `odin.overrides.effective_config`): until then the weeks run on the current dinner.
+        new = _apply(ctx, {**overrides, DINNER_KEY: format_weekly_time(old.schedule.dinner)})
     pending = pending_dinner(ctx.base, ctx.store, ctx.now) if keep_pending else None
     if pending is not None:
         prefix = WITH_NEW_DINNER.format(when=ui.weekly_time(pending.point), first=_first(pending))
@@ -234,6 +242,17 @@ def _moment(moment: datetime) -> str:
 def _first(pending: PendingDinner) -> str:
     """The first dinner under a pending dinner weekday: ``Sa 24.10.``."""
     return _day(pending.transition.first_week)
+
+
+def _from_config(ctx: CommandContext, pending: PendingDinner) -> str:
+    """The note on a new dinner weekday from the config file, and how to keep the current one."""
+    current = ctx.config.schedule.dinner
+    return PENDING_FROM_CONFIG.format(
+        new=ui.weekly_time(pending.point),
+        first=_first(pending),
+        old=ui.weekly_time(current),
+        command=format_weekly_time(current),
+    )
 
 
 def _point(config: Config, point: str) -> WeeklyTime:
@@ -391,6 +410,7 @@ def set_dinner_day(ctx: CommandContext, value: str | None, headline: str) -> lis
                 ctx.store.set_override(DINNER_KEY, target, _changed_by(ctx), ctx.now)
             # A pending change is recorded when it applies (`odin.overrides.effective_config`).
             record_transition(ctx.store, weeks)
+            ctx.store.set_applied_dinner(target)
 
     first = _moment(new.when(new.schedule.dinner, weeks.first_week))
     lines = [
@@ -456,12 +476,22 @@ def run_resettime(ctx: CommandContext, args: str) -> list[str]:
     point = parse_point(words[0])
     if point == "dinner":
         pending = pending_dinner(ctx.base, ctx.store, ctx.now)
+        if pending is not None and pending.from_config:
+            # Nothing to reset in the chat: the change comes from the config file.
+            when = ui.weekly_time(ctx.config.schedule.dinner)
+            line = NOT_OVERRIDDEN.format(label=POINT_LABELS[point], point=point, when=when)
+            return [f"{line}\n{_from_config(ctx, pending)}"]
         if pending is not None:
             ctx.store.delete_override(PENDING_DINNER_KEY)
             headline = PENDING_CANCELLED.format(
                 new=ui.weekly_time(pending.point), first=_first(pending)
             )
-            return [f"{headline}\n{_point_line(ctx, ctx.config, point)}"]
+            lines = [headline, _point_line(ctx, ctx.config, point)]
+            # A change in the config file that the chat change hid comes through again.
+            behind = pending_dinner(ctx.base, ctx.store, ctx.now)
+            if behind is not None and behind.from_config:
+                lines.append(_from_config(ctx, behind))
+            return ["\n".join(lines)]
     keys = [schedule_key(point)] + ([NUDGE_ENABLED_KEY] if point == "nudge" else [])
     stored = current_values(ctx.store)
     if (

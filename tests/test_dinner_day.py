@@ -36,7 +36,7 @@ from odin.overrides import (
 )
 from odin.reactions import handle_reaction
 from odin.signal import FakeSignalClient, ReactionEvent
-from odin.store import _MIGRATIONS, Action, MessageKind, Outcome, Store
+from odin.store import _MIGRATIONS, Action, AppliedDinner, MessageKind, Outcome, Store
 
 TEMPLATES = {
     "flat_ask": "ASK {dinner_day_de}",
@@ -301,9 +301,7 @@ def test_resettime_back_to_the_config_weekday_at_once(store: Store) -> None:
 # --- effective_config ---------------------------------------------------------------------------
 
 
-def test_pending_change_is_dropped_when_the_toml_weekday_changes(
-    store: Store, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_a_pending_change_wins_over_a_new_toml_weekday(store: Store) -> None:
     send(store, "/settime dinner sat 18:00", oct(15, 12), SAT_COOK)
     moved = make_config(
         schedule={
@@ -311,10 +309,15 @@ def test_pending_change_is_dropped_when_the_toml_weekday_changes(
             "dinner": {"weekday": "sat", "time": "19:00"},
         }
     )
-    with caplog.at_level(logging.WARNING):
-        assert effective_config(moved, store, oct(15, 13)) == moved
-    assert PENDING_DINNER_KEY in caplog.text
-    assert stored(store) == {}
+    # The pending change waits for the week of Sun 18., so the TOML's new weekday waits too …
+    assert effective_config(moved, store, oct(15, 13)) == SAT_COOK
+    pending = pending_dinner(moved, store, oct(15, 13))
+    assert pending is not None and not pending.from_config
+    assert pending.point == WeeklyTime(5, time(18, 0))
+    # … and at the switch the chat change takes over, hiding the TOML's dinner time.
+    assert effective_config(moved, store, oct(18, 18)).schedule.dinner == WeeklyTime(5, time(18))
+    assert stored(store) == {DINNER_KEY: ("sat 18:00", None)}
+    assert store.applied_dinner() == AppliedDinner("sat 18:00")
 
 
 def test_pending_change_is_dropped_when_it_no_longer_fits(store: Store) -> None:
@@ -501,6 +504,9 @@ def test_back_after_the_dropped_weeks_dinner_posts_nothing(store: Store) -> None
     bot.run(oct(20, 10), oct(20, 11))
     assert store.dropped_at(MON_19) == oct(18, 18).astimezone(UTC)
     assert bot.outcomes(MON_19) == ALL_SKIPPED
+    # The old week, whose tally was missed, is finished too (#81): nothing stays open.
+    assert bot.outcomes(SUN_18)[Action.TALLY] is Outcome.SKIPPED
+    assert store.unfinished_weeks_before(MON_26) == []
     assert [text for _, text in bot.sent()] == ["ASK Sonntag", "ESSEN Sonntag"]
     # The Monday weeks go on normally.
     bot.run(oct(20, 11), oct(27, 9))
@@ -706,3 +712,363 @@ def test_latest_week_before(store: Store) -> None:
     assert store.latest_week_before(MON_19) == SUN_18
     assert store.has_any_action(SUN_18)
     assert not store.has_any_action(MON_19)
+
+
+def test_upgrade_from_version_6_adds_the_applied_dinner(tmp_path: Path) -> None:
+    path = tmp_path / "odin.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(f"{'; '.join(_MIGRATIONS[:6])}; PRAGMA user_version = 6;")
+    conn.close()
+    with Store(path) as store:
+        assert store.applied_dinner() is None
+        store.set_applied_dinner("sun 18:00", SUN_18)
+        assert store.applied_dinner() == AppliedDinner("sun 18:00", SUN_18)
+        # There is only ever one; setting it again replaces it, without a held week.
+        store.set_applied_dinner("mon 18:00")
+        assert store.applied_dinner() == AppliedDinner("mon 18:00")
+
+
+def test_unfinished_weeks_before(store: Store) -> None:
+    sun_11 = date(2026, 10, 11)
+    for action in Action:
+        store.record_action(sun_11, action, oct(9, 14), Outcome.SKIPPED)
+    store.record_action(SUN_18, Action.FLAT_ASK, oct(13, 18))
+    store.record_dropped_week(MON_19, oct(18, 18))
+    assert store.unfinished_weeks_before(MON_26) == [SUN_18, MON_19]
+    assert store.unfinished_weeks_before(MON_19) == [SUN_18]
+    store.record_action(MON_19, Action.TALLY, oct(20, 10), Outcome.SKIPPED)
+    assert store.unfinished_weeks_before(MON_26) == [SUN_18]
+
+
+# --- A new dinner weekday in the TOML (#81) -----------------------------------------------------
+
+# The TOML before (dinner Sun 18:00) is CONFIG or SAT_COOK; these are the TOML after the edit.
+TOML_SAT = make_config(
+    schedule={"cook": {"weekday": "sat", "time": "17:00"}, "dinner": {"weekday": "sat"}}
+)
+TOML_MON = make_config(schedule={"dinner": {"weekday": "mon", "time": "18:00"}})
+TOML_MON_SAT_COOK = make_config(
+    schedule={"cook": {"weekday": "sat", "time": "17:00"}, "dinner": {"weekday": "mon"}}
+)
+
+SUNDAY_WEEK = [
+    ("Tue 13.10. 18:00", "ASK Sonntag"),
+    ("Wed 14.10. 18:00", "ESSEN Sonntag"),
+    ("Fri 16.10. 14:00", "TALLY 1"),
+]
+SATURDAY_WEEKS = [
+    ("Tue 20.10. 18:00", "ASK Samstag"),
+    ("Wed 21.10. 18:00", "ESSEN Samstag"),
+    ("Fri 23.10. 14:00", "TALLY 1"),
+    ("Tue 27.10. 18:00", "ASK Samstag"),
+    ("Wed 28.10. 18:00", "ESSEN Samstag"),
+    ("Fri 30.10. 14:00", "TALLY 1"),
+]
+MONDAY_WEEKS = [
+    ("Tue 20.10. 18:00", "ASK Montag"),
+    ("Wed 21.10. 18:00", "ESSEN Montag"),
+    ("Fri 23.10. 14:00", "TALLY 1"),
+    ("Tue 27.10. 18:00", "ASK Montag"),
+    ("Wed 28.10. 18:00", "ESSEN Montag"),
+    ("Fri 30.10. 14:00", "TALLY 1"),
+]
+
+
+def runs(store: Store, *runs: tuple[Config, datetime, datetime]) -> list[tuple[str, str]]:
+    """Run the bot from scratch for each (TOML, start, end) on the same DB, as after a restart
+    with that TOML, and return everything sent across all of them."""
+    sent = []
+    for base, start, end in runs:
+        bot = Bot(store, base)
+        # Signal timestamps are wall-clock milliseconds, so a new client never reuses one.
+        first = int(start.timestamp() * 1000)
+        bot.client = FakeSignalClient(number=ACCOUNT.number, first_timestamp=first)
+        bot.run(start, end)
+        sent += bot.sent()
+    return sent
+
+
+def overrides_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [
+        r.getMessage()
+        for r in caplog.records
+        if r.name == "odin.overrides" and r.levelno >= logging.WARNING
+    ]
+
+
+def test_toml_sun_to_sat_on_wednesday_finishes_the_sunday_week(
+    store: Store, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING, logger="odin.overrides"):
+        sent = runs(
+            store,
+            (SAT_COOK, oct(12, 9), oct(14, 12)),  # the flat ask of Sun 18. is out
+            (TOML_SAT, oct(14, 12), local(11, 1, 9)),  # restarted with Saturday in the TOML
+        )
+    assert sent == SUNDAY_WEEK + SATURDAY_WEEKS
+    for week in (SUN_18, SAT_24, date(2026, 10, 31)):
+        assert Bot(store, TOML_SAT).outcomes(week) == ALL_SENT
+    # The Saturday "before" the switch never existed and is never touched.
+    assert Bot(store, TOML_SAT).outcomes(date(2026, 10, 17)) == {}
+    assert store.applied_dinner() == AppliedDinner("sat 18:00")
+    # Warned once when the change was seen, once at the switch; not on every tick.
+    assert overrides_warnings(caplog) == [
+        "the config file moves dinner from sun 18:00 to sat 18:00; the running dinner week of "
+        "2026-10-18 keeps sun 18:00, the new weekday takes over at its dinner "
+        "(2026-10-18 18:00:00+02:00)",
+        "dinner moves from sun 18:00 to sat 18:00 as the config file says, from the dinner "
+        "week of 2026-10-24 on",
+    ]
+
+
+def test_toml_sun_to_mon_drops_the_cut_short_week_across_restarts(store: Store) -> None:
+    sent = runs(
+        store,
+        (CONFIG, oct(12, 9), oct(15, 12)),
+        # Restarted with Monday in the TOML on Thursday, and again on Saturday, at the switch
+        # and just after it.
+        (TOML_MON, oct(15, 12), oct(17, 9)),
+        (TOML_MON, oct(17, 9), oct(18, 18)),
+        (TOML_MON, oct(18, 18), oct(18, 18, 1)),
+        (TOML_MON, oct(18, 18, 1), oct(18, 18, 2)),
+        (TOML_MON, oct(18, 19), local(11, 3, 9)),
+    )
+    assert sent == [
+        *SUNDAY_WEEK,
+        ("Sun 18.10. 18:00", "ABGESAGT Montag"),  # Mon 19. is dropped; only its cancellation
+        *MONDAY_WEEKS,
+    ]
+    bot = Bot(store, TOML_MON)
+    assert bot.outcomes(SUN_18) == ALL_SENT
+    assert bot.outcomes(MON_19) == DROPPED
+    assert bot.outcomes(MON_26) == ALL_SENT
+    assert bot.outcomes(date(2026, 10, 12)) == {}
+    assert store.dropped_at(MON_19) == oct(18, 18).astimezone(UTC)
+
+
+def test_toml_change_waits_after_the_first_record_of_the_week(store: Store) -> None:
+    # Anything recorded makes the week a running one, even before its flat ask is due.
+    store.set_applied_dinner("sun 18:00")
+    store.record_action(SUN_18, Action.FLAT_ASK, oct(13, 9))
+    config = effective_config(TOML_MON, store, oct(13, 10))
+    assert config.schedule.dinner == CONFIG.schedule.dinner
+    assert store.applied_dinner() == AppliedDinner("sun 18:00", SUN_18)
+
+
+def test_toml_change_shows_in_schedule_and_status(store: Store) -> None:
+    runs(store, (CONFIG, oct(12, 9), oct(15, 12)))
+    lines = send(store, "/schedule", oct(15, 12), TOML_MON).splitlines()
+    assert lines[6] == (
+        "dinner – Essen: So 18:00 → ab 26.10.: Mo 18:00 (Mo 19.10. entfällt) (laut Config-Datei)"
+    )
+    status = send(store, "/status", oct(15, 12), TOML_MON).splitlines()
+    assert status[0] == "Sonntag, 18.10."
+    assert status[-2] == (
+        "Ab Mo 26.10. ist das Essen montags um 18:00 (Mo 19.10. entfällt) (laut Config-Datei)."
+    )
+    assert status[-1] == "Nächste Aktion: Zählung, Fr 14:00"
+    pending = pending_dinner(TOML_MON, store, oct(15, 12))
+    assert pending is not None and pending.from_config
+    assert (pending.after_week, pending.switch) == (SUN_18, oct(18, 18))
+
+
+def test_resettime_explains_a_toml_change(store: Store) -> None:
+    runs(store, (CONFIG, oct(12, 9), oct(15, 12)))
+    reply = send(store, "/resettime dinner", oct(15, 12), TOML_MON)
+    assert reply == "\n".join(
+        [
+            "Essen (dinner) war nicht geändert – steht auf So 18:00.",
+            "Der Wechsel auf Mo 18:00 (ab Mo 26.10.) steht so in der Config-Datei. "
+            "Um bei So 18:00 zu bleiben: /settime dinner sun 18:00",
+        ]
+    )
+    assert pending_dinner(TOML_MON, store, oct(15, 13)) is not None
+
+
+@pytest.mark.parametrize(
+    ("toml", "expected"),
+    [
+        (
+            TOML_SAT,
+            [
+                ("Tue 13.10. 18:00", "ASK Samstag"),  # Sat 17. is the first week
+                ("Wed 14.10. 18:00", "ESSEN Samstag"),
+                ("Fri 16.10. 14:00", "TALLY 1"),
+                ("Tue 20.10. 18:00", "ASK Samstag"),
+            ],
+        ),
+        (
+            TOML_MON,
+            [
+                ("Sun 11.10. 19:00", "ABGESAGT Montag"),  # Mon 12. is dropped, at once
+                ("Tue 13.10. 18:00", "ASK Montag"),
+                ("Wed 14.10. 18:00", "ESSEN Montag"),
+                ("Fri 16.10. 14:00", "TALLY 1"),
+                ("Tue 20.10. 18:00", "ASK Montag"),
+            ],
+        ),
+    ],
+)
+def test_toml_change_between_weeks_applies_at_once(
+    store: Store, toml: Config, expected: list[tuple[str, str]]
+) -> None:
+    before = runs(store, (SAT_COOK, oct(5, 9), oct(11, 19)))  # after the dinner of Sun 11.
+    assert [text for _, text in before] == ["ASK Sonntag", "ESSEN Sonntag", "TALLY 1"]
+    assert effective_config(toml, store, oct(11, 19)) == toml
+    assert pending_dinner(toml, store, oct(11, 19)) is None
+    assert runs(store, (toml, oct(11, 19), oct(20, 19))) == expected
+    assert store.applied_dinner() == AppliedDinner(format_weekly_time(toml.schedule.dinner))
+
+
+def test_toml_change_after_a_missed_flat_ask_waits_like_a_chat_change(store: Store) -> None:
+    # The bot was down over the flat ask of Sun 18.: nothing of that week was sent, but its flat
+    # ask is due, so the week has started (the same rule as for `/settime dinner`). It keeps
+    # Sunday; the missed ask is caught up within its window.
+    runs(store, (SAT_COOK, oct(5, 9), oct(12, 9)))
+    assert runs(store, (TOML_SAT, oct(14, 10), oct(21, 9))) == [
+        ("Wed 14.10. 10:00", "ASK Sonntag"),  # caught up within its window
+        ("Wed 14.10. 18:00", "ESSEN Sonntag"),
+        ("Fri 16.10. 14:00", "TALLY 1"),
+        ("Tue 20.10. 18:00", "ASK Samstag"),  # Sat 24. is the first Saturday week
+    ]
+    assert store.applied_dinner() == AppliedDinner("sat 18:00")
+
+
+def test_toml_change_between_weeks_applies_at_once_before_the_flat_ask(store: Store) -> None:
+    # Mon 12., after Sunday's dinner and before Tuesday's flat ask: nothing has started yet.
+    runs(store, (SAT_COOK, oct(5, 9), oct(12, 9)))
+    assert runs(store, (TOML_SAT, oct(12, 10), oct(14, 19))) == [
+        ("Tue 13.10. 18:00", "ASK Samstag"),  # Sat 17. is the first week
+        ("Wed 14.10. 18:00", "ESSEN Samstag"),
+    ]
+    assert Bot(store, TOML_SAT).outcomes(SUN_18) == {}
+
+
+def test_toml_change_back_before_the_switch_changes_nothing(
+    store: Store, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING, logger="odin.overrides"):
+        sent = runs(
+            store,
+            (CONFIG, oct(12, 9), oct(15, 12)),
+            (TOML_MON, oct(15, 12), oct(16, 9)),
+            (CONFIG, oct(16, 9), oct(21, 9)),  # the TOML edit is undone on Friday
+        )
+    assert sent == [*SUNDAY_WEEK, ("Tue 20.10. 18:00", "ASK Sonntag")]
+    assert store.applied_dinner() == AppliedDinner("sun 18:00")
+    assert store.dropped_at(MON_19) is None
+    warnings = overrides_warnings(caplog)
+    assert len(warnings) == 2
+    assert "is back on the weekday" in warnings[1]
+
+
+def test_bot_down_over_a_toml_switch_finishes_every_open_week(store: Store) -> None:
+    sent = runs(
+        store,
+        (CONFIG, oct(12, 9), oct(15, 12)),
+        (TOML_MON, oct(15, 12), oct(16, 12)),
+        # Down from Fri 16. 12:00, before the tally of Sun 18., until Tue 20. 10:00, after the
+        # dinner of the dropped Mon 19.
+        (TOML_MON, oct(20, 10), local(11, 3, 9)),
+    )
+    assert sent == [SUNDAY_WEEK[0], SUNDAY_WEEK[1], *MONDAY_WEEKS]
+    bot = Bot(store, TOML_MON)
+    assert bot.outcomes(SUN_18)[Action.TALLY] is Outcome.SKIPPED
+    assert bot.outcomes(MON_19) == ALL_SKIPPED
+    assert store.dropped_at(MON_19) == oct(18, 18).astimezone(UTC)  # the scheduled switch
+    assert store.unfinished_weeks_before(date(2026, 11, 2)) == []
+
+
+# --- A new weekday in the TOML and a pending chat change ----------------------------------------
+
+
+def test_chat_change_wins_over_a_later_toml_change(store: Store) -> None:
+    bot = Bot(store, SAT_COOK)
+    bot.run(oct(12, 9), oct(16, 9), {oct(15, 12): "/settime dinner sat 18:00"})
+    # Restarted on Friday with Monday in the TOML: the chat change is still the pending one.
+    pending = pending_dinner(TOML_MON_SAT_COOK, store, oct(16, 9))
+    assert pending is not None and not pending.from_config
+    sent = bot.sent() + runs(store, (TOML_MON_SAT_COOK, oct(16, 9), local(11, 3, 9)))
+    assert sent == SUNDAY_WEEK + SATURDAY_WEEKS
+    assert stored(store) == {DINNER_KEY: ("sat 18:00", None)}
+    assert store.applied_dinner() == AppliedDinner("sat 18:00")
+    for week in (MON_19, MON_26):
+        assert store.dropped_at(week) is None
+        assert Bot(store, TOML_MON_SAT_COOK).outcomes(week) == {}
+
+
+def test_chat_change_wins_over_a_waiting_toml_change(store: Store) -> None:
+    runs(store, (SAT_COOK, oct(12, 9), oct(15, 12)), (TOML_MON_SAT_COOK, oct(15, 12), oct(16, 9)))
+    reply = send(store, "/settime dinner sat 18:00", oct(16, 9), TOML_MON_SAT_COOK)
+    assert reply.splitlines()[1:3] == [
+        "Essen (dinner): So 18:00 → Sa 18:00",
+        "Das gilt ab dem Essen am Sa 24.10. um 18:00. "
+        "Diese Woche bleibt es beim Essen am So 18.10. um 18:00.",
+    ]
+    pending = pending_dinner(TOML_MON_SAT_COOK, store, oct(16, 10))
+    assert pending is not None and pending.point == WeeklyTime(5, time(18))
+    sent = runs(store, (TOML_MON_SAT_COOK, oct(16, 9), local(11, 3, 9)))
+    assert sent == [SUNDAY_WEEK[2], *SATURDAY_WEEKS]
+    assert store.dropped_at(MON_19) is None
+
+
+def test_resetting_the_chat_change_brings_back_the_toml_change(store: Store) -> None:
+    runs(store, (SAT_COOK, oct(12, 9), oct(15, 12)), (TOML_MON_SAT_COOK, oct(15, 12), oct(16, 9)))
+    send(store, "/settime dinner sat 18:00", oct(16, 9), TOML_MON_SAT_COOK)
+    reply = send(store, "/resettime dinner", oct(16, 10), TOML_MON_SAT_COOK)
+    assert reply.splitlines()[0] == (
+        "Verworfen ✅ Der geplante Wechsel auf Sa 18:00 (ab Sa 24.10.) fällt weg."
+    )
+    assert reply.splitlines()[-1].startswith("Der Wechsel auf Mo 18:00 (ab Mo 26.10.) steht so")
+    pending = pending_dinner(TOML_MON_SAT_COOK, store, oct(16, 10))
+    assert pending is not None and pending.from_config
+
+
+def test_chat_can_keep_the_weekday_against_the_toml(store: Store) -> None:
+    runs(store, (CONFIG, oct(12, 9), oct(15, 12)))
+    reply = send(store, "/settime dinner sun 18:00", oct(15, 12), TOML_MON)
+    assert reply.splitlines()[-1] == (
+        "Der geplante Wechsel auf Mo 18:00 (ab Mo 26.10.) ist damit verworfen."
+    )
+    assert pending_dinner(TOML_MON, store, oct(15, 13)) is None
+    sent = runs(store, (TOML_MON, oct(15, 12), oct(21, 9)))
+    assert sent == [SUNDAY_WEEK[2], ("Tue 20.10. 18:00", "ASK Sonntag")]
+    assert store.applied_dinner() == AppliedDinner("sun 18:00")
+
+
+# --- A new weekday in the TOML on the first start after the upgrade -----------------------------
+
+
+def test_first_start_keeps_the_weekday_of_a_running_week(store: Store) -> None:
+    # A DB from before the applied dinner was stored, with the week of Sun 18. started.
+    store.record_action(SUN_18, Action.FLAT_ASK, oct(13, 18))
+    config = effective_config(TOML_MON, store, oct(15, 12))
+    assert config.schedule.dinner == CONFIG.schedule.dinner  # TOML_MON's time, on Sunday
+    assert store.applied_dinner() == AppliedDinner("sun 18:00", SUN_18)
+
+
+def test_first_start_takes_the_effective_dinner(store: Store) -> None:
+    store.record_action(date(2026, 10, 11), Action.TALLY, oct(9, 14))
+    assert effective_config(TOML_MON, store, oct(12, 9)) == TOML_MON
+    assert store.applied_dinner() == AppliedDinner("mon 18:00")
+
+
+@pytest.mark.parametrize("chat_pending", [False, True])
+def test_other_schedule_changes_work_while_a_toml_change_waits(
+    store: Store, chat_pending: bool
+) -> None:
+    runs(store, (SAT_COOK, oct(12, 9), oct(15, 12)), (TOML_MON_SAT_COOK, oct(15, 12), oct(15, 13)))
+    if chat_pending:
+        send(store, "/settime dinner sat 18:00", oct(15, 13), TOML_MON_SAT_COOK)
+    reply = send(store, "/settime tally fri 15:00", oct(15, 14), TOML_MON_SAT_COOK)
+    assert reply.splitlines()[:3] == [
+        SAVED,
+        "Zählung der Gäste (tally): Fr 15:00, nächstes Mal Fr 16.10. um 15:00",
+        "Das gilt schon für diese Woche.",
+    ]
+    config = effective_config(TOML_MON_SAT_COOK, store, oct(15, 14))
+    assert config.schedule.dinner == CONFIG.schedule.dinner  # still Sunday this week
+    assert config.schedule.tally == WeeklyTime(4, time(15))
+    pending = pending_dinner(TOML_MON_SAT_COOK, store, oct(15, 14))
+    assert pending is not None and pending.from_config is not chat_pending
+    assert send(store, "/nudge off", oct(15, 14), TOML_MON_SAT_COOK).startswith(SAVED)
