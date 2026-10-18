@@ -13,6 +13,7 @@ from odin.commands.settime import NUDGE, RESETTIME, SETTIME
 from odin.commands.status import STATUS
 from odin.commands.texts import TEXT, TEXTS
 from odin.commands.vars import VARS
+from odin.commands.version import VERSION
 
 __all__ = ["COMMANDS", "Command", "CommandContext", "CommandError", "handle"]
 
@@ -29,6 +30,7 @@ COMMANDS: list[Command] = [
     SETTIME,
     RESETTIME,
     NUDGE,
+    VERSION,
 ]
 
 
