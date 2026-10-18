@@ -14,7 +14,7 @@ from odin.clock import Clock
 from odin.config import Config, Env
 from odin.engine import Account, reconcile
 from odin.events import consume_events
-from odin.overrides import effective_config
+from odin.overrides import effective_config, pending_dinner
 from odin.signal import SignalAdmin, SignalClient
 from odin.store import Store
 
@@ -228,6 +228,7 @@ async def run_bot(
     sent message is always recorded. If the event stream ends or fails, the bot stops with an
     error: a container restart is the simplest way back to a working connection.
     """
+    _log_pending_dinner(config, store, clock)
     consumer = asyncio.create_task(consume_events(client, store, config, account, clock))
     stopped = asyncio.create_task(stop.wait())
     try:
@@ -249,6 +250,24 @@ async def run_bot(
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
+
+
+def _log_pending_dinner(config: Config, store: Store, clock: Clock) -> None:
+    """Warn at startup while a new dinner weekday from the config file waits for its week."""
+    try:
+        pending = pending_dinner(config, store, clock.now())
+    except Exception:
+        logger.exception("checking for a pending dinner weekday change failed")
+        return
+    if pending is not None and pending.from_config:
+        logger.warning(
+            "the config file moves dinner to %s; it takes over at the dinner of %s (%s), "
+            "first dinner week under it: %s",
+            pending.point,
+            pending.after_week,
+            pending.switch,
+            pending.transition.first_week,
+        )
 
 
 async def _tick(

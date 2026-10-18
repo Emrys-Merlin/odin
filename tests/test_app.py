@@ -482,6 +482,47 @@ def test_check_config_shows_where_group_ids_come_from(
     assert "Not set up" not in out
 
 
+def test_check_config_mentions_a_pending_dinner_weekday_change(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db = tmp_path / "odin.db"
+    with Store(db) as store:
+        # The weeks run on Monday, but the config file says Sunday.
+        store.set_applied_dinner("mon 18:00", date(2026, 10, 12))
+    assert main(["check-config"], {**ENV, "ODIN_DB": str(db)}, FixedClock(local(6, 12))) == 0
+    out = capsys.readouterr().out
+    assert "Dinner weekday change pending: mon 18:00 → sun 18:00." in out
+
+
+def test_check_config_without_a_dinner_weekday_change(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db = tmp_path / "odin.db"
+    with Store(db) as store:
+        store.set_applied_dinner("sun 18:00")
+    assert main(["check-config"], {**ENV, "ODIN_DB": str(db)}, FixedClock(local(6, 12))) == 0
+    assert "Dinner weekday change" not in capsys.readouterr().out
+
+
+def test_run_bot_warns_about_a_waiting_toml_weekday_change(
+    store: Store, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The week of Mon 12. runs on Monday; the config file moved dinner to Sunday meanwhile.
+    store.set_applied_dinner("mon 18:00", date(2026, 10, 12))
+    client = FakeSignalClient(number=ACCOUNT.number)
+
+    async def scenario() -> None:
+        stop = asyncio.Event()
+        stop.set()  # one tick, then stop
+        await run_bot(CONFIG, store, client, ACCOUNT, FixedClock(local(6, 12)), stop)
+
+    with caplog.at_level("WARNING", logger="odin"):
+        asyncio.run(scenario())
+    assert (
+        "the config file moves dinner to sun 18:00; it takes over at the dinner of 2026-10-12"
+    ) in caplog.text
+
+
 def test_check_config_reports_not_set_up(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -8,7 +8,9 @@ Everything is keyed by the dinner week, identified by the date of its Sunday. Th
 - **settings** chosen at setup time (e.g. the group IDs) and the **setup lock**,
 - config **overrides** made via chat, applied on top of the TOML config (see `odin.overrides`),
 - the **dropped weeks**: dinner weeks cut short by a new dinner weekday, and when that switch took
-  effect (see `odin.engine.transition`).
+  effect (see `odin.engine.transition`),
+- the **applied dinner**: the dinner time the weeks are currently run under, and a dinner week a
+  new weekday from the config file waits for (see `odin.overrides.effective_config`).
 
 A Signal message is identified by its author and its (millisecond) Signal timestamp, which is also
 how incoming reactions refer to their target message.
@@ -80,6 +82,18 @@ class Override:
     after_week: date | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class AppliedDinner:
+    """The dinner time the dinner weeks are run under, as an override value (``"sun 18:00"``).
+
+    `held_week` is set while a new dinner weekday from the config file waits for that dinner week
+    to end: the weeks keep `point` until its dinner starts.
+    """
+
+    point: str
+    held_week: date | None = None
+
+
 # Migration i brings the schema from user_version i to i + 1. Only ever append.
 _MIGRATIONS: tuple[str, ...] = (
     """
@@ -133,6 +147,13 @@ _MIGRATIONS: tuple[str, ...] = (
     CREATE TABLE dropped_weeks (
         week   TEXT PRIMARY KEY,
         switch TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE applied_dinner (
+        id        INTEGER PRIMARY KEY CHECK (id = 1),
+        point     TEXT NOT NULL,
+        held_week TEXT
     );
     """,
 )
@@ -229,6 +250,18 @@ class Store:
             "SELECT max(week) FROM actions WHERE week < ?", (week.isoformat(),)
         ).fetchone()
         return None if latest is None else date.fromisoformat(latest)
+
+    def unfinished_weeks_before(self, week: date) -> list[date]:
+        """The weeks before ``week`` that were started (anything recorded) or dropped, but whose
+        tally, the last step of every week, is not recorded yet; oldest first."""
+        rows = self._conn.execute(
+            "SELECT week FROM actions WHERE week < :week"
+            " UNION SELECT week FROM dropped_weeks WHERE week < :week"
+            " EXCEPT SELECT week FROM actions WHERE action = :tally"
+            " ORDER BY week",
+            {"week": week.isoformat(), "tally": Action.TALLY.value},
+        ).fetchall()
+        return [date.fromisoformat(w) for (w,) in rows]
 
     def has_any_action(self, week: date) -> bool:
         """Whether anything is recorded for ``week``."""
@@ -397,6 +430,25 @@ class Store:
         """Forget that ``week`` is dropped. Returns whether it was recorded as dropped."""
         cursor = self._conn.execute("DELETE FROM dropped_weeks WHERE week = ?", (week.isoformat(),))
         return cursor.rowcount == 1
+
+    # Applied dinner
+
+    def applied_dinner(self) -> AppliedDinner | None:
+        """The dinner the weeks are run under; None until it is first stored."""
+        row = self._conn.execute("SELECT point, held_week FROM applied_dinner").fetchone()
+        if row is None:
+            return None
+        point, held = row
+        return AppliedDinner(point, None if held is None else date.fromisoformat(held))
+
+    def set_applied_dinner(self, point: str, held_week: date | None = None) -> None:
+        """Store the dinner the weeks are run under; replaces the previous one."""
+        self._conn.execute(
+            "INSERT INTO applied_dinner (id, point, held_week) VALUES (1, ?, ?)"
+            " ON CONFLICT (id) DO UPDATE SET point = excluded.point,"
+            " held_week = excluded.held_week",
+            (point, None if held_week is None else held_week.isoformat()),
+        )
 
     # Setup lock: held by `odin setup` while it runs, so `odin run` stays out of its way. It is
     # a settings row "<token> <heartbeat>"; the holder refreshes the heartbeat, and a lock whose

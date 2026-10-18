@@ -16,6 +16,7 @@ from odin.app import SETUP_HINT, Source, resolve_account, serve
 from odin.clock import Clock, SystemClock
 from odin.config import ConfigError, Settings, load_settings, load_signal_env
 from odin.engine import upcoming_actions
+from odin.overrides import config_dinner_change
 from odin.setup import REDO_STEPS, SetupOptions, run_setup, setup_status
 from odin.signal import RestSignalClient, SignalApiError
 from odin.store import Store
@@ -182,9 +183,11 @@ def _check_config(settings: Settings, clock: Clock) -> None:
     config = settings.config
     env = settings.env
     # Read the stored group IDs if the database exists; never create it here.
+    dinner_change = None
     if env.db_path.exists():
         with Store(env.db_path) as store:
             resolution = resolve_account(env, store)
+            dinner_change = config_dinner_change(config, store)
     else:
         resolution = resolve_account(env, None)
     print(f"Config OK: {env.config_path}")
@@ -197,6 +200,13 @@ def _check_config(settings: Settings, clock: Clock) -> None:
     print(f"Emoji:        {config.emoji}")
     if resolution.account is None:
         print(f"Not set up yet ({resolution.missing}) — {SETUP_HINT}")
+    if dinner_change is not None:
+        old, new = dinner_change
+        print(
+            f"Dinner weekday change pending: {old} → {new}. It never takes over in the middle of"
+            " a running dinner week: the bot switches at that week's dinner, or at once between"
+            " weeks."
+        )
     print()
     print("Next scheduled actions:")
     for action in upcoming_actions(config, clock.now()):
