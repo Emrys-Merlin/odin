@@ -169,13 +169,14 @@ def effective_config(base: Config, store: Store, now: datetime) -> Config:
     another weekday, that is detected here:
 
     - If the running dinner week (the one whose dinner is next under the applied dinner) has
-      started — anything of it is recorded, or a pending chat change waits for it — the weeks keep
+      started — its flat ask is due, anything of it is recorded, or a pending chat change waits
+      for it; the same rule as for a chat change (`/settime dinner`) — the weeks keep
       the applied dinner until that week's dinner starts. The week is stored as held, so the
       decision survives restarts. At the switch the new weekday takes over like a pending chat
       change: `odin.engine.transition` at the scheduled dinner and `record_transition`, in the
       same transaction as storing the new applied dinner.
-    - Else (between weeks, e.g. after dinner and before the next flat ask, or nothing of the week
-      was recorded) it applies at once, with `record_transition` at `now`.
+    - Else (between weeks: after dinner and before the next flat ask) it applies at once, with
+      `record_transition` at `now`.
     - A pending chat change wins over the config file, as every override does: at the switch it
       becomes the ``schedule.dinner`` override, which hides the config file's dinner.
     - If the schedule is out of order with the applied dinner, the new weekday applies at once.
@@ -240,7 +241,12 @@ def _resolve(base: Config, store: Store, now: datetime) -> tuple[Config, Pending
             held = None
         elif held is None:
             week = dinner_week(running, now)
-            if store.has_any_action(week) or (pending is not None and pending.after_week == week):
+            started = (
+                store.has_any_action(week)
+                or running.when(running.schedule.flat_ask, week) <= now
+                or (pending is not None and pending.after_week == week)
+            )
+            if started:
                 store.set_applied_dinner(applied.point, week)
                 held = week
                 config = running

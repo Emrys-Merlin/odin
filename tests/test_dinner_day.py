@@ -920,12 +920,25 @@ def test_toml_change_between_weeks_applies_at_once(
     assert store.applied_dinner() == AppliedDinner(format_weekly_time(toml.schedule.dinner))
 
 
-def test_toml_change_with_nothing_recorded_applies_at_once(store: Store) -> None:
-    # The bot was down over the flat ask of Sun 18.: nothing of that week was sent, so the new
-    # weekday takes over at once, and its week runs like one the bot was down for.
+def test_toml_change_after_a_missed_flat_ask_waits_like_a_chat_change(store: Store) -> None:
+    # The bot was down over the flat ask of Sun 18.: nothing of that week was sent, but its flat
+    # ask is due, so the week has started (the same rule as for `/settime dinner`). It keeps
+    # Sunday; the missed ask is caught up within its window.
     runs(store, (SAT_COOK, oct(5, 9), oct(12, 9)))
-    assert runs(store, (TOML_SAT, oct(14, 10), oct(14, 19))) == [
-        ("Wed 14.10. 10:00", "ASK Samstag"),  # caught up within its window
+    assert runs(store, (TOML_SAT, oct(14, 10), oct(21, 9))) == [
+        ("Wed 14.10. 10:00", "ASK Sonntag"),  # caught up within its window
+        ("Wed 14.10. 18:00", "ESSEN Sonntag"),
+        ("Fri 16.10. 14:00", "TALLY 1"),
+        ("Tue 20.10. 18:00", "ASK Samstag"),  # Sat 24. is the first Saturday week
+    ]
+    assert store.applied_dinner() == AppliedDinner("sat 18:00")
+
+
+def test_toml_change_between_weeks_applies_at_once_before_the_flat_ask(store: Store) -> None:
+    # Mon 12., after Sunday's dinner and before Tuesday's flat ask: nothing has started yet.
+    runs(store, (SAT_COOK, oct(5, 9), oct(12, 9)))
+    assert runs(store, (TOML_SAT, oct(12, 10), oct(14, 19))) == [
+        ("Tue 13.10. 18:00", "ASK Samstag"),  # Sat 17. is the first week
         ("Wed 14.10. 18:00", "ESSEN Samstag"),
     ]
     assert Bot(store, TOML_SAT).outcomes(SUN_18) == {}
