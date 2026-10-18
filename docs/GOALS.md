@@ -103,6 +103,7 @@ group) ODIN ignores them.
 | `/settime dinner <weekday> <HH:MM>` (other weekday) | Moves dinner to another weekday. Never touches the running dinner week: once it has started (flat ask due or anything recorded) the change waits until that week's dinner, else it applies at once. A week of the new weekday whose steps would all lie before the switch (e.g. Sun → Mon) is dropped — no dinner, nothing sent to the flat group, but ODIN posts the cancellation for it to the dinner group when the switch takes effect; the reply names the first new dinner, warns about a dropped one and says when its cancellation goes out. `/schedule` and `/status` show a pending change; a new time on the current weekday or `/resettime dinner` discards it. |
 | `/nudge on\|off` | Turns the nudge on or off; same guard. |
 | `/resettime <point>` | Drops the chat change of a point back to the config value (for `nudge` also on/off); same guard. For `dinner` it first discards a pending weekday change; going back to the config's weekday waits like `/settime dinner`. |
+| `/version` | Shows the running version of ODIN (the same as `odin --version`, from the release tag). |
 
 ## Architecture
 
