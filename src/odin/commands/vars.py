@@ -12,6 +12,8 @@ from odin.overrides import EDITABLE_TEMPLATES
 # one description and is shown on one line.
 DESCRIPTIONS = {
     "emoji": "Reaktion zum Bestätigen",
+    "flat_ask_day_de": "Frage an die WG (Wochentag)",
+    "flat_ask_day_en": "Frage an die WG (Wochentag)",
     "deadline": "Entscheidung der WG (Uhrzeit)",
     "deadline_day_de": "Entscheidung der WG (Wochentag)",
     "deadline_day_en": "Entscheidung der WG (Wochentag)",

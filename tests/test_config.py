@@ -129,9 +129,26 @@ def test_example_texts_follow_the_dinner_weekday() -> None:
         assert "Wednesday" in getattr(c.templates, name).render(**values)
 
 
+def test_example_flat_test_names_the_flat_ask_weekday() -> None:
+    c = load_config(EXAMPLE)
+    text = c.templates.flat_test.render(**c.placeholder_values())
+    assert "Ab jetzt frage ich jeden Dienstag, ob am Sonntag das offene Abendessen" in text
+
+
+def test_example_flat_test_follows_the_flat_ask_weekday() -> None:
+    c = example_with_schedule(flat_ask={"weekday": "mon", "time": "18:00"})
+    values = c.placeholder_values()
+    assert (values["flat_ask_day_de"], values["flat_ask_day_en"]) == ("Montag", "Monday")
+    text = c.templates.flat_test.render(**values)
+    assert "jeden Montag" in text
+    assert "Dienstag" not in text
+
+
 def test_weekday_placeholders() -> None:
     values = parse_config(config()).placeholder_values()
     assert {name: values[name] for name in values if "_day_" in name} == {
+        "flat_ask_day_de": "Dienstag",
+        "flat_ask_day_en": "Tuesday",
         "deadline_day_de": "Mittwoch",
         "deadline_day_en": "Wednesday",
         "rsvp_by_day_de": "Freitag",
