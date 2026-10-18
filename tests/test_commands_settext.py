@@ -38,7 +38,7 @@ def context(
     """A context as the bot builds it: the effective config is computed from the store."""
     return CommandContext(
         base=BASE,
-        config=effective_config(BASE, store),
+        config=effective_config(BASE, store, now),
         store=store,
         now=now,
         sender="+4915100000001",
@@ -269,7 +269,7 @@ def test_next_cancellation_is_sent_with_the_new_text(store: Store) -> None:
     client = FakeSignalClient(number=account.number)
 
     def tick(now: datetime) -> None:
-        asyncio.run(reconcile(effective_config(BASE, store), store, client, account, now))
+        asyncio.run(reconcile(effective_config(BASE, store, now), store, client, account, now))
 
     tick(datetime(2026, 10, 6, 18, 0, tzinfo=BERLIN))  # flat ask
     run(store, "/settext cancellation\nFällt aus.\n\nNo dinner.", now=WEDNESDAY)
