@@ -23,7 +23,12 @@ so a skipped flat ask skips the rest of the week, including the dinner-group mes
 **A new dinner weekday** (see `transition`) makes the dinner weeks named by another weekday. The
 change never takes over in the middle of a running week; the first week under the new weekday
 either starts cleanly after the switch, or all of its steps lie before the switch and it is
-skipped as a whole, like any week whose flat ask was missed. Nothing of it is ever sent.
+**dropped**. Whoever applies the switch records a dropped week in the store (`record_transition`),
+so the engine knows it from state. A dropped week runs like a week whose flat ask was missed —
+its flat ask, nudge and tally are recorded as skipped — except that the dinner group still gets
+the cancellation: it is due from the switch (see `dropped_cancellation_window`), so it goes out on
+the first tick after the switch, and is skipped like any late step after the dropped week's dinner
+start or once the catch-up grace counted from the switch has passed.
 """
 
 import logging
@@ -123,10 +128,20 @@ class StepWindow:
         return now < self.end
 
 
+def _window(
+    config: Config, name: str, actions: tuple[Action, ...], start: datetime, expiry: datetime
+) -> StepWindow:
+    end = expiry
+    if config.catch_up_grace is not None:
+        end = min(end, start + config.catch_up_grace)
+    return StepWindow(name, actions, start, end)
+
+
 def step_windows(config: Config, week: date) -> list[StepWindow]:
     """The steps of dinner week `week` in schedule order, with when each is due.
 
-    The nudge is left out while it is disabled.
+    The nudge is left out while it is disabled. For a dropped week, the cancellation is due as
+    `dropped_cancellation_window` says instead.
     """
     schedule = config.schedule
 
@@ -136,10 +151,7 @@ def step_windows(config: Config, week: date) -> list[StepWindow]:
     def window(
         name: str, actions: tuple[Action, ...], start: datetime, expiry: datetime
     ) -> StepWindow:
-        end = expiry
-        if config.catch_up_grace is not None:
-            end = min(end, start + config.catch_up_grace)
-        return StepWindow(name, actions, start, end)
+        return _window(config, name, actions, start, expiry)
 
     deadline, dinner = at(schedule.flat_deadline), at(schedule.dinner)
     windows = [window("flat_ask", (Action.FLAT_ASK,), at(schedule.flat_ask), deadline)]
@@ -150,10 +162,18 @@ def step_windows(config: Config, week: date) -> list[StepWindow]:
     return windows
 
 
+def dropped_cancellation_window(config: Config, week: date, switch: datetime) -> StepWindow:
+    """When the cancellation of dropped week `week` is due: from the `switch` that dropped it
+    until the week's dinner starts, cut short by the catch-up grace counted from the switch."""
+    dinner = config.when(config.schedule.dinner, week).astimezone(UTC)
+    return _window(config, "decision", (Action.CANCELLATION,), _utc(switch), dinner)
+
+
 @dataclass(frozen=True)
 class Transition:
     """How the dinner weeks of a new schedule begin when it takes over at a given moment."""
 
+    switch: datetime  # when the new schedule takes over (UTC)
     first_week: date  # the first dinner week that is run under the new schedule
     dropped_week: date | None  # the week before it, if all its steps lie before the switch
 
@@ -163,9 +183,10 @@ def transition(new: Config, switch: datetime) -> Transition:
 
     Takes the first week of `new` whose dinner is after `switch`. If all its steps start after
     the switch, it is run normally. If all of them start at or before it, it is dropped: the
-    engine records its steps as skipped (its flat ask is past its window), sends nothing, and the
-    next week is the first one run. A week whose steps lie on both sides of the switch would be
-    half-run; raises ValueError then.
+    engine records its flat ask, nudge and tally as skipped (they are past their windows), posts
+    only the cancellation, and the next week is the first one run. The engine only knows a week
+    is dropped once `record_transition` stored it, at the moment the switch is applied. A week
+    whose steps lie on both sides of the switch would be half-run; raises ValueError then.
 
     When `switch` is a dinner of the old schedule and both schedules are in order (see
     `odin.config`), that cannot happen: before the old dinner its steps run flat ask … tally in
@@ -176,10 +197,23 @@ def transition(new: Config, switch: datetime) -> Transition:
     week = dinner_week(new, switch)
     starts = [window.start for window in step_windows(new, week)]
     if all(start > switch for start in starts):
-        return Transition(week, None)
+        return Transition(switch, week, None)
     if all(start <= switch for start in starts):
-        return Transition(week + timedelta(weeks=1), week)
+        return Transition(switch, week + timedelta(weeks=1), week)
     raise ValueError(f"the dinner week {week} would start before {switch} and end after it")
+
+
+def record_transition(store: Store, weeks: Transition) -> None:
+    """Store what the engine has to know about a new dinner weekday taking over.
+
+    Call it when the new schedule becomes the effective one (at `weeks.switch`), in the same
+    transaction as the change itself, so that a restart never loses it. It records the dropped
+    week, if any, with the switch: `reconcile` then posts that week's cancellation once. A week
+    that a later switch runs normally (`first_week`) is no longer dropped.
+    """
+    store.delete_dropped_week(weeks.first_week)
+    if weeks.dropped_week is not None:
+        store.record_dropped_week(weeks.dropped_week, weeks.switch)
 
 
 async def reconcile(
@@ -253,14 +287,19 @@ class _Week:
             else:
                 self._skip(Action.NUDGE)
 
-        # 3. Decision: announcement or cancellation.
+        # 3. Decision: announcement or cancellation. A dropped week was never asked; it gets the
+        # cancellation, due from the switch that dropped it.
         if not (self._recorded(Action.ANNOUNCEMENT) or self._recorded(Action.CANCELLATION)):
-            due_now = due("decision")
+            dropped = None if asked or self.over else self.store.dropped_at(self.week)
+            if dropped is not None:
+                due_now = dropped_cancellation_window(self.config, self.week, dropped).due(self.now)
+            else:
+                due_now = due("decision")
             if due_now is None:
                 return
             on = asked and self._confirmations() > 0
             decision = Action.ANNOUNCEMENT if on else Action.CANCELLATION
-            if due_now and asked:
+            if due_now and (asked or dropped is not None):
                 track = MessageKind.DINNER_ANNOUNCEMENT if on else None
                 await self._send(decision, track=track)
             else:

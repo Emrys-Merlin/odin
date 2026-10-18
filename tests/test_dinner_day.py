@@ -1,4 +1,7 @@
-"""Changing the dinner weekday from chat (#77): never inside the running dinner week."""
+"""Changing the dinner weekday from chat (#77): never inside the running dinner week.
+
+A week dropped by the switch gets the cancellation in the dinner group, exactly once (#80).
+"""
 
 import asyncio
 import logging
@@ -14,7 +17,15 @@ import pytest
 from odin.commands import CommandContext, handle
 from odin.commands.settime import RESET, SAVED
 from odin.config import Config, ConfigError, WeeklyTime, parse_config
-from odin.engine import Account, dinner_week, reconcile, step_windows, transition
+from odin.engine import (
+    Account,
+    Transition,
+    dinner_week,
+    reconcile,
+    record_transition,
+    step_windows,
+    transition,
+)
 from odin.overrides import (
     DINNER_KEY,
     PENDING_DINNER_KEY,
@@ -150,10 +161,13 @@ def test_sun_to_mon_drops_the_cut_short_week(store: Store) -> None:
             "Das gilt ab dem Essen am Mo 26.10. um 18:00. "
             "Diese Woche bleibt es beim Essen am So 18.10. um 18:00.",
             "Achtung: Am Mo 19.10. gibt es kein Essen – diese Woche fällt beim Wechsel aus, weil "
-            "ihre Frage an die WG schon vor dem Wechsel dran gewesen wäre. Sag am besten in der "
-            "Essensgruppe Bescheid.",
+            "ihre Frage an die WG schon vor dem Wechsel dran gewesen wäre.",
+            "Die Absage für den Mo 19.10. schicke ich der Essensgruppe beim Wechsel "
+            "(So 18.10. um 18:00).",
         ]
     )
+    # Nothing is recorded as dropped before the switch applies.
+    assert store.dropped_at(MON_19) is None
     pending = pending_dinner(CONFIG, store, oct(15, 12))
     assert pending is not None
     assert (pending.transition.first_week, pending.transition.dropped_week) == (MON_26, MON_19)
@@ -164,9 +178,11 @@ def test_sun_to_mon_right_after_dinner_drops_tomorrows_week(store: Store) -> Non
     assert reply.splitlines()[2:] == [
         "Das gilt schon ab dieser Woche: nächstes Essen am Mo 19.10. um 18:00.",
         "Achtung: Am Mo 12.10. gibt es kein Essen – diese Woche fällt beim Wechsel aus, weil "
-        "ihre Frage an die WG schon vor dem Wechsel dran gewesen wäre. Sag am besten in der "
-        "Essensgruppe Bescheid.",
+        "ihre Frage an die WG schon vor dem Wechsel dran gewesen wäre.",
+        "Die Absage für den Mo 12.10. schicke ich der Essensgruppe gleich.",
     ]
+    # Applied at once: the dropped week is recorded with the command's time as the switch.
+    assert store.dropped_at(date(2026, 10, 12)) == oct(11, 19).astimezone(UTC)
 
 
 def test_order_is_checked_for_the_new_weekday(store: Store) -> None:
@@ -389,6 +405,8 @@ ALL_SKIPPED = {
     Action.CANCELLATION: Outcome.SKIPPED,
     Action.TALLY: Outcome.SKIPPED,
 }
+# A dropped week: never asked, but the dinner group gets the cancellation.
+DROPPED = ALL_SKIPPED | {Action.CANCELLATION: Outcome.SENT}
 
 
 def test_sun_to_sat_across_the_switch_sends_everything_once(store: Store) -> None:
@@ -419,7 +437,9 @@ def test_sun_to_mon_drops_one_week_and_never_asks_twice(store: Store) -> None:
         ("Tue 13.10. 18:00", "ASK Sonntag"),
         ("Wed 14.10. 18:00", "ESSEN Sonntag"),
         ("Fri 16.10. 14:00", "TALLY 1"),
-        # Mon 19.: its flat ask would have been Tue 13. — dropped, nothing sent for it.
+        # Mon 19.: its flat ask would have been Tue 13. — dropped; only its cancellation goes
+        # out, right when Sunday's dinner starts, naming the new weekday.
+        ("Sun 18.10. 18:00", "ABGESAGT Montag"),
         ("Tue 20.10. 18:00", "ASK Montag"),
         ("Wed 21.10. 18:00", "ESSEN Montag"),
         ("Fri 23.10. 14:00", "TALLY 1"),
@@ -428,9 +448,13 @@ def test_sun_to_mon_drops_one_week_and_never_asks_twice(store: Store) -> None:
         ("Fri 30.10. 14:00", "TALLY 1"),
     ]
     assert bot.outcomes(SUN_18) == ALL_SENT
-    assert bot.outcomes(MON_19) == ALL_SKIPPED
+    assert bot.outcomes(MON_19) == DROPPED
     assert bot.outcomes(MON_26) == ALL_SENT
     assert bot.outcomes(date(2026, 10, 12)) == {}
+    # The whole bilingual cancellation, to the dinner group.
+    [cancellation] = [m for m in bot.client.sent if m.text.startswith("ABGESAGT")]
+    assert cancellation.group_id == ACCOUNT.dinner_group_id
+    assert cancellation.text == "ABGESAGT Montag\n\nCANCELLED Monday"
 
 
 def test_sun_to_mon_right_after_dinner(store: Store) -> None:
@@ -440,6 +464,7 @@ def test_sun_to_mon_right_after_dinner(store: Store) -> None:
         "ASK Sonntag",  # Tue 6.
         "ESSEN Sonntag",
         "TALLY 1",
+        "ABGESAGT Montag",  # Sun 11. 19:00, right after the command: Mon 12. is dropped
         "ASK Montag",  # Tue 13., for Mon 19.
         "ESSEN Montag",
         "TALLY 1",
@@ -447,7 +472,8 @@ def test_sun_to_mon_right_after_dinner(store: Store) -> None:
         "ESSEN Montag",
         "TALLY 1",
     ]
-    assert bot.outcomes(date(2026, 10, 12)) == ALL_SKIPPED
+    assert bot.sent()[3] == ("Sun 11.10. 19:00", "ABGESAGT Montag")
+    assert bot.outcomes(date(2026, 10, 12)) == DROPPED
     assert bot.outcomes(MON_19) == ALL_SENT
 
 
@@ -462,9 +488,102 @@ def test_the_bot_down_over_the_switch_finishes_the_old_week(store: Store) -> Non
     # Down from Fri 16. 12:00 until Mon 19. 10:00: the tally of Sun 18. was missed.
     bot.run(oct(19, 10), oct(19, 11))
     assert bot.outcomes(SUN_18)[Action.TALLY] is Outcome.SKIPPED
-    assert bot.outcomes(MON_19) == ALL_SKIPPED
-    assert len(bot.log) == 2  # flat ask and announcement; nothing caught up
+    # Back before Mon 19.'s dinner, within the grace: its cancellation is still posted, once.
+    assert bot.outcomes(MON_19) == DROPPED
+    assert [text for _, text in bot.sent()] == ["ASK Sonntag", "ESSEN Sonntag", "ABGESAGT Montag"]
     assert bot.outcomes(date(2026, 10, 12)) == {}
+
+
+def test_back_after_the_dropped_weeks_dinner_posts_nothing(store: Store) -> None:
+    bot = Bot(store, CONFIG)
+    bot.run(oct(12, 9), oct(16, 12), {oct(15, 12): "/settime dinner mon 18:00"})
+    # Down from Fri 16. 12:00 until Tue 20. 10:00, after Mon 19.'s dinner.
+    bot.run(oct(20, 10), oct(20, 11))
+    assert store.dropped_at(MON_19) == oct(18, 18).astimezone(UTC)
+    assert bot.outcomes(MON_19) == ALL_SKIPPED
+    assert [text for _, text in bot.sent()] == ["ASK Sonntag", "ESSEN Sonntag"]
+    # The Monday weeks go on normally.
+    bot.run(oct(20, 11), oct(27, 9))
+    assert bot.outcomes(MON_26) == ALL_SENT
+    assert "ABGESAGT Montag" not in [text for _, text in bot.sent()]
+
+
+@pytest.mark.parametrize(
+    ("back", "posted"),
+    [(oct(18, 18, 30), True), (oct(18, 19, 0), False), (oct(19, 10), False)],
+)
+def test_the_grace_counts_from_the_switch(store: Store, back: datetime, posted: bool) -> None:
+    base = make_config(catch_up_grace=60)
+    bot = Bot(store, base)
+    bot.run(oct(12, 9), oct(18, 17), {oct(15, 12): "/settime dinner mon 18:00"})
+    bot.run(back, back + timedelta(minutes=1))  # down from Sun 17:00 until `back`
+    outcome = Outcome.SENT if posted else Outcome.SKIPPED
+    assert bot.outcomes(MON_19) == ALL_SKIPPED | {Action.CANCELLATION: outcome}
+    assert ("ABGESAGT Montag" in [text for _, text in bot.sent()]) is posted
+
+
+def test_a_restart_over_the_switch_posts_the_cancellation_once(store: Store) -> None:
+    bot = Bot(store, CONFIG)
+    bot.run(oct(12, 9), oct(18, 18), {oct(15, 12): "/settime dinner mon 18:00"})
+    # A command right at the switch applies it (and records the dropped week) before the next
+    # tick does.
+    send(store, "/schedule", oct(18, 18, 0))
+    assert store.dropped_at(MON_19) == oct(18, 18).astimezone(UTC)
+    assert PENDING_DINNER_KEY not in stored(store)
+    # The bot restarts a few times around the switch: a new client each time, same DB.
+    restarted = [Bot(store, CONFIG) for _ in range(3)]
+    for restart, now in zip(restarted, (oct(18, 18, 1), oct(18, 18, 2), oct(18, 20)), strict=True):
+        restart.tick(now)
+    assert [s.text for r in restarted for s in r.log] == ["ABGESAGT Montag"]
+    assert restarted[0].log[0].at == oct(18, 18, 1)
+    bot = Bot(store, CONFIG)
+    bot.run(oct(18, 20), oct(19, 20))
+    assert bot.log == []
+    assert bot.outcomes(MON_19) == DROPPED
+
+
+class FlakyClient(FakeSignalClient):
+    """Fails the first `failures` sends."""
+
+    def __init__(self, failures: int) -> None:
+        super().__init__(number=ACCOUNT.number)
+        self.failures = failures
+
+    async def send_group_message(self, group_id: str, text: str) -> int:
+        if self.failures:
+            self.failures -= 1
+            raise ConnectionError("signal-cli is down")
+        return await super().send_group_message(group_id, text)
+
+
+def test_a_failed_cancellation_is_retried_and_sent_once(store: Store) -> None:
+    bot = Bot(store, CONFIG)
+    bot.run(oct(12, 9), oct(18, 18), {oct(15, 12): "/settime dinner mon 18:00"})
+    flaky = FlakyClient(failures=2)
+    for minute in range(5):
+        now = oct(18, 18, minute)
+        asyncio.run(reconcile(effective_config(CONFIG, store, now), store, flaky, ACCOUNT, now))
+    assert [m.text.split("\n")[0] for m in flaky.sent] == ["ABGESAGT Montag"]
+    assert store.action_time(MON_19, Action.CANCELLATION) == oct(18, 18, 2).astimezone(UTC)
+
+
+def test_a_switch_that_drops_no_week_records_none(store: Store) -> None:
+    bot = Bot(store, SAT_COOK)
+    bot.run(oct(12, 9), oct(25, 9), {oct(15, 12): "/settime dinner sat 18:00"})
+    assert [text for _, text in bot.sent() if text.startswith("ABGESAGT")] == []
+    for week in (date(2026, 10, 17), SUN_18, SAT_24):
+        assert store.dropped_at(week) is None
+
+
+def test_record_transition(store: Store) -> None:
+    switch = oct(18, 18)
+    monday = apply_overrides(CONFIG, {DINNER_KEY: "mon 18:00"})
+    record_transition(store, transition(monday, switch))
+    assert store.dropped_at(MON_19) == switch.astimezone(UTC)
+    assert store.dropped_at(MON_26) is None
+    # A later switch that runs Mon 19. normally (a made-up one here) undoes it.
+    record_transition(store, Transition(switch, MON_19, None))
+    assert store.dropped_at(MON_19) is None
 
 
 def test_late_reaction_on_the_old_poll_is_ignored(store: Store) -> None:
@@ -561,6 +680,22 @@ def test_upgrade_from_version_4_keeps_overrides(tmp_path: Path) -> None:
         # Setting it again without a week clears it.
         store.set_override(PENDING_DINNER_KEY, "sat 18:00", "Tim", oct(12, 12))
         assert store.overrides()[PENDING_DINNER_KEY].after_week is None
+
+
+def test_upgrade_from_version_5_adds_dropped_weeks(tmp_path: Path) -> None:
+    path = tmp_path / "odin.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(f"{'; '.join(_MIGRATIONS[:5])}; PRAGMA user_version = 5;")
+    conn.close()
+    with Store(path) as store:
+        assert store.dropped_at(MON_19) is None
+        assert store.record_dropped_week(MON_19, oct(18, 18))
+        # The first record wins.
+        assert not store.record_dropped_week(MON_19, oct(18, 19))
+        assert store.dropped_at(MON_19) == oct(18, 18).astimezone(UTC)
+        assert store.delete_dropped_week(MON_19)
+        assert not store.delete_dropped_week(MON_19)
+        assert store.dropped_at(MON_19) is None
 
 
 def test_latest_week_before(store: Store) -> None:

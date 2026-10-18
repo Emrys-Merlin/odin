@@ -9,9 +9,10 @@ effective config is always a valid one. Keys and values are strings:
 - ``schedule.nudge.enabled`` — ``"true"`` or ``"false"``.
 - ``schedule.dinner.next`` (`PENDING_DINNER_KEY`) — a new dinner time on another weekday, as for
   ``schedule.dinner``, that waits for the running dinner week to end. Its `Override.after_week`
-  is that week; once its dinner starts, the value becomes the ``schedule.dinner`` override.
-  Dinner weeks are named by their dinner date, so a new weekday must never take over in the
-  middle of a week (see `odin.engine.transition`).
+  is that week; once its dinner starts, the value becomes the ``schedule.dinner`` override, and a
+  week dropped by the switch is recorded in the store (`odin.engine.record_transition`), so the
+  engine posts its cancellation. Dinner weeks are named by their dinner date, so a new weekday
+  must never take over in the middle of a week (see `odin.engine.transition`).
 
 The bot computes `effective_config` on every tick and every handled event, so a change made via
 chat takes effect without a restart.
@@ -33,7 +34,7 @@ from odin.config import (
     _parse_time,
     _parse_weekday,
 )
-from odin.engine import Transition, transition
+from odin.engine import Transition, record_transition, transition
 from odin.store import Override, Store
 
 logger = logging.getLogger(__name__)
@@ -152,8 +153,10 @@ def effective_config(base: Config, store: Store, now: datetime) -> Config:
 
     A pending dinner weekday (`PENDING_DINNER_KEY`) is applied from the dinner of its
     `after_week` on; the first call at or after that moment stores it as the ``schedule.dinner``
-    override. It is dropped with a warning if it no longer fits (its week is no dinner week
-    under the current config, or the schedule with it is out of order).
+    override and, in the same transaction, records a week the switch drops (with the scheduled
+    switch, not the time of the call, so a late first call still counts the grace from it). It is
+    dropped with a warning if it no longer fits (its week is no dinner week under the current
+    config, or the schedule with it is out of order).
     """
     return _resolve(base, store, now)[0]
 
@@ -194,6 +197,7 @@ def _resolve(base: Config, store: Store, now: datetime) -> tuple[Config, Pending
             store.delete_override(DINNER_KEY)  # back to the config file's value
         else:
             store.set_override(DINNER_KEY, pending.value, pending.changed_by, pending.changed_at)
+        record_transition(store, weeks)
     logger.info("dinner is now on %s, from the week of %s", pending.value, weeks.first_week)
     return new, None
 

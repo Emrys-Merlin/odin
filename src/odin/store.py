@@ -6,7 +6,9 @@ Everything is keyed by the dinner week, identified by the date of its Sunday. Th
 - the **tracked messages** whose reactions matter (flat poll, dinner announcement),
 - the current **reactions** on those messages,
 - **settings** chosen at setup time (e.g. the group IDs) and the **setup lock**,
-- config **overrides** made via chat, applied on top of the TOML config (see `odin.overrides`).
+- config **overrides** made via chat, applied on top of the TOML config (see `odin.overrides`),
+- the **dropped weeks**: dinner weeks cut short by a new dinner weekday, and when that switch took
+  effect (see `odin.engine.transition`).
 
 A Signal message is identified by its author and its (millisecond) Signal timestamp, which is also
 how incoming reactions refer to their target message.
@@ -126,6 +128,12 @@ _MIGRATIONS: tuple[str, ...] = (
     """,
     """
     ALTER TABLE overrides ADD COLUMN after_week TEXT;
+    """,
+    """
+    CREATE TABLE dropped_weeks (
+        week   TEXT PRIMARY KEY,
+        switch TEXT NOT NULL
+    );
     """,
 )
 
@@ -364,6 +372,31 @@ class Store:
             )
             for k, v, by, at, after in rows
         }
+
+    # Dropped weeks
+
+    def record_dropped_week(self, week: date, switch: datetime) -> bool:
+        """Record that dinner week ``week`` is dropped by a dinner weekday change at ``switch``.
+
+        Returns False (and keeps the original record) if it was already recorded.
+        """
+        cursor = self._conn.execute(
+            "INSERT OR IGNORE INTO dropped_weeks (week, switch) VALUES (?, ?)",
+            (week.isoformat(), _utc(switch)),
+        )
+        return cursor.rowcount == 1
+
+    def dropped_at(self, week: date) -> datetime | None:
+        """When the switch that dropped ``week`` took effect; None if ``week`` is not dropped."""
+        row = self._conn.execute(
+            "SELECT switch FROM dropped_weeks WHERE week = ?", (week.isoformat(),)
+        ).fetchone()
+        return None if row is None else datetime.fromisoformat(row[0])
+
+    def delete_dropped_week(self, week: date) -> bool:
+        """Forget that ``week`` is dropped. Returns whether it was recorded as dropped."""
+        cursor = self._conn.execute("DELETE FROM dropped_weeks WHERE week = ?", (week.isoformat(),))
+        return cursor.rowcount == 1
 
     # Setup lock: held by `odin setup` while it runs, so `odin run` stays out of its way. It is
     # a settings row "<token> <heartbeat>"; the holder refreshes the heartbeat, and a lock whose
