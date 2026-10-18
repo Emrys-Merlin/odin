@@ -7,7 +7,8 @@ week that has not happened yet due right now. See `check_change`.
 A new dinner weekday is the exception (see `set_dinner_day`): it never touches the running dinner
 week. Once that week has started (its flat ask is due or anything of it is recorded), the change
 waits until the week's dinner; before that, it applies at once. A week of the new weekday whose
-steps would all lie before the switch is dropped, and the reply says so.
+steps would all lie before the switch is dropped: ODIN posts only its cancellation, and the reply
+says so.
 """
 
 import re
@@ -17,7 +18,7 @@ from datetime import date, datetime, time, timedelta
 from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError
 from odin.config import WEEKDAYS_DE, WEEKDAYS_EN, Config, ConfigError, WeeklyTime
-from odin.engine import dinner_week, step_windows, transition
+from odin.engine import dinner_week, record_transition, step_windows, transition
 from odin.overrides import (
     DINNER_KEY,
     EDITABLE_TEMPLATES,
@@ -107,8 +108,12 @@ DINNER_FROM_NEXT = "Das gilt ab dem Essen am {first}. Diese Woche bleibt es beim
 DINNER_FROM_NOW = "Das gilt schon ab dieser Woche: nächstes Essen am {first}."
 DINNER_WEEK_DROPPED = (
     "Achtung: Am {day} gibt es kein Essen – diese Woche fällt beim Wechsel aus, weil ihre Frage "
-    "an die WG schon vor dem Wechsel dran gewesen wäre. Sag am besten in der Essensgruppe Bescheid."
+    "an die WG schon vor dem Wechsel dran gewesen wäre."
 )
+DROPPED_CANCELLATION_LATER = (
+    "Die Absage für den {day} schicke ich der Essensgruppe beim Wechsel ({switch})."
+)
+DROPPED_CANCELLATION_NOW = "Die Absage für den {day} schicke ich der Essensgruppe gleich."
 PENDING_DISCARDED = "Der geplante Wechsel auf {new} (ab {first}) ist damit verworfen."
 PENDING_CANCELLED = "Verworfen ✅ Der geplante Wechsel auf {new} (ab {first}) fällt weg."
 HARDCODED_WEEKDAY = (
@@ -384,6 +389,8 @@ def set_dinner_day(ctx: CommandContext, value: str | None, headline: str) -> lis
                 ctx.store.delete_override(DINNER_KEY)
             else:
                 ctx.store.set_override(DINNER_KEY, target, _changed_by(ctx), ctx.now)
+            # A pending change is recorded when it applies (`odin.overrides.effective_config`).
+            record_transition(ctx.store, weeks)
 
     first = _moment(new.when(new.schedule.dinner, weeks.first_week))
     lines = [
@@ -398,7 +405,12 @@ def set_dinner_day(ctx: CommandContext, value: str | None, headline: str) -> lis
     else:
         lines.append(DINNER_FROM_NOW.format(first=first))
     if weeks.dropped_week is not None:
-        lines.append(DINNER_WEEK_DROPPED.format(day=_day(weeks.dropped_week)))
+        day = _day(weeks.dropped_week)
+        lines.append(DINNER_WEEK_DROPPED.format(day=day))
+        if started:
+            lines.append(DROPPED_CANCELLATION_LATER.format(day=day, switch=this))
+        else:
+            lines.append(DROPPED_CANCELLATION_NOW.format(day=day))
     lines += _hardcoded_weekdays(new)
     return ["\n".join(lines)]
 
