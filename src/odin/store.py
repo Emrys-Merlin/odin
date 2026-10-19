@@ -37,6 +37,10 @@ class Action(StrEnum):
     ANNOUNCEMENT = "announcement"
     CANCELLATION = "cancellation"
     TALLY = "tally"
+    # Told the flat group that a tracked message went out but cannot be tracked (see
+    # `odin.notices`). The retry of the flat ask is the week's flat poll from then on.
+    FLAT_ASK_RETRY = "flat_ask_retry"
+    ANNOUNCEMENT_NOTICE = "announcement_notice"
 
 
 class Outcome(StrEnum):

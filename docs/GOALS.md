@@ -69,6 +69,11 @@ skipped), so nothing stays open even if ODIN was down over the switch.
   The one exception: a send that times out while waiting for Signal's answer is retried, though
   it may have gone out (at least once rather than at most once — a missing cancellation is worse
   than a duplicate). A send that Signal accepted is recorded even if its answer can't be read.
+- If that answer is unreadable for the flat poll or the announcement, ODIN cannot tell which
+  message the 👍 belong to. It then tells the flat group once (a German notice, not a template):
+  for the flat poll it asks again, and the 👍 on that new message count instead; for the
+  announcement it warns that the tally will show 0, so the 👍 must be counted by hand.
+  `/status` shows such a message as "nicht zählbar".
 - The scheduler is a *reconcile loop*: on every tick it computes what should have happened by now
   from config + state, and does what is missing. Restarts and missed ticks are therefore safe.
 - **Catch-up:** an action that is late (bot was down) is still performed while within a grace
