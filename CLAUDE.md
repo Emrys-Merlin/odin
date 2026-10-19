@@ -1,11 +1,15 @@
 # CLAUDE.md
 
 ODIN (repo `odin`) is a Signal bot for our weekly open Sunday dinner. Goals, the weekly cycle and
-the architecture are in `docs/GOALS.md` — read it before starting an issue.
+the architecture are in `docs/explanation/` — read it (at least `design-goals.md`,
+`weekly-cycle.md` and `reliability.md`) before starting an issue.
 
 ## Workflow
 
-- Work is tracked in GitHub issues (`gh issue view <n>`). Work on exactly one issue per session.
+- Work is tracked in GitHub issues (`gh issue view <n>`; milestone **MVP** for the first usable
+  version). One issue per vertical slice; each issue is self-contained so a cold Claude Code cloud
+  session can pick it up. Work on exactly one issue per session.
+- Changes land via PRs that Tim reviews; CI must be green.
 - Branch from `main`; any branch name is fine (cloud sessions use `claude/<slug>`). Open a PR with
   `Closes #<n>`. Never push to `main`.
 - Things found outside the issue's scope: note them in the PR description or open a new issue —
@@ -48,6 +52,8 @@ follows Diátaxis. Details: `docs/how-to/develop/write-docs.md`.
   live once in `reference/`; other pages link there.
 - A PR that changes user-visible behaviour updates the matching docs page in the same PR.
 - Chat examples use the chat-mock HTML from `write-docs.md`, built from the real texts.
+- Changed the CLI, a chat command or a template placeholder? Rerun `uv run scripts/gen_reference.py`
+  (it writes `docs/reference/_generated/`; a test fails while it is stale).
 
 ## Design rules
 
