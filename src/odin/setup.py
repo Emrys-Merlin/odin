@@ -314,8 +314,9 @@ class _Wizard:
                     "Signal says the account is already registered. signal-cli-rest-api cannot "
                     "force a new registration of an existing account; to really start over, "
                     "ODIN's account data would have to be removed from the signal-cli volume "
-                    'first (this throws away its keys). See "What the wizard cannot do" in '
-                    "docs/runbooks/signal-registration.md."
+                    'first (this throws away its keys). See "Register again after the account '
+                    'was lost" in https://emrys-merlin.github.io/odin/how-to/operate/'
+                    "re-register-number/."
                 ) from None
             captcha = await self.captcha()
         self.store.set_setting(CODE_REQUESTED_KEY, self.clock.now().isoformat())

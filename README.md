@@ -1,56 +1,44 @@
 # ODIN — Open Dinner Invitation Notifier
 
-Signal bot that organises our weekly open Sunday dinner: asks the flat whether dinner happens,
-announces it (or the cancellation) to the dinner group, and collects a rough head count.
+[![CI](https://github.com/Emrys-Merlin/odin/actions/workflows/ci.yml/badge.svg)](https://github.com/Emrys-Merlin/odin/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Emrys-Merlin/odin)](https://github.com/Emrys-Merlin/odin/releases/latest)
+[![Docs](https://github.com/Emrys-Merlin/odin/actions/workflows/docs.yml/badge.svg)](https://emrys-merlin.github.io/odin/)
 
-See [docs/GOALS.md](docs/GOALS.md) for goals and design. Work is tracked in GitHub issues.
+ODIN is a Signal bot that organises a weekly open Sunday dinner. Every week it asks the flat
+group whether dinner takes place, announces it to the dinner group (or cancels it when nobody
+hosts), and collects a rough head count so there is enough food. Flatmates can check and change
+its settings with chat commands such as `/status` or `/cancel`; all texts it posts are templates
+in a config file.
 
-## Configuration
+<!-- Chat mock rendered from the docs site's landing page; replace with a real Signal screenshot
+     once #113 has landed. -->
+<p align="center">
+  <img src="docs/assets/readme-chat.png" width="560"
+       alt="ODIN asks the flat group whether Sunday's open dinner takes place; two flatmates reacted with a thumbs-up.">
+</p>
 
-Behaviour (schedule, emoji, message texts) lives in a TOML file; see
-[config.example.toml](config.example.toml) for all options and their defaults. Deployment values
-come from env vars: `SIGNAL_NUMBER`, `SIGNAL_API_URL` (default `http://localhost:8080`),
-`ODIN_CONFIG` (path to the TOML file) and `ODIN_DB` (path to the SQLite database). The profile
-name and picture and the texts `odin setup` sends are in the TOML file too. The IDs of the flat
-and dinner group are stored in the database by `odin setup`; the env vars `FLAT_GROUP_ID` and
-`DINNER_GROUP_ID` override them when set.
+## Quickstart
 
-## Commands
+ODIN runs as two rootless podman containers (the bot and a Signal API) on any Debian machine,
+with its own phone number. [First deployment](https://emrys-merlin.github.io/odin/tutorials/first-deployment/)
+takes you from a fresh machine to ODIN's first question in the flat group in about an hour.
 
-- `odin run` — run the bot: consumes reactions and checks the weekly schedule every minute.
-  While ODIN is not set up (number not registered, or a group ID missing), the Signal API is not
-  reachable, or `odin setup` is running, it waits and checks again every 30 s, so finishing the
-  setup takes effect without a restart. Stops cleanly on SIGTERM/SIGINT.
-- `odin setup` — interactive setup, run inside the container (`podman exec -it odin odin setup`):
-  registers ODIN's number (captcha, SMS or voice code), sets the PIN and profile, exchanges a
-  hello with the operator and lets them pick the flat and dinner group. Every finished step is
-  skipped, so it can be stopped and run again at any time. `--status` only shows what is done
-  (exit code 0 when fully set up; usable as a health check), `--pin` sets an own PIN,
-  `--redo pin|hello|groups|test` repeats a finished step. It never registers an already
-  registered number again (see the registration runbook). While it runs, `odin run` pauses.
-- `odin list-groups` — print the groups ODIN is in with their IDs (for debugging, or for the
-  `FLAT_GROUP_ID` / `DINNER_GROUP_ID` overrides). Needs only `SIGNAL_NUMBER` and `SIGNAL_API_URL`.
-- `odin check-config` — validate the config file and env vars, show the group IDs and where they
-  come from (or that ODIN is not set up yet), and print the next scheduled actions. Does not
-  contact Signal.
+## Documentation
 
-Logs go to stdout; set the level with `ODIN_LOG_LEVEL` (default `INFO`).
+Everything else is on the docs site, **<https://emrys-merlin.github.io/odin/>**:
 
-## Container image
+| | For | Start with |
+|---|---|---|
+| **[Tutorials](https://emrys-merlin.github.io/odin/tutorials/)** | learning by doing | [First deployment](https://emrys-merlin.github.io/odin/tutorials/first-deployment/), [Your first week with ODIN](https://emrys-merlin.github.io/odin/tutorials/first-week/) |
+| **[How-to guides](https://emrys-merlin.github.io/odin/how-to/)** | one task at a time | [operate](https://emrys-merlin.github.io/odin/how-to/operate/upgrade/), [in the chat](https://emrys-merlin.github.io/odin/how-to/chat/cancel-dinner/), [develop](https://emrys-merlin.github.io/odin/how-to/develop/run-locally/) |
+| **[Reference](https://emrys-merlin.github.io/odin/reference/)** | looking things up | [CLI](https://emrys-merlin.github.io/odin/reference/cli/), [chat commands](https://emrys-merlin.github.io/odin/reference/chat-commands/), [templates](https://emrys-merlin.github.io/odin/reference/templates/), [configuration](https://emrys-merlin.github.io/odin/reference/configuration/), [deployment units](https://emrys-merlin.github.io/odin/reference/deployment-units/) |
+| **[Explanation](https://emrys-merlin.github.io/odin/explanation/)** | understanding why | [the weekly cycle](https://emrys-merlin.github.io/odin/explanation/weekly-cycle/), [reliability](https://emrys-merlin.github.io/odin/explanation/reliability/), [design goals](https://emrys-merlin.github.io/odin/explanation/design-goals/) |
 
-`podman build -f Containerfile -t odin .` (docker works too; without `--build-arg VERSION=…` the
-image reports version `0.0.0+unknown`). Every merge to `main` is a release `vX.Y.Z`, and CI
-publishes `ghcr.io/emrys-merlin/odin` with tags `X.Y.Z`, `X.Y`, `X`, `latest` and the commit SHA;
-deployments follow the major tag (`:0`). `odin --version` prints the version. The
-image presets `ODIN_CONFIG=/config/config.toml` and `ODIN_DB=/data/odin.db`; mount `/config` and
-`/data` as volumes and pass the other env vars at run time.
+## Contributing
 
-## Runbooks
+Work is tracked in GitHub issues. Start with [`CLAUDE.md`](CLAUDE.md) (workflow, commands, design
+rules) and the [develop how-tos](https://emrys-merlin.github.io/odin/how-to/develop/run-locally/).
 
-One-time and operational tasks that need the real bot are in [docs/runbooks](docs/runbooks):
+## License
 
-- [deploy.md](docs/runbooks/deploy.md) — run ODIN on a Debian 13 VM on Proxmox with rootless
-  podman and the Quadlet units in [deploy/quadlet](deploy/quadlet): install, auto-update,
-  upgrade, rollback, restore from backup.
-- [signal-registration.md](docs/runbooks/signal-registration.md) — set up ODIN's Signal account
-  with `odin setup`: what each step asks, `--status`, the options, backups and troubleshooting.
+See [LICENSE](LICENSE).

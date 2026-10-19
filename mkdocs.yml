@@ -8,10 +8,7 @@ repo_url: https://github.com/Emrys-Merlin/odin
 repo_name: Emrys-Merlin/odin
 edit_uri: edit/main/docs/
 
-# Migrated into the site by later issues of the docs epic (#103), then deleted.
 exclude_docs: |
-  GOALS.md
-  runbooks/
   # Fragments of scripts/gen_reference.py, only included into the reference pages.
   reference/_generated/
 
