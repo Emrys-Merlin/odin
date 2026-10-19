@@ -87,6 +87,16 @@ its services start at boot:
 sudo loginctl enable-linger odin
 ```
 
+At boot, podman waits until the machine is online (systemd's `network-online.target`) before it
+starts `odin`'s containers. On some minimal Debian images nothing activates that target, and the
+containers would never start. This line makes sure it is activated at every boot:
+
+```bash
+sudo systemctl add-wants multi-user.target network-online.target
+```
+
+It prints `Created symlink …`.
+
 Now we **become `odin`**. We use `machinectl`, because it opens a real login session for `odin`,
 which `systemctl --user` needs:
 
