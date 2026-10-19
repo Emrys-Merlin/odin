@@ -34,8 +34,20 @@ Everything goes through uv; do not use pip or ad-hoc venvs.
 - `uv sync` — install
 - `uv run pytest` — tests
 - `uv run prek run --all-files` — ruff (lint + format) and ty; the same check CI runs
+- `uv run --group docs zensical build --strict` — build the docs site; CI runs it too
 
 The prek hook is installed in cloud sessions by `scripts/session-start.sh`.
+
+## Docs
+
+The docs site (`docs/`, nav in `mkdocs.yml`, published to https://emrys-merlin.github.io/odin/)
+follows Diátaxis. Details: `docs/how-to/develop/write-docs.md`.
+
+- Every page is exactly one quadrant: `tutorials/`, `how-to/`, `reference/` or `explanation/`.
+- English; German chat texts are quoted verbatim. Facts (syntax, keys, defaults, placeholders)
+  live once in `reference/`; other pages link there.
+- A PR that changes user-visible behaviour updates the matching docs page in the same PR.
+- Chat examples use the chat-mock HTML from `write-docs.md`, built from the real texts.
 
 ## Design rules
 

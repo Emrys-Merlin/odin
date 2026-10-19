@@ -13,6 +13,11 @@ dependencies = [
     "websockets>=17.2",
 ]
 
+[project.urls]
+Homepage = "https://emrys-merlin.github.io/odin/"
+Documentation = "https://emrys-merlin.github.io/odin/"
+Source = "https://github.com/Emrys-Merlin/odin"
+
 [project.scripts]
 odin = "odin:main"
 
@@ -22,6 +27,10 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.16.10",
     "ty>=0.0.84",
+]
+# Docs site (`uv run --group docs zensical serve`). Zensical is pre-1.0: pinned exactly.
+docs = [
+    "zensical==0.0.71",
 ]
 
 [build-system]

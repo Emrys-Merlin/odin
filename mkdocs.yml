@@ -1,0 +1,120 @@
+# Docs site, built with Zensical (`uv run --group docs zensical serve`). Zensical reads this
+# MkDocs-format file, so Material for MkDocs could build it too. Conventions:
+# docs/how-to/develop/write-docs.md.
+site_name: ODIN
+site_description: Signal bot for a weekly open dinner
+site_url: https://emrys-merlin.github.io/odin/
+repo_url: https://github.com/Emrys-Merlin/odin
+repo_name: Emrys-Merlin/odin
+edit_uri: edit/main/docs/
+
+# Migrated into the site by later issues of the docs epic (#103), then deleted.
+exclude_docs: |
+  GOALS.md
+  runbooks/
+
+theme:
+  name: material
+  language: en
+  features:
+    - content.action.edit
+    - content.code.copy
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.path
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: lucide/sun-moon
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: lucide/sun
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: lucide/moon
+        name: Switch to system preference
+
+extra_css:
+  - assets/chat.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.snippets:
+      # `--8<-- "config.example.toml"` includes repo files; a missing file fails the build.
+      base_path: ["."]
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Tutorials:
+      - tutorials/index.md
+      - First deployment: tutorials/first-deployment.md
+      - Your first week with ODIN: tutorials/first-week.md
+  - How-to guides:
+      - how-to/index.md
+      - Operate:
+          - Upgrade: how-to/operate/upgrade.md
+          - Roll back: how-to/operate/rollback.md
+          - Back up and restore: how-to/operate/backup-restore.md
+          - Re-register the number: how-to/operate/re-register-number.md
+          - Change the groups: how-to/operate/change-groups.md
+          - Change the config: how-to/operate/change-config.md
+          - Troubleshoot: how-to/operate/troubleshoot.md
+      - In the chat:
+          - Cancel a dinner: how-to/chat/cancel-dinner.md
+          - Edit a text: how-to/chat/edit-a-text.md
+          - Move dinner to another day: how-to/chat/move-dinner-day.md
+          - Pause the nudge: how-to/chat/pause-nudge.md
+      - Develop:
+          - Run locally: how-to/develop/run-locally.md
+          - Add a chat command: how-to/develop/add-a-chat-command.md
+          - Release: how-to/develop/release.md
+          - Write docs: how-to/develop/write-docs.md
+  - Reference:
+      - reference/index.md
+      - CLI: reference/cli.md
+      - Chat commands: reference/chat-commands.md
+      - Templates: reference/templates.md
+      - Configuration: reference/configuration.md
+      - Deployment units: reference/deployment-units.md
+  - Explanation:
+      - explanation/index.md
+      - The weekly cycle: explanation/weekly-cycle.md
+      - Reactions: explanation/reactions.md
+      - Reliability: explanation/reliability.md
+      - Changing the dinner weekday: explanation/weekday-change.md
+      - Architecture: explanation/architecture.md
+      - Design goals: explanation/design-goals.md

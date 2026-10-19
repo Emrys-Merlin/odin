@@ -19,3 +19,6 @@ htmlcov/
 *.sqlite3
 *.db
 .env
+
+# Docs build output
+site/
