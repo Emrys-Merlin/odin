@@ -5,6 +5,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+import websockets
 
 from odin.signal import (
     AlreadyRegistered,
@@ -315,3 +316,36 @@ def test_events_and_direct_messages_share_the_receive_stream(
         DirectMessage(sender="+4915100000002", text="Ja, das bin ich.", timestamp=1760454500000)
     ]
     assert urls == [f"ws://signal-api:8080/v1/receive/{NUMBER}"] * 2
+
+
+def test_receive_reconnects_when_the_websocket_closes(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    message = (FIXTURES / "direct_message.json").read_text()
+    connections = 0
+
+    async def dropped() -> AsyncIterator[str]:
+        yield message
+        raise websockets.ConnectionClosed(None, None)
+
+    async def healthy() -> AsyncIterator[str]:
+        yield message
+
+    async def connect(url: str) -> AsyncIterator[AsyncIterator[str]]:
+        # Like websockets.connect(): yields a new connection whenever the last one dropped.
+        nonlocal connections
+        for socket in (dropped(), healthy()):
+            connections += 1
+            yield socket
+
+    monkeypatch.setattr(rest.websockets, "connect", connect)
+    client = make_client(lambda request: httpx.Response(500))
+
+    async def collect() -> list[DirectMessage]:
+        return [dm async for dm in client.direct_messages()]
+
+    with caplog.at_level("WARNING", logger="odin"):
+        dms = asyncio.run(collect())
+    assert len(dms) == 2
+    assert connections == 2
+    assert "Signal API WebSocket closed, reconnecting" in caplog.text

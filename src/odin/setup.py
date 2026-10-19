@@ -538,12 +538,17 @@ class _Wizard:
             if message.sender == operator:
                 return
             if not message.sender.startswith("+"):
-                # Signal hides the number of senders who chose so; only their UUID arrives.
+                # Signal hides the number of senders who chose so; only their UUID arrives. It
+                # may be anyone, so the operator confirms by the text they just sent.
                 self.t.print(
-                    f"Got a reply from a sender whose number is hidden ({message.sender}); "
-                    "taking it as yours."
+                    f"Got a reply from a sender whose number is hidden ({message.sender}): "
+                    f"“{message.text}”"
                 )
-                return
+                answer = await self.t.prompt("Was that your reply? [y/N]: ")
+                if answer.strip().lower() in ("y", "yes"):
+                    return
+                self.t.print("(Ignoring it. Still waiting for your reply …)")
+                continue
             self.t.print(f"(Ignoring a message from {message.sender}.)")
 
     # Step 7
