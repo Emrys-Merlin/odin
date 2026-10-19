@@ -23,6 +23,18 @@ class SignalApiError(Exception):
         self.message = message
 
 
+class SendResponseUnreadable(Exception):
+    """The Signal API accepted a send (2xx), but its response carries no readable timestamp.
+
+    The message has most likely been posted, so it must not be sent again. ``body`` is the raw
+    response body, for the log.
+    """
+
+    def __init__(self, body: str) -> None:
+        super().__init__(f"cannot read the timestamp from the send response: {body!r}")
+        self.body = body
+
+
 class CaptchaRequired(SignalApiError):
     """Registration needs a (new) captcha: none was given, or it was invalid or expired."""
 

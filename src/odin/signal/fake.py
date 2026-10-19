@@ -21,7 +21,7 @@ class FakeSignalClient:
 
     Sent messages get strictly increasing timestamps starting at ``first_timestamp``.
     ``events()`` yields injected events in order and ends once ``close()`` is called and
-    all earlier events are consumed.
+    all earlier events are consumed. ``fail_sends()`` makes the next group sends raise.
     """
 
     def __init__(
@@ -35,11 +35,25 @@ class FakeSignalClient:
         self.sent: list[SentMessage] = []
         self._next_timestamp = first_timestamp
         self._queue: asyncio.Queue[Event | None] = asyncio.Queue()
+        self._send_failures: deque[tuple[BaseException, bool]] = deque()
+
+    def fail_sends(self, error: BaseException, *, delivered: bool = False, times: int = 1) -> None:
+        """Make the next ``times`` group sends raise ``error``.
+
+        With ``delivered`` the message is posted (recorded in ``sent``) before ``error`` is
+        raised, like a send whose response could not be read.
+        """
+        self._send_failures.extend([(error, delivered)] * times)
 
     async def send_group_message(self, group_id: str, text: str) -> int:
+        failure = self._send_failures.popleft() if self._send_failures else None
+        if failure is not None and not failure[1]:
+            raise failure[0]
         timestamp = self._next_timestamp
         self._next_timestamp += 1
         self.sent.append(SentMessage(group_id=group_id, text=text, timestamp=timestamp))
+        if failure is not None:
+            raise failure[0]
         return timestamp
 
     async def list_groups(self) -> list[Group]:

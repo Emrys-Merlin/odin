@@ -49,6 +49,19 @@ def test_records_sent_messages_with_increasing_timestamps() -> None:
     ]
 
 
+def test_failed_sends_raise_with_or_without_posting() -> None:
+    fake = FakeSignalClient()
+    fake.fail_sends(ConnectionError("down"))
+    fake.fail_sends(ValueError("unreadable"), delivered=True)
+
+    with pytest.raises(ConnectionError):
+        asyncio.run(fake.send_group_message("group.flat=", "lost"))
+    with pytest.raises(ValueError, match="unreadable"):
+        asyncio.run(fake.send_group_message("group.flat=", "posted"))
+    assert asyncio.run(fake.send_group_message("group.flat=", "fine")) == 1001
+    assert [message.text for message in fake.sent] == ["posted", "fine"]
+
+
 def test_lists_configured_groups() -> None:
     groups = [Group(id="group.flat=", internal_id="flat=", name="WG")]
     fake: SignalClient = FakeSignalClient(groups=groups)
