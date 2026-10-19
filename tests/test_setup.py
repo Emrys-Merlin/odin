@@ -543,16 +543,47 @@ def test_hello_waits_for_the_operators_reply(store: Store, clock: FixedClock) ->
     assert store.get_setting(HELLO_KEY) == START.isoformat()
 
 
-def test_hello_accepts_a_reply_from_a_hidden_number(store: Store, clock: FixedClock) -> None:
+HIDDEN = "5f3c8a2e-1b7d-4e0a-9c6f-2d8b4a1e7c90"
+
+
+@pytest.mark.parametrize("yes", ["y", " Yes "])
+def test_hello_accepts_a_hidden_number_reply_the_operator_confirms(
+    store: Store, clock: FixedClock, yes: str
+) -> None:
     admin = FakeSignalAdmin(number=NUMBER, groups=[FLAT, DINNER], accounts=[NUMBER])
-    admin.inject_direct(
-        DirectMessage(sender="5f3c8a2e-1b7d-4e0a-9c6f-2d8b4a1e7c90", text="hi", timestamp=1)
-    )
+    admin.inject_direct(DirectMessage(sender=HIDDEN, text="hi", timestamp=1))
     store.set_setting(PIN_SET_KEY, START.isoformat())
-    code, terminal = run(admin, store, clock, [TIM])
+    code, terminal = run(admin, store, clock, [TIM, yes])
     assert code == 1  # stops at the groups question
-    assert "whose number is hidden" in terminal.text
+    assert f"whose number is hidden ({HIDDEN}): “hi”" in terminal.text
+    assert "Was that your reply? [y/N]: " in terminal.output
+    assert store.get_setting(OPERATOR_KEY) == TIM
     assert store.get_setting(HELLO_KEY) is not None
+
+
+@pytest.mark.parametrize("no", ["", "n", "no"])
+def test_hello_ignores_a_hidden_number_reply_the_operator_does_not_confirm(
+    store: Store, clock: FixedClock, no: str
+) -> None:
+    admin = FakeSignalAdmin(number=NUMBER, groups=[FLAT, DINNER], accounts=[NUMBER])
+    store.set_setting(PIN_SET_KEY, START.isoformat())
+
+    async def scenario() -> int:
+        terminal = ScriptedTerminal([TIM, no])
+        setup = asyncio.create_task(run_setup(admin, store, CONFIG, ENV, terminal, clock))
+        while not admin.sent_direct:
+            await asyncio.sleep(0)
+        admin.inject_direct(DirectMessage(sender=HIDDEN, text="Wer bist du?", timestamp=2))
+        for _ in range(20):
+            await asyncio.sleep(0)
+        assert "“Wer bist du?”" in terminal.text
+        assert "(Ignoring it. Still waiting for your reply …)" in terminal.text
+        assert store.get_setting(HELLO_KEY) is None  # a stranger: still waiting
+        admin.inject_direct(DirectMessage(sender=TIM, text="Hallo Odin", timestamp=3))
+        return await setup  # stops at the groups question
+
+    assert asyncio.run(scenario()) == 1
+    assert store.get_setting(HELLO_KEY) == START.isoformat()
 
 
 def test_redo_hello_offers_the_stored_number(store: Store, clock: FixedClock) -> None:

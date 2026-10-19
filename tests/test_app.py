@@ -283,6 +283,37 @@ def test_a_failing_tick_does_not_stop_the_bot(store: Store) -> None:
     assert client.failed
 
 
+def test_a_tick_whose_reconcile_raises_is_logged_and_the_bot_keeps_running(
+    store: Store, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    calls = 0
+
+    async def reconcile(*args: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr("odin.app.reconcile", reconcile)
+    client = FakeSignalClient(number=ACCOUNT.number)
+    clock = FixedClock(local(6, 18, 5))
+
+    async def scenario() -> None:
+        stop = asyncio.Event()
+        bot = asyncio.create_task(
+            run_bot(CONFIG, store, client, ACCOUNT, clock, stop, tick_interval=timedelta(0))
+        )
+        await until(lambda: calls >= 2)  # ticked again after the failure
+        stop.set()
+        await bot
+
+    with caplog.at_level("ERROR", logger="odin"):
+        asyncio.run(scenario())
+    [failure] = [r for r in caplog.records if "reconcile tick failed" in r.getMessage()]
+    assert failure.exc_info is not None
+    assert str(failure.exc_info[1]) == "boom"
+
+
 def test_the_bot_fails_when_the_event_stream_ends(store: Store) -> None:
     client = FakeSignalClient(number=ACCOUNT.number)
     clock = FixedClock(local(6, 12))  # nothing due
