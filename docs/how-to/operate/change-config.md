@@ -4,7 +4,7 @@
 
 Edit the config file, check it, and restart ODIN.
 
-Commands on the VM run as the `odin` user (`sudo machinectl shell odin@`). Every key is listed in
+Commands on the machine run as the `odin` user (`sudo machinectl shell odin@`). Every key is listed in
 [Configuration](../../reference/configuration.md), the placeholders of the texts in
 [Templates](../../reference/templates.md).
 

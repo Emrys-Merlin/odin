@@ -4,7 +4,7 @@
 
 Let auto-update follow new releases, upgrade by hand, and move to a new major version.
 
-All commands run as the `odin` user on the VM: `sudo machinectl shell odin@` (not `sudo -u` or
+All commands run as the `odin` user on the machine: `sudo machinectl shell odin@` (not `sudo -u` or
 `su`, see [Troubleshoot](troubleshoot.md#failed-to-connect-to-bus)).
 
 ## Turn on automatic updates

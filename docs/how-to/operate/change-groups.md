@@ -4,7 +4,7 @@
 
 Point ODIN at another flat or dinner group.
 
-Commands on the VM run as the `odin` user (`sudo machinectl shell odin@`).
+Commands on the machine run as the `odin` user (`sudo machinectl shell odin@`).
 
 ## Choose other groups
 

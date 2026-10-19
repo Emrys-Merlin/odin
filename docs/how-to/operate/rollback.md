@@ -4,7 +4,7 @@
 
 Go back to an earlier image.
 
-All commands run as the `odin` user on the VM (`sudo machinectl shell odin@`).
+All commands run as the `odin` user on the machine (`sudo machinectl shell odin@`).
 
 ## A new image does not start
 
@@ -57,7 +57,9 @@ systemctl --user daemon-reload && systemctl --user restart signal-api
 Unpin it (back to `:latest`) as soon as a fixed version is out: Signal stops accepting clients
 that are a few months old.
 
-## Roll back the whole VM
+## Roll back the whole machine
 
-For a bad change that is not about the image (a broken database, a botched edit on the VM),
-restore a backup instead: [Back up and restore](backup-restore.md#restore-the-whole-vm).
+For a bad change that is not about the image (a broken database, a botched edit on the
+machine), restore a backup instead: the whole machine from your host's backup (on Proxmox:
+[restore the whole VM](backup-restore.md#restore-the-whole-vm)), or a single volume
+[from a tarball](backup-restore.md#restore-one-volume-from-a-tarball).

@@ -4,7 +4,7 @@
 
 Find out why ODIN is quiet or misbehaves: setup status, logs, common problems.
 
-Commands on the VM run as the `odin` user (`sudo machinectl shell odin@`).
+Commands on the machine run as the `odin` user (`sudo machinectl shell odin@`).
 
 ## Check the state first
 

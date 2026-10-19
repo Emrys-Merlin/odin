@@ -8,7 +8,7 @@ You need this only when ODIN's account is gone — the `odin-signal` volume is l
 no backup — or when you deliberately start over. If a backup exists,
 [restore it](backup-restore.md) instead: it needs no SIM and keeps ODIN in its groups.
 
-Commands on the VM run as the `odin` user (`sudo machinectl shell odin@`).
+Commands on the machine run as the `odin` user (`sudo machinectl shell odin@`).
 
 ## Before you start
 
@@ -56,8 +56,9 @@ Commands on the VM run as the `odin` user (`sudo machinectl shell odin@`).
     podman exec odin odin setup --status
     ```
 
-6. Run the Proxmox backup job once by hand
-   ([check the backup](backup-restore.md#check-the-backup-after-setup)).
+6. Back up the new keys right away: run your machine's backup once by hand (on Proxmox:
+   [check the backup](backup-restore.md#check-the-backup-after-setup)), or
+   [export the volume](backup-restore.md#make-an-extra-copy-of-a-volume).
 
 ## Use another number
 

@@ -1,8 +1,13 @@
-# Back up and restore
+# Back up and restore on Proxmox
 
 **How-to guide** — steps for one task you already know you want to do.
 
-Back up the Signal and state volumes, and restore them.
+Back up ODIN's volumes on a Proxmox VE deployment, and restore them.
+
+This page assumes ODIN runs in a VM on [Proxmox VE](https://www.proxmox.com/en/proxmox-virtual-environment)
+and is backed up by a Proxmox backup job. On another host, use whatever backs up that machine
+in place of the Proxmox sections; the [volume tarball](#make-an-extra-copy-of-a-volume) sections
+work wherever ODIN runs on podman.
 
 Two volumes hold everything ODIN needs to survive ([Deployment units](../../reference/deployment-units.md)):
 
@@ -10,7 +15,7 @@ Two volumes hold everything ODIN needs to survive ([Deployment units](../../refe
   [registering the number again](re-register-number.md), which needs the SIM.
 - `odin-data` — the state database: what was sent, reactions, the chosen groups.
 
-Commands on the VM run as the `odin` user (`sudo machinectl shell odin@`).
+Commands on the machine run as the `odin` user (`sudo machinectl shell odin@`).
 
 !!! danger "Never run a second copy"
 
@@ -20,7 +25,7 @@ Commands on the VM run as the `odin` user (`sudo machinectl shell odin@`).
 
 ## Back up the VM with Proxmox
 
-This is the primary backup; it covers both volumes.
+A backup of the whole VM covers both volumes.
 
 1. Proxmox → Datacenter → *Backup* → *Add*:
     - *Node/Storage*: your backup storage (Proxmox Backup Server or a directory storage).
@@ -42,8 +47,8 @@ After `odin setup` (and after any re-registration), the backup must contain the 
 
 ## Make an extra copy of a volume
 
-Before a risky change (re-registering, a rollback across a database change), export the volume to
-a tarball:
+Works on any host. Before a risky change (re-registering, a rollback across a database change),
+export the volumes to tarballs:
 
 ```bash
 podman volume export odin-signal --output odin-signal-$(date +%F).tar
@@ -75,6 +80,8 @@ caught up within the grace window, and nothing the restored database records as 
 again ([Reliability](../../explanation/reliability.md)).
 
 ## Restore one volume from a tarball
+
+Works on any host.
 
 ```bash
 systemctl --user stop odin-pod
