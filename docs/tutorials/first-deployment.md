@@ -17,6 +17,10 @@ account.
   server is ideal; ODIN needs about 1 CPU core, 1.5 GB of memory and 10 GB of disk. We assume a
   fresh install with an SSH server and a user with `sudo` rights; we call that user `admin` here.
 - A **SIM card for ODIN's own phone number**, in any phone, to receive one verification code.
+  This may not be needed in the future: Signal accounts can work without a phone number (with a
+  username only), and ODIN can switch to that once signal-cli and signal-cli-rest-api support
+  it ([signal-cli#2124](https://github.com/AsamK/signal-cli/issues/2124),
+  [signal-cli-rest-api#889](https://github.com/bbernhard/signal-cli-rest-api/issues/889)).
 - **Your own phone with Signal**, already in the flat group and the dinner group.
 - A **desktop browser** and your **password manager**.
 
