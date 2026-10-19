@@ -22,3 +22,13 @@ jobs:
         run: uv run prek run --all-files --show-diff-on-failure
       - name: Tests
         run: uv run pytest
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Build docs (strict: warnings and broken links fail)
+        run: uv run --locked --only-group docs zensical build --strict
