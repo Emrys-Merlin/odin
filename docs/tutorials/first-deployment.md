@@ -58,7 +58,7 @@ The upgrade ends without errors and you are back at the prompt, e.g. `admin@debi
 podman and a few helpers:
 
 ```bash
-sudo apt install -y podman systemd-container dbus-user-session git
+sudo apt install -y podman systemd-container dbus-user-session git nano
 podman --version
 ```
 
