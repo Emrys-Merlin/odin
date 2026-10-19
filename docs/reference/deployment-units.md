@@ -11,6 +11,23 @@ written for rootless podman ≥ 5.0 under a dedicated user, installed in
 `~/.config/containers/systemd/`. Installing them is part of
 [First deployment](../tutorials/first-deployment.md).
 
+## Host layout
+
+Where [First deployment](../tutorials/first-deployment.md) puts things. The
+[operate how-to guides](../how-to/operate/upgrade.md) assume this layout; if yours differs,
+adjust their paths.
+
+| What | Where |
+|---|---|
+| User running ODIN | `odin`, with lingering enabled; a shell as `odin`: `sudo machinectl shell odin@` (`sudo -u` and `su` give no `systemctl --user`) |
+| Clone of this repo | `~/odin-src/` — source of the unit files and `config.example.toml` |
+| Quadlet units | `~/.config/containers/systemd/` (`odin.pod`, `*.container`, `*.volume`) |
+| Env file | `~/odin/odin.env`, mode `600` — see [`odin.env.example`](#odinenvexample) |
+| Config file | `~/odin/config/config.toml`, optional avatar image next to it; mounted at `/config` |
+| Named volumes | `odin-signal`, `odin-data` under `~/.local/share/containers/storage/volumes/` — see [Volumes and mounts](#volumes-and-mounts) |
+
+`~` is the home directory of `odin`.
+
 ## Files
 
 | File | Defines | systemd service |
