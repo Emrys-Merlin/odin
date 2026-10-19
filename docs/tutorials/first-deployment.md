@@ -2,25 +2,27 @@
 
 **Tutorial** — a guided lesson: follow along and learn by doing.
 
-In this tutorial we take an empty Proxmox host to a running ODIN: we create a Debian VM, run
-ODIN in it with podman, give it its own Signal account, add it to the flat group and the dinner
-group, and finally watch it ask the flat group whether dinner takes place.
+In this tutorial we take a fresh Debian machine to a running ODIN: we run ODIN on it with
+podman, give it its own Signal account, add it to the flat group and the dinner group, and
+finally watch it ask the flat group whether dinner takes place.
 
 You do not need to know podman. Every step says what to type and what you should see.
 
-Allow about two hours: one for the VM and the containers, 20 minutes for the Signal account,
-the rest for waiting on installs and downloads.
+Allow about an hour: half of it for the machine and the containers, 20 minutes for the Signal
+account.
 
 ## What you need
 
-- A **Proxmox VE** host with a backup storage (Proxmox Backup Server or a directory storage).
+- A **Debian 13 machine** that runs all the time, with internet access. A small VM or a home
+  server is ideal; ODIN needs about 1 CPU core, 1.5 GB of memory and 10 GB of disk. We assume a
+  fresh install with an SSH server and a user with `sudo` rights; we call that user `tim` here.
 - A **SIM card for ODIN's own phone number**, in any phone, to receive one verification code.
 - **Your own phone with Signal**, already in the flat group and the dinner group.
 - A **desktop browser** and your **password manager**.
 
 ## What we are building
 
-At the end, the VM runs two containers side by side in a *pod*: the Signal API
+At the end, the machine runs two containers side by side in a *pod*: the Signal API
 ([signal-cli-rest-api](https://github.com/bbernhard/signal-cli-rest-api)), which holds ODIN's
 Signal account, and ODIN itself, which talks to it. A few things about podman make the commands
 below easier to follow:
@@ -39,80 +41,28 @@ The units, volumes and image tags are listed in the
 [deployment units reference](../reference/deployment-units.md); the
 [architecture](../explanation/architecture.md) explains why it is built this way.
 
-## 1. Create the VM
+## 1. Install podman
 
-All of this happens in the Proxmox web UI.
-
-1. **Download the installer.** Select your node → `local` storage → *ISO Images* →
-   *Download from URL*. Paste the link of the current *amd64* netinst image from
-   <https://www.debian.org/CD/netinst/> (`debian-13.…-amd64-netinst.iso`) and click
-   *Download*. When it has finished, the ISO is listed under *ISO Images*.
-2. **Create the VM** with *Create VM* (top right):
-    - *General*: name `odin`.
-    - *OS*: the Debian 13 ISO; type Linux.
-    - *System*: tick **Qemu Agent**.
-    - *Disks*: **10 GB**.
-    - *CPU*: **1** core.
-    - *Memory*: **1536** MiB.
-    - *Network*: keep the defaults.
-    - *Confirm*: tick *Start after created*, then *Finish*.
-
-    The VM `odin` appears in the tree on the left and starts.
-
-3. **Install Debian** in the VM's *Console*:
-    - Language and keyboard as you like; hostname `odin`.
-    - Leave the **root password empty**. Debian then gives the first user `sudo` rights. Create
-      your own admin user; we call it `tim` here.
-    - Partitioning: *Guided – use entire disk*, *All files in one partition*.
-    - Software selection: untick the desktop environment, tick only **SSH server** and
-      **standard system utilities**.
-
-    The installer finishes with a reboot, and the console shows a `odin login:` prompt.
-
-4. **Log in over SSH** from your computer. To find the VM's IP address, log in on the console
-   and run `ip a`; the address is on the line `inet …` of the network interface (not `lo`).
-
-    ```bash
-    ssh tim@<vm-ip>
-    sudo apt update && sudo apt full-upgrade -y
-    ```
-
-    The upgrade ends without errors and you are back at the prompt `tim@odin:~$`.
-
-## 2. Back up the VM
-
-Soon this VM will hold ODIN's Signal keys. If they are lost, the number has to be registered
-again, which needs the SIM. So we set up the backup now, before there is anything to lose.
-
-1. In Proxmox: *Datacenter* → *Backup* → *Add*.
-2. Fill in:
-    - *Storage*: your backup storage.
-    - *Schedule*: daily, e.g. `03:00`.
-    - *Selection mode*: *Include selected VMs*, and tick `odin`.
-    - *Mode*: **Snapshot**.
-    - *Retention* tab: e.g. keep-daily 7, keep-weekly 4, keep-monthly 6.
-3. Click *Create*.
-
-The job is now listed under *Datacenter* → *Backup*, with the VM `odin` included.
-
-!!! warning "The backups contain ODIN's private keys"
-
-    Keep them on storage that is as private as your password manager.
-
-## 3. Install podman and create the `odin` user
-
-Still logged in as `tim`, install podman and a few helpers:
+Log in to the machine over SSH and bring it up to date:
 
 ```bash
-sudo apt install -y podman systemd-container dbus-user-session qemu-guest-agent git
-sudo systemctl enable --now qemu-guest-agent
+ssh tim@<machine>
+sudo apt update && sudo apt full-upgrade -y
+```
+
+The upgrade ends without errors and you are back at the prompt, e.g. `tim@odin:~$`. Now install
+podman and a few helpers:
+
+```bash
+sudo apt install -y podman systemd-container dbus-user-session git
 podman --version
 ```
 
-The last command prints `podman version 5.…`. (The guest agent lets Proxmox show the VM's IP
-and take consistent backups.)
+The last command prints `podman version 5.…`.
 
-Now create the user that will run ODIN. Nobody logs in as it with a password:
+## 2. Create the `odin` user
+
+Create the user that will run ODIN. Nobody logs in as it with a password:
 
 ```bash
 sudo adduser --disabled-password --comment "ODIN bot" odin
@@ -140,7 +90,7 @@ which `systemctl --user` needs:
 sudo machinectl shell odin@
 ```
 
-The prompt changes to `odin@odin:~$`. **Every command from here on runs in this shell, as
+The prompt changes to `odin@…:~$`. **Every command from here on runs in this shell, as
 `odin`**, unless we say otherwise. Check that it works:
 
 ```bash
@@ -151,7 +101,7 @@ podman info --format '{{.Host.Security.Rootless}}'
 The first command shows `State: running` near the top (press ++q++ to leave it), the second
 prints `true`.
 
-## 4. Install the files
+## 3. Install the files
 
 We take the unit files and the example config from ODIN's repository:
 
@@ -214,7 +164,7 @@ Next scheduled actions:
 
 *Not set up yet* is expected: we have not given ODIN a Signal account or groups yet.
 
-## 5. Start ODIN
+## 4. Start ODIN
 
 Let systemd read the unit files, then start the pod:
 
@@ -256,7 +206,7 @@ Let us make sure it also comes back after a reboot. Leave the `odin` shell with 
 sudo reboot
 ```
 
-Wait a minute, log in again with `ssh tim@<vm-ip>`, and become `odin` again:
+Wait a minute, log in again with `ssh tim@<machine>`, and become `odin` again:
 
 ```bash
 sudo machinectl shell odin@
@@ -265,7 +215,7 @@ podman ps
 
 The same three containers are `Up` again, without us starting anything.
 
-## 6. Turn on automatic updates
+## 5. Turn on automatic updates
 
 ODIN and the Signal API get updates through `podman auto-update`. A timer runs it daily:
 
@@ -278,7 +228,7 @@ The list contains `podman-auto-update.timer` with its next run, around midnight.
 ODIN releases arrive by themselves; see [Upgrade](../how-to/operate/upgrade.md) for what that
 covers.
 
-## 7. Set up ODIN's Signal account
+## 6. Set up ODIN's Signal account
 
 Now ODIN gets its own Signal account and joins the two groups. One command walks us through it:
 
@@ -369,7 +319,7 @@ Abendessen stattfindet. Bestätigt wird mit 👍.
 ✓ ODIN is set up. A running `odin run` notices within 30 s and starts — no restart needed.
 ```
 
-There is nothing to restart: ODIN, which has been waiting since step 5, starts by itself.
+There is nothing to restart: ODIN, which has been waiting since step 4, starts by itself.
 
 !!! note "Finished between Tuesday 18:00 and Wednesday 18:00?"
 
@@ -378,7 +328,7 @@ There is nothing to restart: ODIN, which has been waiting since step 5, starts b
 
 The wizard's options, e.g. to redo a step later, are in the [CLI reference](../reference/cli.md).
 
-## 8. Check the setup
+## 7. Check the setup
 
 Ask ODIN for a summary:
 
@@ -393,15 +343,30 @@ and `Dinner group` (each with the group's name) all start with ✓. The last lin
 ODIN is set up.
 ```
 
-## 9. Back up again
+## 8. Keep a backup
 
-ODIN's keys exist now, so we make the first backup right away instead of waiting for the night.
-In Proxmox: *Datacenter* → *Backup* → select the job → *Run now*.
+ODIN's Signal keys now live in the volume `odin-signal`. If they are lost, the number has to be
+registered again, which needs the SIM. So we recommend backing them up, and the simplest way is
+to back up the whole machine regularly. If it is a VM, your hypervisor probably has this built
+in: on Proxmox VE, for example, a backup job under *Datacenter* → *Backup* covers it.
 
-When the task has finished, the VM's *Backup* tab lists a backup with today's date. The daily
-job takes over from here ([Back up and restore](../how-to/operate/backup-restore.md)).
+To have one copy right away, export the volume:
 
-## 10. See ODIN at work
+```bash
+podman volume export odin-signal --output ~/odin-signal-$(date +%F).tar
+ls -lh ~/odin-signal-*.tar
+```
+
+`ls` lists the tarball. Move it somewhere safe, off this machine.
+
+!!! warning "The backups contain ODIN's private keys"
+
+    Keep them as private as your password manager: encrypted, and never in a repository.
+
+How to restore, and what else is worth backing up:
+[Back up and restore](../how-to/operate/backup-restore.md).
+
+## 9. See ODIN at work
 
 The deployment is done. Let us see ODIN answer in the flat group. On your phone, write in the
 flat group:
@@ -473,9 +438,9 @@ nothing. Then the first question simply comes on Tuesday at 18:00.
 
 ## What we did
 
-We created a Debian VM with a daily backup, ran ODIN and the Signal API in it as rootless podman
-containers that start at boot and update themselves, gave ODIN its own Signal account protected
-by a PIN, added it to the flat group and the dinner group, and watched it answer in the chat.
+We ran ODIN and the Signal API on a Debian machine as rootless podman containers that start at
+boot and update themselves, gave ODIN its own Signal account protected by a PIN, added it to the
+flat group and the dinner group, made a backup of its keys, and watched it answer in the chat.
 
 ## Next steps
 
