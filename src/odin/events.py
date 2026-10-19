@@ -13,18 +13,21 @@ ignoring its own number as well makes sure a reply such as `/text`'s ready-to-co
 can never be taken for a command.
 
 Command replies are not recorded or retried: they are not part of the exactly-once weekly cycle.
+A reply whose reactions matter (`TrackedReply`, the confirmation request of `/cancel`) is tracked
+once sent, like the engine's flat poll, so that reactions to it are stored. If Signal's answer
+cannot be read, it has no timestamp and stays untracked; the command can simply be sent again.
 """
 
 import logging
 
 from odin import commands
 from odin.clock import Clock
-from odin.commands import CommandContext, ui
+from odin.commands import CommandContext, TrackedReply, ui
 from odin.config import Config
 from odin.engine import Account
 from odin.overrides import effective_config
 from odin.reactions import handle_reaction
-from odin.signal import GroupMessage, ReactionEvent, SignalClient
+from odin.signal import GroupMessage, ReactionEvent, SendResponseUnreadable, SignalClient
 from odin.store import Store
 
 logger = logging.getLogger(__name__)
@@ -75,6 +78,21 @@ async def _answer(
         replies = [ui.GENERIC_ERROR]
     for reply in replies:
         try:
-            await client.send_group_message(account.flat_group_id, reply)
+            timestamp = await client.send_group_message(account.flat_group_id, reply)
+        except SendResponseUnreadable as e:
+            logger.warning("sent a command reply, but %s", e)
+            continue
         except Exception:
             logger.exception("sending a command reply failed; not retried")
+            continue
+        if isinstance(reply, TrackedReply):
+            _track(reply, timestamp, store, account)
+
+
+def _track(reply: TrackedReply, timestamp: int, store: Store, account: Account) -> None:
+    # Checked after the send, with no await in between: two replies of the same kind sent at
+    # once both pass the command's own check, and only the first one is kept.
+    if store.tracked_message(reply.week, reply.kind) is not None:
+        logger.warning("not tracking a second %s for week %s", reply.kind, reply.week)
+        return
+    store.track_message(reply.week, reply.kind, account.flat_group_id, account.number, timestamp)

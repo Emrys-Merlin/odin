@@ -3,7 +3,8 @@
 Everything is keyed by the dinner week, identified by the date of its Sunday. The store holds
 
 - the **actions** performed per week (so nothing is ever sent twice),
-- the **tracked messages** whose reactions matter (flat poll, dinner announcement),
+- the **tracked messages** whose reactions matter (flat poll, dinner announcement, the
+  confirmation request of `/cancel`),
 - the current **reactions** on those messages,
 - **settings** chosen at setup time (e.g. the group IDs) and the **setup lock**,
 - config **overrides** made via chat, applied on top of the TOML config (see `odin.overrides`),
@@ -55,6 +56,7 @@ class MessageKind(StrEnum):
 
     FLAT_POLL = "flat_poll"
     DINNER_ANNOUNCEMENT = "dinner_announcement"
+    CANCEL_REQUEST = "cancel_request"  # ODIN's reply to /cancel; a reaction confirms it
 
 
 @dataclass(frozen=True, slots=True)

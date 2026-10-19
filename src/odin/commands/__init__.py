@@ -5,7 +5,8 @@ Every command lives in its own module and is registered in `COMMANDS` below. The
 """
 
 from odin.commands import ui
-from odin.commands.core import Command, CommandContext, CommandError, parse
+from odin.commands.cancel import CANCEL
+from odin.commands.core import Command, CommandContext, CommandError, TrackedReply, parse
 from odin.commands.help import HELP
 from odin.commands.schedule import SCHEDULE
 from odin.commands.settext import RESETTEXT, SETTEXT
@@ -15,7 +16,14 @@ from odin.commands.texts import TEXT, TEXTS
 from odin.commands.vars import VARS
 from odin.commands.version import VERSION
 
-__all__ = ["COMMANDS", "Command", "CommandContext", "CommandError", "handle"]
+__all__ = [
+    "COMMANDS",
+    "Command",
+    "CommandContext",
+    "CommandError",
+    "TrackedReply",
+    "handle",
+]
 
 # The registry, in the order /help lists the commands. One line per command.
 COMMANDS: list[Command] = [
@@ -30,6 +38,7 @@ COMMANDS: list[Command] = [
     SETTIME,
     RESETTIME,
     NUDGE,
+    CANCEL,
     VERSION,
 ]
 
