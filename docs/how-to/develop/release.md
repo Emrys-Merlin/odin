@@ -25,7 +25,16 @@ them afterwards.
 
 ## 2. Merge
 
-Merge the PR once CI is green. On the push to `main`, the **Release** workflow:
+Merge the PR once CI is green. `main` has a linear history: merge commits are disabled for the
+repository, so pick one of the two other merge methods on the PR:
+
+- **Squash and merge** for a small, atomic change — the usual case. The PR becomes one commit on
+  `main`.
+- **Rebase and merge** for a larger feature built from atomic sub-features, where each commit
+  stands on its own (tests pass, one clear message). Its commits land on `main` one by one;
+  the release planner below looks up the PR of each and releases them together.
+
+On the push to `main`, the **Release** workflow:
 
 1. Recreates the three `release:*` labels, in case someone deleted one.
 2. Plans the release with `scripts/release_plan.py`: it takes every commit on `main` since the
