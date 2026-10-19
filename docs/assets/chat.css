@@ -1,0 +1,87 @@
+/* Signal-style chat mocks. Usage: docs/how-to/develop/write-docs.md#chat-mocks */
+
+.chat {
+  --chat-in-bg: var(--md-code-bg-color);
+  --chat-in-fg: var(--md-default-fg-color);
+  --chat-out-bg: #2c6bed;
+  --chat-out-fg: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 36rem;
+  margin: 1.2em 0;
+  padding: 0.8rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.8rem;
+  font-size: 0.75rem;
+}
+
+/* Group name as a header: <div class="chat" data-group="WG" markdown> */
+.chat[data-group]::before {
+  content: attr(data-group);
+  align-self: center;
+  margin-bottom: 0.2rem;
+  color: var(--md-default-fg-color--light);
+  font-weight: 700;
+}
+
+.chat .msg {
+  position: relative;
+  align-self: flex-start;
+  max-width: 85%;
+  padding: 0.45rem 0.75rem;
+  border-radius: 1rem;
+  background: var(--chat-in-bg);
+  color: var(--chat-in-fg);
+  overflow-wrap: anywhere;
+}
+
+/* Sent by the reader (a flatmate), shown on the right. */
+.chat .msg.me {
+  align-self: flex-end;
+  background: var(--chat-out-bg);
+  color: var(--chat-out-fg);
+}
+
+.chat .msg.me code {
+  color: inherit;
+  background: rgb(255 255 255 / 20%);
+}
+
+/* Reserve room below a bubble that carries reactions. */
+.chat .msg:has(.reactions) {
+  margin-bottom: 0.7rem;
+}
+
+.chat .msg > p {
+  margin: 0.3em 0;
+}
+
+.chat .sender {
+  display: block;
+  font-weight: 700;
+  font-size: 0.65rem;
+  color: var(--md-accent-fg-color);
+}
+
+.chat .msg.me .sender {
+  display: none;
+}
+
+.chat .reactions {
+  position: absolute;
+  bottom: -0.8rem;
+  left: 0.8rem;
+  padding: 0 0.4rem;
+  border: 2px solid var(--md-default-bg-color);
+  border-radius: 1rem;
+  background: var(--chat-in-bg);
+  color: var(--md-default-fg-color);
+  font-size: 0.65rem;
+  line-height: 1.4;
+}
+
+.chat .msg.me .reactions {
+  left: auto;
+  right: 0.8rem;
+}
