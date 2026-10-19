@@ -3,7 +3,7 @@
 # published to the VM's network.
 #
 # Quadlet turns this file into odin-pod.service. Needs podman >= 5.0 (Debian 13 has 5.4).
-# Install: see docs/runbooks/deploy.md.
+# Install: see https://emrys-merlin.github.io/odin/tutorials/first-deployment/.
 
 [Unit]
 Description=ODIN pod (Signal API + bot)

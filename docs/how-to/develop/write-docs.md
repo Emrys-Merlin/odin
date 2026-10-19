@@ -40,6 +40,9 @@ quadrant line (copy it from a page in the same folder).
   relative to the repo root) keeps the page in sync with the file. A missing file fails the
   build.
 - **Links are relative** (`../reference/cli.md`), so the strict build can check them.
+- **Only what is specific to ODIN.** Generic host setup (creating a VM, installing Debian,
+  hypervisor settings) is not documented here; pages start from a running machine and link to
+  upstream docs where needed.
 
 ## Chat mocks
 

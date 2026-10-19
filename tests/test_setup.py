@@ -298,7 +298,7 @@ def test_registered_between_preflight_and_register_is_explained(
     assert code == 1
     assert len(calls(admin, "register")) == 1
     assert "cannot force a new registration" in terminal.text
-    assert "signal-registration.md" in terminal.text
+    assert "how-to/operate/re-register-number/" in terminal.text
 
 
 # --- steps 1-3: captcha, register, code ---------------------------------------------------------
