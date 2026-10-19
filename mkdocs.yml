@@ -12,6 +12,8 @@ edit_uri: edit/main/docs/
 exclude_docs: |
   GOALS.md
   runbooks/
+  # Fragments of scripts/gen_reference.py, only included into the reference pages.
+  reference/_generated/
 
 theme:
   name: material
