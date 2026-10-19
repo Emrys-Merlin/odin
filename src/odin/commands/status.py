@@ -44,6 +44,7 @@ PENDING = "⏳"
 OFF = "–"
 ONLY_IF_UNCONFIRMED = "nur falls noch kein {emoji}"
 NO_DINNER = "kein Essen"
+ASKED_AGAIN = "nochmal gefragt"
 REQUESTED = "🛑 Absage per /cancel angefragt ({at})"
 AWAITING = "wartet auf {emoji}"
 CONFIRMED = "bestätigt, geht gleich raus"
@@ -107,7 +108,7 @@ class _WeekStatus:
     @property
     def cancel_confirmed(self) -> bool:
         """Whether a /cancel request of this week has its confirming reaction."""
-        return self._count(MessageKind.CANCEL_REQUEST) > 0
+        return (self._count(MessageKind.CANCEL_REQUEST) or 0) > 0
 
     @property
     def cancel_pending(self) -> bool:
@@ -115,17 +116,18 @@ class _WeekStatus:
         return self.cancel_confirmed and self.outcome(Action.CANCELLATION) is None
 
     def confirmations(self) -> int:
-        return self._count(MessageKind.FLAT_POLL)
+        return self._count(MessageKind.FLAT_POLL) or 0
 
     def lines(self) -> list[str]:
         schedule = self.config.schedule
-        emoji = self.config.emoji
 
         flat_ask = self._step(
             Action.FLAT_ASK, FLAT_ASK, "Frage an die WG gesendet", schedule.flat_ask
         )
         if self.asked:
-            flat_ask += f" – {self.confirmations()}× {emoji}"
+            if self.outcome(Action.FLAT_ASK_RETRY) is Outcome.SENT:
+                flat_ask += f", {ASKED_AGAIN} ({self._sent_at(Action.FLAT_ASK_RETRY)})"
+            flat_ask += " – " + self._reactions(MessageKind.FLAT_POLL)
 
         if schedule.nudge is None and self.outcome(Action.NUDGE) is None:
             nudge = f"{OFF} {NUDGE}: aus"
@@ -140,7 +142,7 @@ class _WeekStatus:
                 cancellation += f" – {BY_CANCEL}"
         if self.outcome(Action.ANNOUNCEMENT) is Outcome.SENT:
             decision = f"{SENT} Einladung gesendet ({self._sent_at(Action.ANNOUNCEMENT)})"
-            decision += f" – {self._count(MessageKind.DINNER_ANNOUNCEMENT)}× {emoji}"
+            decision += " – " + self._reactions(MessageKind.DINNER_ANNOUNCEMENT)
             if cancellation:  # cancelled via /cancel after the announcement
                 decisions.append(cancellation)
         elif self.cancelled:
@@ -154,7 +156,8 @@ class _WeekStatus:
         if request is not None and self.outcome(Action.CANCELLATION) is None:
             at = datetime.fromtimestamp(request.timestamp / 1000, UTC)
             line = REQUESTED.format(at=self._local(at))
-            state = CONFIRMED if self.cancel_confirmed else AWAITING.format(emoji=emoji)
+            awaiting = AWAITING.format(emoji=self.config.emoji)
+            state = CONFIRMED if self.cancel_confirmed else awaiting
             decisions.append(f"{line} – {state}")
 
         if self.outcome(Action.TALLY) is None and self.decided and not self.dinner_on:
@@ -184,10 +187,17 @@ class _WeekStatus:
         local = at.astimezone(self.config.timezone)
         return f"{ui.WEEKDAYS_SHORT[local.weekday()]} {local:%H:%M}"
 
-    def _count(self, kind: MessageKind) -> int:
+    def _reactions(self, kind: MessageKind) -> str:
+        """``2× 👍``, or that they cannot be counted: the message was sent but is not tracked."""
+        count = self._count(kind)
+        emoji = self.config.emoji
+        return ui.UNTRACKED.format(emoji=emoji) if count is None else f"{count}× {emoji}"
+
+    def _count(self, kind: MessageKind) -> int | None:
+        """The reactions on the week's message of `kind`; None if it is not tracked."""
         message = self.store.tracked_message(self.week, kind)
         if message is None:
-            return 0
+            return None
         return reactions.count_confirmations(self.store, message, self.config.emoji)
 
 

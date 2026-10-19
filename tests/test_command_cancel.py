@@ -374,6 +374,39 @@ def test_a_failed_cancellation_is_retried_and_sent_once(world: World) -> None:
     assert world.dinner_texts() == [CANCELLATION]
 
 
+def test_a_cancelled_week_does_not_ask_an_untracked_flat_poll_again(world: World) -> None:
+    world.run(local(5, 0), local(6, 18))
+    # The flat ask is posted untracked, and the retry of it fails once.
+    world.client.fail_sends(SendResponseUnreadable("{}"), delivered=True)
+    world.client.fail_sends(ConnectionError("unreachable"))
+    world.tick(local(6, 18))
+    assert world.store.tracked_message(WEEK, MessageKind.FLAT_POLL) is None
+    world.cancel(local(6, 18, 5))
+    world.react(local(6, 18, 10))
+    world.run(local(6, 18, 15), local(12, 0))
+
+    assert world.dinner_texts() == [CANCELLATION]
+    assert world.flat_texts() == ["ASK 👍 bis 18:00"]
+    assert Action.FLAT_ASK_RETRY not in world.outcomes()
+
+
+def test_a_cancelled_week_gets_no_untracked_announcement_notice(world: World) -> None:
+    world.run(local(5, 0), local(6, 19))
+    world.react(local(6, 19), MessageKind.FLAT_POLL, reactor=ANNA)
+    world.run(local(6, 19), local(7, 18))
+    # The announcement is posted untracked, and the notice about it fails once.
+    world.client.fail_sends(SendResponseUnreadable("{}"), delivered=True)
+    world.client.fail_sends(ConnectionError("unreachable"))
+    world.tick(local(7, 18))
+    world.cancel(local(7, 18, 5))
+    world.react(local(7, 18, 10))
+    world.run(local(7, 18, 15), local(12, 0))
+
+    assert world.dinner_texts() == ["ESSEN 18:00\n\nDINNER 18:00", CANCELLATION]
+    assert Action.ANNOUNCEMENT_NOTICE not in world.outcomes()
+    assert world.outcomes()[Action.TALLY] is Outcome.SKIPPED
+
+
 # --- /status ------------------------------------------------------------------------------------
 
 

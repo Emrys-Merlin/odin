@@ -63,7 +63,8 @@ poll. As soon as anyone in the flat group reacts with it (the requester too), OD
 normal bilingual cancellation template to the dinner group on its next tick and records it as the
 week's cancellation, so the dinner group never gets two. Before the flat deadline it replaces the
 decision (an open flat ask or nudge is skipped); after an announcement it follows it, and an open
-tally is skipped. A request that nobody confirms does nothing; it lapses when the week's dinner
+tally is skipped. A cancelled week needs no reactions any more, so an untracked flat poll is not
+asked again and an untracked announcement gets no notice. A request that nobody confirms does nothing; it lapses when the week's dinner
 starts. `/cancel` is refused once the cancellation went out (or was skipped as too late), for a
 week dropped by a dinner weekday change, and while a request of this week is open.
 
@@ -82,6 +83,11 @@ week dropped by a dinner weekday change, and while a request of this week is ope
   The one exception: a send that times out while waiting for Signal's answer is retried, though
   it may have gone out (at least once rather than at most once — a missing cancellation is worse
   than a duplicate). A send that Signal accepted is recorded even if its answer can't be read.
+- If that answer is unreadable for the flat poll or the announcement, ODIN cannot tell which
+  message the 👍 belong to. It then tells the flat group once (a German notice, not a template):
+  for the flat poll it asks again, and the 👍 on that new message count instead; for the
+  announcement it warns that the tally will show 0, so the 👍 must be counted by hand.
+  `/status` shows such a message as "nicht zählbar".
 - The scheduler is a *reconcile loop*: on every tick it computes what should have happened by now
   from config + state, and does what is missing. Restarts and missed ticks are therefore safe.
 - **Catch-up:** an action that is late (bot was down) is still performed while within a grace

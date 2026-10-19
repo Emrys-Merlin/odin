@@ -388,13 +388,154 @@ def test_tracked_send_with_unreadable_response_is_recorded_untracked(
 ) -> None:
     bot.tick(local(6, 17, 45))
     bot.client.fail_sends(SendResponseUnreadable("{}"), delivered=True)
+    bot.client.fail_sends(ConnectionError("down"))  # the retry, see below
     assert bot.tick(local(6, 18)) == [Step(WEEK, Action.FLAT_ASK, Outcome.SENT)]
     assert bot.store.tracked_message(WEEK, MessageKind.FLAT_POLL) is None
-    [error] = [r for r in caplog.records if r.levelname == "ERROR"]
+    [error] = [r for r in caplog.records if r.levelname == "ERROR" and r.exc_info is None]
     assert "flat_ask" in error.getMessage()
     assert "reactions cannot be counted" in error.getMessage()
-    bot.tick(local(6, 18, 15))
-    assert bot.texts() == ["ASK 👍 bis 18:00"]
+    assert bot.texts()[0] == "ASK 👍 bis 18:00"
+
+
+# --- Untracked messages -------------------------------------------------------------------------
+
+
+def test_an_untracked_flat_poll_is_asked_again_once(bot: Bot) -> None:
+    bot.tick(local(6, 17, 45))
+    bot.client.fail_sends(SendResponseUnreadable("{}"), delivered=True)
+    assert bot.tick(local(6, 18)) == [
+        Step(WEEK, Action.FLAT_ASK, Outcome.SENT),
+        Step(WEEK, Action.FLAT_ASK_RETRY, Outcome.SENT),
+    ]
+    [_, retry] = bot.log
+    assert retry.group == FLAT
+    assert retry.text.startswith("⚠️ Meine Frage zum Essen am Sonntag")
+    assert "bis Mittwoch 18:00" in retry.text
+    # The retry is the week's flat poll: confirming on it works as usual.
+    poll = bot.store.tracked_message(WEEK, MessageKind.FLAT_POLL)
+    assert poll is not None
+    assert poll.timestamp == bot.client.sent[1].timestamp
+    bot.react(MessageKind.FLAT_POLL, ANNA, at=local(6, 20))
+    bot.run(local(6, 18, 15), local(12, 0))
+    assert bot.texts() == [
+        "ASK 👍 bis 18:00",
+        "⚠️ Meine Frage zum Essen am Sonntag ist rausgegangen, aber ich kann die 👍 darauf "
+        "nicht zählen (Signal hat mir nicht gesagt, welche Nachricht es war).",
+        "ESSEN 18:00",
+        "TALLY 0 x 👍",
+    ]
+    assert bot.outcomes()[Action.NUDGE] is Outcome.SKIPPED
+
+
+def test_an_untracked_flat_poll_is_asked_again_once_across_restarts(store: Store) -> None:
+    first = Bot(store)
+    first.tick(local(6, 17, 45))
+    first.client.fail_sends(SendResponseUnreadable("{}"), delivered=True)
+    first.tick(local(6, 18))
+    assert len(first.log) == 2
+    second = Bot(store, first_timestamp=2_000)  # restarted
+    second.run(local(6, 18, 15), local(12, 0))
+    assert second.texts() == ["NUDGE 18:00", "ABGESAGT"]
+
+
+def test_a_failed_retry_is_tried_again_without_holding_up_the_week(bot: Bot) -> None:
+    bot.tick(local(6, 17, 45))
+    bot.client.fail_sends(SendResponseUnreadable("{}"), delivered=True)
+    bot.client.fail_sends(ConnectionError("down"))  # the retry fails
+    assert bot.tick(local(6, 18)) == [Step(WEEK, Action.FLAT_ASK, Outcome.SENT)]
+    assert bot.tick(local(6, 18, 15)) == [Step(WEEK, Action.FLAT_ASK_RETRY, Outcome.SENT)]
+    assert len(bot.log) == 2
+
+
+def test_a_retry_that_still_fails_at_the_nudge_does_not_stop_it(bot: Bot) -> None:
+    bot.tick(local(6, 17, 45))
+    bot.client.fail_sends(SendResponseUnreadable("{}"), delivered=True)
+    bot.client.fail_sends(ConnectionError("down"))
+    bot.tick(local(6, 18))
+    # Signal is down until the nudge; then the retry fails once more, and the nudge still goes out.
+    bot.client.failures = 1
+    assert bot.tick(local(7, 12)) == [Step(WEEK, Action.NUDGE, Outcome.SENT)]
+    assert bot.tick(local(7, 12, 15)) == [Step(WEEK, Action.FLAT_ASK_RETRY, Outcome.SENT)]
+    [_, nudge, retry] = bot.texts()
+    assert nudge == "NUDGE 18:00"
+    assert retry.startswith("⚠️ Meine Frage")
+
+
+def test_a_retry_past_the_flat_deadline_is_skipped(bot: Bot) -> None:
+    bot.tick(local(6, 17, 45))
+    bot.client.fail_sends(SendResponseUnreadable("{}"), delivered=True)
+    bot.client.fail_sends(ConnectionError("down"))
+    bot.tick(local(6, 18))
+    # Signal is down until after the flat deadline; the decision catches up at 18:15.
+    bot.client.failures = 1000
+    bot.run(local(6, 18, 15), local(7, 18, 15))
+    bot.client.failures = 0
+    bot.tick(local(7, 18, 15))
+    assert bot.outcomes()[Action.FLAT_ASK_RETRY] is Outcome.SKIPPED
+    assert bot.texts() == ["ASK 👍 bis 18:00", "ABGESAGT"]
+
+
+def test_an_unreadable_retry_is_not_retried(bot: Bot) -> None:
+    bot.tick(local(6, 17, 45))
+    bot.client.fail_sends(SendResponseUnreadable("{}"), delivered=True, times=2)
+    bot.run(local(6, 18), local(7, 11))
+    assert bot.outcomes() == {Action.FLAT_ASK: Outcome.SENT, Action.FLAT_ASK_RETRY: Outcome.SENT}
+    assert bot.store.tracked_message(WEEK, MessageKind.FLAT_POLL) is None
+    assert len(bot.log) == 2
+
+
+def test_a_tracked_flat_poll_is_not_asked_again(bot: Bot) -> None:
+    bot.run(local(5, 0), local(12, 0))
+    assert Action.FLAT_ASK_RETRY not in bot.outcomes()
+    assert Action.ANNOUNCEMENT_NOTICE not in bot.outcomes()
+
+
+def confirm(bot: Bot) -> None:
+    bot.run(local(5, 0), local(6, 18, 15))
+    bot.react(MessageKind.FLAT_POLL, ANNA, at=local(6, 20))
+    bot.run(local(6, 18, 15), local(7, 18))
+
+
+def test_an_untracked_announcement_is_told_to_the_flat_group_once(bot: Bot) -> None:
+    confirm(bot)
+    bot.client.fail_sends(SendResponseUnreadable("{}"), delivered=True)
+    assert bot.tick(local(7, 18)) == [
+        Step(WEEK, Action.ANNOUNCEMENT, Outcome.SENT),
+        Step(WEEK, Action.ANNOUNCEMENT_NOTICE, Outcome.SENT),
+    ]
+    notice = bot.log[-1]
+    assert notice.group == FLAT
+    assert notice.text == (
+        "⚠️ Die Einladung zum Essen am Sonntag ist in der Essensgruppe rausgegangen, aber ich "
+        "kann die 👍 darauf nicht zählen (Signal hat mir nicht gesagt, welche Nachricht es war). "
+        "Die Zählung am Freitag um 14:00 zeigt deshalb 0 – bitte zählt die 👍 unter der "
+        "Einladung selbst."
+    )
+    bot.run(local(7, 18, 15), local(12, 0))
+    assert bot.texts()[-1] == "TALLY 0 x 👍"
+    assert len(bot.log) == 4
+
+
+def test_an_untracked_announcement_is_told_once_across_restarts(store: Store) -> None:
+    first = Bot(store)
+    confirm(first)
+    first.client.fail_sends(SendResponseUnreadable("{}"), delivered=True)
+    first.tick(local(7, 18))
+    second = Bot(store, first_timestamp=2_000)  # restarted
+    second.run(local(7, 18, 15), local(12, 0))
+    assert second.texts() == ["TALLY 0 x 👍"]
+
+
+def test_a_failed_announcement_notice_does_not_hold_up_the_tally(bot: Bot) -> None:
+    confirm(bot)
+    bot.client.fail_sends(SendResponseUnreadable("{}"), delivered=True)
+    bot.client.fail_sends(ConnectionError("down"))  # the notice fails
+    bot.tick(local(7, 18))
+    bot.client.failures = 1000  # Signal is down until the tally
+    bot.run(local(7, 18, 15), local(9, 14))
+    bot.client.failures = 1
+    assert bot.tick(local(9, 14)) == [Step(WEEK, Action.TALLY, Outcome.SENT)]
+    assert bot.tick(local(9, 14, 15)) == [Step(WEEK, Action.ANNOUNCEMENT_NOTICE, Outcome.SENT)]
 
 
 # --- DST ----------------------------------------------------------------------------------------

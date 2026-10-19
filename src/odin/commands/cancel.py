@@ -26,9 +26,7 @@ CONFIRM = (
     "Das Essen am {day} absagen? Dann reagiert mit {emoji} auf diese Nachricht – "
     "ich schicke der Essensgruppe dann diese Absage:"
 )
-ALREADY_ANNOUNCED = (
-    "Die Einladung ist schon raus ({count}× {emoji}); die Absage kommt dann hinterher."
-)
+ALREADY_ANNOUNCED = "Die Einladung ist schon raus ({reactions}); die Absage kommt dann hinterher."
 LAPSES = "Ohne {emoji} passiert nichts; die Anfrage verfällt, wenn das Essen beginnt ({dinner})."
 ALREADY_CANCELLED = "Das Essen am {day} ist schon abgesagt (Absage gesendet {at})."
 CANCELLATION_SKIPPED = (
@@ -75,10 +73,12 @@ def run(ctx: CommandContext, args: str) -> list[str]:
     lines = [CONFIRM.format(day=day, emoji=config.emoji)]
     announcement = store.tracked_message(week, MessageKind.DINNER_ANNOUNCEMENT)
     if store.action_outcome(week, Action.ANNOUNCEMENT) is Outcome.SENT:
-        count = (
-            0 if announcement is None else count_confirmations(store, announcement, config.emoji)
-        )
-        lines.append(ALREADY_ANNOUNCED.format(count=count, emoji=config.emoji))
+        if announcement is None:
+            reactions = ui.UNTRACKED.format(emoji=config.emoji)
+        else:
+            count = count_confirmations(store, announcement, config.emoji)
+            reactions = f"{count}× {config.emoji}"
+        lines.append(ALREADY_ANNOUNCED.format(reactions=reactions))
     dinner = config.when(config.schedule.dinner, week)
     lines.append(LAPSES.format(emoji=config.emoji, dinner=local(dinner)))
     cancellation = config.templates.cancellation.render(**config.placeholder_values())

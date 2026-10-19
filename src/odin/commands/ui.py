@@ -11,6 +11,8 @@ from odin.config import WeeklyTime
 HELP_HINT = "/help zeigt alle Befehle."
 UNKNOWN_COMMAND = "Unbekannter Befehl {command} – " + HELP_HINT
 GENERIC_ERROR = "Da ist etwas schiefgegangen – bitte später nochmal versuchen."
+# Reactions on a message that was sent but is not tracked (its timestamp could not be read).
+UNTRACKED = "{emoji} nicht zählbar"
 
 WEEKDAYS_SHORT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 
