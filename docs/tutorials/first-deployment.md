@@ -15,7 +15,7 @@ account.
 
 - A **Debian 13 machine** that runs all the time, with internet access. A small VM or a home
   server is ideal; ODIN needs about 1 CPU core, 1.5 GB of memory and 10 GB of disk. We assume a
-  fresh install with an SSH server and a user with `sudo` rights; we call that user `tim` here.
+  fresh install with an SSH server and a user with `sudo` rights; we call that user `admin` here.
 - A **SIM card for ODIN's own phone number**, in any phone, to receive one verification code.
 - **Your own phone with Signal**, already in the flat group and the dinner group.
 - A **desktop browser** and your **password manager**.
@@ -46,11 +46,11 @@ The units, volumes and image tags are listed in the
 Log in to the machine over SSH and bring it up to date:
 
 ```bash
-ssh tim@<machine>
+ssh admin@<machine>
 sudo apt update && sudo apt full-upgrade -y
 ```
 
-The upgrade ends without errors and you are back at the prompt, e.g. `tim@odin:~$`. Now install
+The upgrade ends without errors and you are back at the prompt, e.g. `admin@debian:~$`. Now install
 podman and a few helpers:
 
 ```bash
@@ -200,13 +200,13 @@ That is what we want to see: ODIN runs and waits for its setup. Press ++ctrl+c++
 following the log; ODIN keeps running.
 
 Let us make sure it also comes back after a reboot. Leave the `odin` shell with `exit`, then, as
-`tim`:
+`admin`:
 
 ```bash
 sudo reboot
 ```
 
-Wait a minute, log in again with `ssh tim@<machine>`, and become `odin` again:
+Wait a minute, log in again with `ssh admin@<machine>`, and become `odin` again:
 
 ```bash
 sudo machinectl shell odin@
