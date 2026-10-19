@@ -181,6 +181,31 @@ def test_after_dinner_it_shows_the_next_week(store: Store) -> None:
     assert lines[1] == "⏳ Frage an die WG: Di 18:00"
 
 
+def test_an_untracked_flat_poll(store: Store) -> None:
+    store.record_action(WEEK, Action.FLAT_ASK, ASK_TIME)  # sent, but its response was unreadable
+    lines = status(store, local(13, 20))
+    assert lines[1] == "✅ Frage an die WG gesendet (Di 18:00) – 👍 nicht zählbar"
+    assert lines[-1] == "Nächste Aktion: Erinnerung, Mi 12:00 (nur falls noch kein 👍)"
+
+
+def test_a_flat_poll_asked_again(store: Store) -> None:
+    store.record_action(WEEK, Action.FLAT_ASK, ASK_TIME)
+    store.record_action(WEEK, Action.FLAT_ASK_RETRY, local(13, 18, 15))
+    retry = store.track_message(WEEK, MessageKind.FLAT_POLL, FLAT, BOT, 1_001)
+    store.set_reaction(retry, ANNA, "👍", local(13, 19))
+    lines = status(store, local(13, 20))
+    assert lines[1] == "✅ Frage an die WG gesendet (Di 18:00), nochmal gefragt (Di 18:15) – 1× 👍"
+    assert lines[-1] == "Nächste Aktion: Entscheidung, Mi 18:00"
+
+
+def test_an_untracked_announcement(store: Store) -> None:
+    ask(store, ANNA)
+    skip(store, Action.NUDGE, local(14, 12))
+    store.record_action(WEEK, Action.ANNOUNCEMENT, local(14, 18))
+    store.record_action(WEEK, Action.ANNOUNCEMENT_NOTICE, local(14, 18))
+    assert status(store, local(15, 10))[3] == "✅ Einladung gesendet (Mi 18:00) – 👍 nicht zählbar"
+
+
 def test_with_the_nudge_disabled(store: Store) -> None:
     ask(store)
     assert status(store, local(13, 20), NO_NUDGE) == [

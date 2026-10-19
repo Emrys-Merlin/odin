@@ -42,6 +42,8 @@ PENDING = "⏳"
 OFF = "–"
 ONLY_IF_UNCONFIRMED = "nur falls noch kein {emoji}"
 NO_DINNER = "kein Essen"
+UNTRACKED = "{emoji} nicht zählbar"
+ASKED_AGAIN = "nochmal gefragt"
 PENDING_DINNER = "Ab {weekday} {first:%d.%m.} ist das Essen {weekdays} um {time:%H:%M}"
 
 
@@ -94,17 +96,18 @@ class _WeekStatus:
         return self.outcome(Action.ANNOUNCEMENT) is Outcome.SENT
 
     def confirmations(self) -> int:
-        return self._count(MessageKind.FLAT_POLL)
+        return self._count(MessageKind.FLAT_POLL) or 0
 
     def lines(self) -> list[str]:
         schedule = self.config.schedule
-        emoji = self.config.emoji
 
         flat_ask = self._step(
             Action.FLAT_ASK, FLAT_ASK, "Frage an die WG gesendet", schedule.flat_ask
         )
         if self.asked:
-            flat_ask += f" – {self.confirmations()}× {emoji}"
+            if self.outcome(Action.FLAT_ASK_RETRY) is Outcome.SENT:
+                flat_ask += f", {ASKED_AGAIN} ({self._sent_at(Action.FLAT_ASK_RETRY)})"
+            flat_ask += " – " + self._reactions(MessageKind.FLAT_POLL)
 
         if schedule.nudge is None and self.outcome(Action.NUDGE) is None:
             nudge = f"{OFF} {NUDGE}: aus"
@@ -113,7 +116,7 @@ class _WeekStatus:
 
         if self.outcome(Action.ANNOUNCEMENT) is Outcome.SENT:
             decision = f"{SENT} Einladung gesendet ({self._sent_at(Action.ANNOUNCEMENT)})"
-            decision += f" – {self._count(MessageKind.DINNER_ANNOUNCEMENT)}× {emoji}"
+            decision += " – " + self._reactions(MessageKind.DINNER_ANNOUNCEMENT)
         elif self.outcome(Action.CANCELLATION) is Outcome.SENT:
             decision = f"{CANCELLED} Absage gesendet ({self._sent_at(Action.CANCELLATION)})"
         elif self.decided:
@@ -145,10 +148,17 @@ class _WeekStatus:
         local = at.astimezone(self.config.timezone)
         return f"{ui.WEEKDAYS_SHORT[local.weekday()]} {local:%H:%M}"
 
-    def _count(self, kind: MessageKind) -> int:
+    def _reactions(self, kind: MessageKind) -> str:
+        """``2× 👍``, or that they cannot be counted: the message was sent but is not tracked."""
+        count = self._count(kind)
+        emoji = self.config.emoji
+        return UNTRACKED.format(emoji=emoji) if count is None else f"{count}× {emoji}"
+
+    def _count(self, kind: MessageKind) -> int | None:
+        """The reactions on the week's message of `kind`; None if it is not tracked."""
         message = self.store.tracked_message(self.week, kind)
         if message is None:
-            return 0
+            return None
         return reactions.count_confirmations(self.store, message, self.config.emoji)
 
 

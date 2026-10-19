@@ -17,8 +17,18 @@ next tick retries it and later steps never overtake it.
 **Sending is at least once.** A send counts as failed only if Signal did not accept it: an HTTP
 error, no connection, or a timeout. A send that Signal accepted but whose response cannot be read
 (no timestamp) is recorded as sent — it was posted. Its message cannot be tracked then, so the
-reactions to it are not counted (an untracked flat poll has no confirmations, so the week is
-cancelled); that is logged as an error. A timeout while waiting for the response is the one case
+reactions to it are not counted; that is logged as an error, and the flat group is told once (see
+`odin.notices`), right after the step, as an action of its own:
+
+- an untracked **flat poll** is asked again (`FLAT_ASK_RETRY`): the new message is tracked as the
+  week's flat poll, so the nudge and the decision count the reactions on it. It is due until the
+  flat deadline; if it is not out by then (or its response is unreadable too), the reactions
+  count as none, so the week is cancelled.
+- an untracked **announcement** gets a notice (`ANNOUNCEMENT_NOTICE`) that the tally will show 0,
+  due until dinner starts.
+
+A notice whose send fails is retried on the next tick, but never holds up the steps after it.
+A timeout while waiting for the response is the one case
 in which a message may be posted twice: it is retried, because a message that never went out —
 most of all the cancellation — is worse than a duplicate. The send timeout is long (see
 `odin.signal.rest`), so this stays rare.
@@ -44,6 +54,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
+from odin import notices
 from odin.config import Config, WeeklyTime
 from odin.reactions import count_confirmations
 from odin.signal import SendResponseUnreadable, SignalClient
@@ -289,6 +300,13 @@ class _Week:
             else:
                 self._skip(Action.FLAT_ASK)
         asked = self.store.action_outcome(self.week, Action.FLAT_ASK) is Outcome.SENT
+        if asked:
+            await self._notify_untracked(
+                Action.FLAT_ASK,
+                MessageKind.FLAT_POLL,
+                Action.FLAT_ASK_RETRY,
+                self.config.schedule.flat_deadline,
+            )
 
         # 2. Nudge, if enabled.
         if self.config.schedule.nudge is not None and not self._recorded(Action.NUDGE):
@@ -318,6 +336,13 @@ class _Week:
             else:
                 self._skip(decision)
         on = self.store.action_outcome(self.week, Action.ANNOUNCEMENT) is Outcome.SENT
+        if on:
+            await self._notify_untracked(
+                Action.ANNOUNCEMENT,
+                MessageKind.DINNER_ANNOUNCEMENT,
+                Action.ANNOUNCEMENT_NOTICE,
+                self.config.schedule.dinner,
+            )
 
         # 4. Tally, if dinner is on.
         if not self._recorded(Action.TALLY):
@@ -353,6 +378,41 @@ class _Week:
         group = self.account.dinner_group_id if to_dinner else self.account.flat_group_id
         template = getattr(self.config.templates, action.value)
         text = template.render(**self.config.placeholder_values(), **values)
+        if not await self._post(action, group, text, track):
+            raise _SendFailed
+
+    async def _notify_untracked(
+        self, sent: Action, kind: MessageKind, notice: Action, expiry: WeeklyTime
+    ) -> None:
+        """Tell the flat group, once, that `sent` went out but its message is not tracked.
+
+        Due from when `sent` was recorded until `expiry` of this week, cut short by the catch-up
+        grace. A failed notice is retried next tick, but never holds up the weekly steps after it.
+        """
+        if self.store.tracked_message(self.week, kind) is not None or self._recorded(notice):
+            return
+        due_now: bool | None = False
+        if not self.over:
+            start = self.store.action_time(self.week, sent)
+            assert start is not None
+            end = self.config.when(expiry, self.week).astimezone(UTC)
+            due_now = _window(self.config, notice.value, (notice,), start, end).due(self.now)
+        if due_now is None:
+            return
+        if not due_now:
+            self._skip(notice)
+            return
+        # The retry is the week's flat poll from now on; the announcement stays untracked.
+        if notice is Action.FLAT_ASK_RETRY:
+            text, track = notices.FLAT_ASK_RETRY, MessageKind.FLAT_POLL
+        else:
+            text, track = notices.ANNOUNCEMENT_NOTICE, None
+        group = self.account.flat_group_id
+        await self._post(notice, group, notices.render(text, self.config), track)
+
+    async def _post(self, action: Action, group: str, text: str, track: MessageKind | None) -> bool:
+        """Send `text` and record `action` as sent. Returns False if the send failed; nothing
+        is recorded then."""
         timestamp: int | None
         try:
             timestamp = await self.client.send_group_message(group, text)
@@ -369,13 +429,14 @@ class _Week:
                 )
         except Exception:
             logger.exception("sending %s for week %s failed; retrying next tick", action, self.week)
-            raise _SendFailed from None
+            return False
         with self.store.transaction():
             self.store.record_action(self.week, action, self.now)
             if track is not None and timestamp is not None:
                 self.store.track_message(self.week, track, group, self.account.number, timestamp)
         logger.info("sent %s for week %s", action, self.week)
         self.steps.append(Step(self.week, action, Outcome.SENT))
+        return True
 
     def _skip(self, action: Action) -> None:
         self.store.record_action(self.week, action, self.now, Outcome.SKIPPED)
