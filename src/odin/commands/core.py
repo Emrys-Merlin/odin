@@ -8,10 +8,11 @@ which imports the command modules for its registry.
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
+from typing import Self
 
 from odin.config import Config
-from odin.store import Store
+from odin.store import MessageKind, Store
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,23 @@ class CommandContext:
     now: datetime
     sender: str  # number or UUID
     sender_name: str | None
+
+
+class TrackedReply(str):
+    """A reply whose reactions matter: once sent, it is tracked as message `kind` of `week`.
+
+    Otherwise it is a plain string, so commands keep returning ``list[str]``. A week has at most
+    one tracked message per kind; a later one is sent but not tracked (see `odin.events`).
+    """
+
+    week: date
+    kind: MessageKind
+
+    def __new__(cls, text: str, week: date, kind: MessageKind) -> Self:
+        reply = super().__new__(cls, text)
+        reply.week = week
+        reply.kind = kind
+        return reply
 
 
 class CommandError(Exception):

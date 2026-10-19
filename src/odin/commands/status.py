@@ -2,10 +2,12 @@
 
 Reads the store only; never writes. Works on the effective config (`ctx.config`), plus a pending
 dinner weekday change (`odin.overrides.pending_dinner`), which takes over at this week's dinner.
+A week cancelled via /cancel shows the cancellation (after the announcement, if that was sent),
+and an open cancel request shows whether it is confirmed yet.
 """
 
 import dataclasses
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING
 
 # odin.engine (and odin.overrides, which imports it) is imported inside the functions and
@@ -42,6 +44,11 @@ PENDING = "⏳"
 OFF = "–"
 ONLY_IF_UNCONFIRMED = "nur falls noch kein {emoji}"
 NO_DINNER = "kein Essen"
+REQUESTED = "🛑 Absage per /cancel angefragt ({at})"
+AWAITING = "wartet auf {emoji}"
+CONFIRMED = "bestätigt, geht gleich raus"
+BY_CANCEL = "per /cancel"
+CANCELLATION_NOW = "Absage an die Essensgruppe, gleich"
 PENDING_DINNER = "Ab {weekday} {first:%d.%m.} ist das Essen {weekdays} um {time:%H:%M}"
 
 
@@ -90,8 +97,22 @@ class _WeekStatus:
         )
 
     @property
+    def cancelled(self) -> bool:
+        return self.outcome(Action.CANCELLATION) is Outcome.SENT
+
+    @property
     def dinner_on(self) -> bool:
-        return self.outcome(Action.ANNOUNCEMENT) is Outcome.SENT
+        return self.outcome(Action.ANNOUNCEMENT) is Outcome.SENT and not self.cancelled
+
+    @property
+    def cancel_confirmed(self) -> bool:
+        """Whether a /cancel request of this week has its confirming reaction."""
+        return self._count(MessageKind.CANCEL_REQUEST) > 0
+
+    @property
+    def cancel_pending(self) -> bool:
+        """A confirmed /cancel whose cancellation the engine sends on its next tick."""
+        return self.cancel_confirmed and self.outcome(Action.CANCELLATION) is None
 
     def confirmations(self) -> int:
         return self._count(MessageKind.FLAT_POLL)
@@ -111,15 +132,30 @@ class _WeekStatus:
         else:
             nudge = self._step(Action.NUDGE, NUDGE, "Erinnerung gesendet", schedule.nudge_time)
 
+        decisions = []
+        cancellation = ""
+        if self.cancelled:
+            cancellation = f"{CANCELLED} Absage gesendet ({self._sent_at(Action.CANCELLATION)})"
+            if self.cancel_confirmed:
+                cancellation += f" – {BY_CANCEL}"
         if self.outcome(Action.ANNOUNCEMENT) is Outcome.SENT:
             decision = f"{SENT} Einladung gesendet ({self._sent_at(Action.ANNOUNCEMENT)})"
             decision += f" – {self._count(MessageKind.DINNER_ANNOUNCEMENT)}× {emoji}"
-        elif self.outcome(Action.CANCELLATION) is Outcome.SENT:
-            decision = f"{CANCELLED} Absage gesendet ({self._sent_at(Action.CANCELLATION)})"
+            if cancellation:  # cancelled via /cancel after the announcement
+                decisions.append(cancellation)
+        elif self.cancelled:
+            decision = cancellation
         elif self.decided:
             decision = f"{SKIPPED} {DECISION}: übersprungen"
         else:
             decision = f"{PENDING} {DECISION}: {ui.weekly_time(schedule.flat_deadline)}"
+
+        request = self.store.tracked_message(self.week, MessageKind.CANCEL_REQUEST)
+        if request is not None and self.outcome(Action.CANCELLATION) is None:
+            at = datetime.fromtimestamp(request.timestamp / 1000, UTC)
+            line = REQUESTED.format(at=self._local(at))
+            state = CONFIRMED if self.cancel_confirmed else AWAITING.format(emoji=emoji)
+            decisions.append(f"{line} – {state}")
 
         if self.outcome(Action.TALLY) is None and self.decided and not self.dinner_on:
             tally = f"{OFF} {TALLY}: entfällt ({NO_DINNER})"
@@ -128,7 +164,7 @@ class _WeekStatus:
         else:
             tally = self._step(Action.TALLY, TALLY, "Zählung gesendet", schedule.tally)
 
-        return [flat_ask, nudge, decision, tally]
+        return [flat_ask, nudge, decision, *decisions, tally]
 
     def _step(self, action: Action, label: str, sent: str, point: WeeklyTime) -> str:
         match self.outcome(action):
@@ -142,6 +178,9 @@ class _WeekStatus:
     def _sent_at(self, action: Action) -> str:
         at = self.store.action_time(self.week, action)
         assert at is not None
+        return self._local(at)
+
+    def _local(self, at: datetime) -> str:
         local = at.astimezone(self.config.timezone)
         return f"{ui.WEEKDAYS_SHORT[local.weekday()]} {local:%H:%M}"
 
@@ -195,10 +234,16 @@ def _next_action(
     """The first scheduled action that will (or may) still happen, in German."""
     from odin import engine
 
+    if current.cancel_pending:
+        return CANCELLATION_NOW
     flat_ask_missed = current.outcome(Action.FLAT_ASK) is None and (
         engine.step_windows(config, current.week)[0].due(now) is False
     )
-    for upcoming in _upcoming(config, now, pending):
+    # If every step still ahead belongs to this week and none of them will happen (e.g. it was
+    # cancelled before its flat ask), the next action is next week's first.
+    dinner = config.when(config.schedule.dinner, current.week)
+    candidates = [*_upcoming(config, now, pending), *_upcoming(config, dinner, pending)]
+    for upcoming in candidates:
         note = ""
         if engine.dinner_week(config, upcoming.at) == current.week:
             match upcoming.name:

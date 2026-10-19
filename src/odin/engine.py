@@ -38,6 +38,14 @@ its flat ask, nudge and tally are recorded as skipped — except that the dinner
 the cancellation: it is due from the switch (see `dropped_cancellation_window`), so it goes out on
 the first tick after the switch, and is skipped like any late step after the dropped week's dinner
 start or once the catch-up grace counted from the switch has passed.
+
+**Cancelled via chat** (`/cancel`, see `odin.commands.cancel`): ODIN's reply to `/cancel` is
+tracked as the week's cancel request. Once anyone reacts to it with the configured emoji, the next
+tick posts the cancellation to the dinner group, whatever the week's state, as long as the week's
+dinner has not started (an earlier, finished week never acts on it) and no cancellation is
+recorded yet: before the decision it *is* the decision, after an announcement it follows it. From
+then on dinner is off: an open flat ask or nudge is skipped at once (the week needs no
+confirmations any more), and the tally is skipped at its time, as after any cancellation.
 """
 
 import logging
@@ -279,9 +287,14 @@ class _Week:
         def due(name: str) -> bool | None:
             return False if self.over else windows[name].due(self.now)
 
+        # 0. Cancellation via /cancel, once confirmed: it overtakes every other step.
+        if not self.over and not self._recorded(Action.CANCELLATION) and self._cancel_confirmed():
+            await self._send(Action.CANCELLATION)
+        cancelled = self.store.action_outcome(self.week, Action.CANCELLATION) is Outcome.SENT
+
         # 1. Flat ask.
         if not self._recorded(Action.FLAT_ASK):
-            due_now = due("flat_ask")
+            due_now = False if cancelled else due("flat_ask")
             if due_now is None:
                 return
             if due_now:
@@ -292,7 +305,7 @@ class _Week:
 
         # 2. Nudge, if enabled.
         if self.config.schedule.nudge is not None and not self._recorded(Action.NUDGE):
-            due_now = due("nudge")
+            due_now = False if cancelled else due("nudge")
             if due_now is None:
                 return
             if due_now and asked and self._confirmations() == 0:
@@ -317,7 +330,8 @@ class _Week:
                 await self._send(decision, track=track)
             else:
                 self._skip(decision)
-        on = self.store.action_outcome(self.week, Action.ANNOUNCEMENT) is Outcome.SENT
+        announced = self.store.action_outcome(self.week, Action.ANNOUNCEMENT) is Outcome.SENT
+        on = announced and not cancelled
 
         # 4. Tally, if dinner is on.
         if not self._recorded(Action.TALLY):
@@ -339,6 +353,12 @@ class _Week:
 
     def _recorded(self, action: Action) -> bool:
         return self.store.has_action(self.week, action)
+
+    def _cancel_confirmed(self) -> bool:
+        request = self.store.tracked_message(self.week, MessageKind.CANCEL_REQUEST)
+        if request is None:
+            return False
+        return count_confirmations(self.store, request, self.config.emoji) > 0
 
     def _confirmations(self) -> int:
         poll = self.store.tracked_message(self.week, MessageKind.FLAT_POLL)

@@ -56,12 +56,25 @@ applies at once. A chat change wins over the config file, as every override does
 every week that was started or dropped and is not finished yet is finished (late steps recorded as
 skipped), so nothing stays open even if ODIN was down over the switch.
 
+**Cancelling via chat:** `/cancel` in the flat group cancels the current dinner week (the one
+whose dinner has not started yet) after a confirmation. ODIN replies with the cancellation it
+would post and asks for the configured emoji on that reply; the reply is tracked like the flat
+poll. As soon as anyone in the flat group reacts with it (the requester too), ODIN posts the
+normal bilingual cancellation template to the dinner group on its next tick and records it as the
+week's cancellation, so the dinner group never gets two. Before the flat deadline it replaces the
+decision (an open flat ask or nudge is skipped); after an announcement it follows it, and an open
+tally is skipped. A request that nobody confirms does nothing; it lapses when the week's dinner
+starts. `/cancel` is refused once the cancellation went out (or was skipped as too late), for a
+week dropped by a dinner weekday change, and while a request of this week is open.
+
 ### Reaction rules
 
 - A 👍 (configurable emoji) from **anyone** in the flat group counts. No member list.
 - Removing a reaction before the deadline withdraws it (this covers "reacted by mistake").
 - Reactions after the deadline, and other emojis, are ignored.
 - The tally counts the configured emoji on the dinner announcement at tally time.
+- A `/cancel` request is confirmed by the configured emoji on ODIN's reply, from anyone in the
+  flat group, until the week's dinner starts; removing it before ODIN's next tick withdraws it.
 
 ### Robustness
 
@@ -95,7 +108,7 @@ group) ODIN ignores them.
 | Command | What it does |
 |---------|--------------|
 | `/help` | Lists all commands with a one-line description. |
-| `/status` | This dinner week: each step (flat ask, nudge, decision, tally) as sent, skipped or pending, the 👍 counts on the flat poll and the announcement, a pending dinner weekday change, and the next action. |
+| `/status` | This dinner week: each step (flat ask, nudge, decision, tally) as sent, skipped or pending, the 👍 counts on the flat poll and the announcement, a cancellation via `/cancel` (also after the announcement) or an open `/cancel` request, a pending dinner weekday change, and the next action. |
 | `/schedule` | Shows the 7 schedule points (key, German description, weekday and time), whether the nudge is off, and who changed a value via chat. |
 | `/texts` | Lists the five editable weekly templates: group, short description, and who changed it when if overridden. |
 | `/text <name>` | Shows a template twice: raw as a ready-to-send `/settext <name>` command, and rendered with this week's values (for `tally` with the current 👍 count, or a sample count of 3). |
@@ -106,6 +119,7 @@ group) ODIN ignores them.
 | `/settime dinner <weekday> <HH:MM>` (other weekday) | Moves dinner to another weekday. Never touches the running dinner week: once it has started (flat ask due or anything recorded) the change waits until that week's dinner, else it applies at once. A week of the new weekday whose steps would all lie before the switch (e.g. Sun → Mon) is dropped — no dinner, nothing sent to the flat group, but ODIN posts the cancellation for it to the dinner group when the switch takes effect; the reply names the first new dinner, warns about a dropped one and says when its cancellation goes out. `/schedule` and `/status` show a pending change; a new time on the current weekday or `/resettime dinner` discards it. |
 | `/nudge on\|off` | Turns the nudge on or off; same guard. |
 | `/resettime <point>` | Drops the chat change of a point back to the config value (for `nudge` also on/off); same guard. For `dinner` it first discards a pending weekday change; going back to the config's weekday waits like `/settime dinner`. |
+| `/cancel` | Cancels this week's dinner after a confirmation: ODIN shows the cancellation and asks for a 👍 on its reply; once someone reacts, the dinner group gets the cancellation (once, also after an announcement). See *Cancelling via chat*. |
 | `/version` | Shows the running version of ODIN (the same as `odin --version`, from the release tag). |
 
 ## Architecture
@@ -161,7 +175,7 @@ inside the pod.
 
 Tracked as separate issues where useful:
 
-- Cancelling a single dinner via chat (`/cancel`, #11).
+- Cancelling a dinner in advance for a later week, or taking a `/cancel` back once it went out.
 - Skip dates / holiday calendar (#12).
 - Counting plus-ones automatically (#13); guest names or lists.
 - More than one dinner per week; reminders to guests.

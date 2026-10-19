@@ -8,7 +8,8 @@ On the flat poll, reactions sent at or after the flat deadline are ignored (addi
 removing), so the vote the decision was based on stays as it was. Whether a reaction is late is
 judged by its Signal timestamp — when the reactor sent it — not by when ODIN received it: a
 reaction sent in time but delivered late (ODIN was down over the deadline) still counts for the
-catch-up decision. The dinner announcement has no deadline. A flat poll of a week under an earlier
+catch-up decision. The dinner announcement and the `/cancel` request have no deadline (the engine
+ignores a request once its week's dinner has started). A flat poll of a week under an earlier
 dinner weekday is long decided, so all reactions on it are ignored.
 """
 
