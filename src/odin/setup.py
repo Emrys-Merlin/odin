@@ -33,6 +33,7 @@ from odin.signal import (
     Group,
     RateLimited,
     RegistrationLocked,
+    SendResponseUnreadable,
     SignalAdmin,
     SignalApiError,
     SignalClient,
@@ -219,7 +220,7 @@ class _Wizard:
             self.t.print()
             self.t.print(f"Stopped. {RUN_AGAIN}")
             return 1
-        except (httpx.HTTPError, SignalApiError) as e:
+        except (httpx.HTTPError, SignalApiError, SendResponseUnreadable) as e:
             self.t.print()
             self.t.print(f"The Signal API call failed: {e}")
             self.t.print(RUN_AGAIN)

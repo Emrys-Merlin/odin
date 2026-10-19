@@ -66,6 +66,9 @@ skipped), so nothing stays open even if ODIN was down over the switch.
 ### Robustness
 
 - State lives in SQLite. Every action is recorded once sent; **nothing is ever posted twice**.
+  The one exception: a send that times out while waiting for Signal's answer is retried, though
+  it may have gone out (at least once rather than at most once — a missing cancellation is worse
+  than a duplicate). A send that Signal accepted is recorded even if its answer can't be read.
 - The scheduler is a *reconcile loop*: on every tick it computes what should have happened by now
   from config + state, and does what is missing. Restarts and missed ticks are therefore safe.
 - **Catch-up:** an action that is late (bot was down) is still performed while within a grace

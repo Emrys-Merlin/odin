@@ -13,8 +13,10 @@ from odin.signal import (
     Event,
     Group,
     GroupMessage,
+    RateLimited,
     ReactionEvent,
     RestSignalClient,
+    SendResponseUnreadable,
     SignalAdmin,
     SignalApiError,
     SignalClient,
@@ -84,10 +86,46 @@ def test_send_group_message() -> None:
     }
 
 
-def test_send_error_raises() -> None:
-    client = make_client(lambda request: httpx.Response(400, json={"error": "bad"}))
-    with pytest.raises(httpx.HTTPStatusError):
+def test_send_error_raises_mapped_error() -> None:
+    client = make_client(Recorder(400, {"error": "bad"}))
+    with pytest.raises(SignalApiError) as excinfo:
         asyncio.run(client.send_group_message("group.abc=", "x"))
+    assert (excinfo.value.status, excinfo.value.message) == (400, "bad")
+
+    client = make_client(Recorder(400, {"error": "Rate limit reached"}))
+    with pytest.raises(RateLimited):
+        asyncio.run(client.send_group_message("group.abc=", "x"))
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(201, json={}),
+        httpx.Response(201, json=[]),
+        httpx.Response(201, json={"timestamp": "soon"}),
+        httpx.Response(201, json="1760454000000x"),
+        httpx.Response(201, text="not json"),
+        httpx.Response(204),
+    ],
+)
+def test_send_with_unreadable_response_raises(response: httpx.Response) -> None:
+    client = make_client(lambda request: response)
+    with pytest.raises(SendResponseUnreadable):
+        asyncio.run(client.send_group_message("group.abc=", "x"))
+    with pytest.raises(SendResponseUnreadable):
+        asyncio.run(client.send_direct_message("+4915100000002", "x"))
+
+
+def test_send_waits_longer_for_the_response() -> None:
+    recorder = Recorder(201, fixture_json("send_response.json"))
+    asyncio.run(make_client(recorder).send_group_message("group.abc=", "x"))
+    assert recorder.request.extensions["timeout"]["read"] == rest.SEND_TIMEOUT.read
+
+
+def test_list_groups_error_raises_mapped_error() -> None:
+    client = make_client(Recorder(400, {"error": "Specified account does not exist"}))
+    with pytest.raises(SignalApiError):
+        asyncio.run(client.list_groups())
 
 
 def test_list_groups() -> None:

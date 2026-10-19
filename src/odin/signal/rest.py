@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 import websockets
 
-from odin.signal.errors import raise_for_api_error
+from odin.signal.errors import SendResponseUnreadable, raise_for_api_error
 from odin.signal.models import ApiInfo, DirectMessage, Event, Group
 from odin.signal.parsing import (
     parse_about,
@@ -21,6 +21,13 @@ from odin.signal.parsing import (
 
 logger = logging.getLogger(__name__)
 
+TIMEOUT = httpx.Timeout(30)
+# signal-cli answers ``/v2/send`` only once the message went out to every member, so it may take
+# longer than other calls. A send that times out while waiting for the answer may have been posted
+# all the same and is retried (at least once, see `odin.engine`); the longer read timeout keeps
+# that rare.
+SEND_TIMEOUT = httpx.Timeout(30, read=120)
+
 
 class RestSignalClient:
     """Talks REST for sending, listing and administration, WebSocket for receiving."""
@@ -30,20 +37,13 @@ class RestSignalClient:
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.number = number
-        self._http = http_client or httpx.AsyncClient(timeout=30)
+        self._http = http_client or httpx.AsyncClient(timeout=TIMEOUT)
 
     async def send_group_message(self, group_id: str, text: str) -> int:
-        response = await self._http.post(
-            f"{self.base_url}/v2/send",
-            json={"message": text, "number": self.number, "recipients": [group_id]},
-        )
-        response.raise_for_status()
-        return parse_send_timestamp(response.json())
+        return await self._send(group_id, text)
 
     async def list_groups(self) -> list[Group]:
-        response = await self._http.get(f"{self.base_url}/v1/groups/{self.number}")
-        response.raise_for_status()
-        return parse_groups(response.json())
+        return parse_groups(await self._request("GET", f"/v1/groups/{self.number}"))
 
     def events(self) -> AsyncIterator[Event]:
         return self._receive(parse_event)
@@ -80,12 +80,7 @@ class RestSignalClient:
         await self._request("PUT", f"/v1/profiles/{self.number}", json=body)
 
     async def send_direct_message(self, recipient: str, text: str) -> int:
-        data = await self._request(
-            "POST",
-            "/v2/send",
-            json={"message": text, "number": self.number, "recipients": [recipient]},
-        )
-        return parse_send_timestamp(data)
+        return await self._send(recipient, text)
 
     def direct_messages(self) -> AsyncIterator[DirectMessage]:
         return self._receive(parse_direct_message)
@@ -98,11 +93,40 @@ class RestSignalClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
+    async def _send(self, recipient: str, text: str) -> int:
+        """Send ``text`` to ``recipient`` (a number or a group ID); return its timestamp.
+
+        Raises the mapped SignalApiError if the API refused the send, and SendResponseUnreadable
+        if it accepted it but the response has no readable timestamp.
+        """
+        response = await self._call(
+            "POST",
+            "/v2/send",
+            json={"message": text, "number": self.number, "recipients": [recipient]},
+            timeout=SEND_TIMEOUT,
+        )
+        try:
+            return parse_send_timestamp(response.json())
+        except ValueError, KeyError, IndexError, TypeError:
+            raise SendResponseUnreadable(response.text) from None
+
     async def _request(self, method: str, path: str, json: object = None) -> Any:
         """Send a request; raise the mapped SignalApiError on failure, else return the JSON."""
-        response = await self._http.request(method, f"{self.base_url}{path}", json=json)
-        raise_for_api_error(response)
+        response = await self._call(method, path, json=json)
         return response.json() if response.content else None
+
+    async def _call(
+        self, method: str, path: str, json: object = None, timeout: httpx.Timeout | None = None
+    ) -> httpx.Response:
+        """Send a request; raise the mapped SignalApiError on failure, else return the response."""
+        response = await self._http.request(
+            method,
+            f"{self.base_url}{path}",
+            json=json,
+            timeout=timeout or httpx.USE_CLIENT_DEFAULT,
+        )
+        raise_for_api_error(response)
+        return response
 
     async def _receive[T](self, parse: Callable[[str | bytes], T | None]) -> AsyncIterator[T]:
         """Yield what ``parse`` makes of each WebSocket message, skipping ``None``."""

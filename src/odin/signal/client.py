@@ -10,7 +10,12 @@ class SignalClient(Protocol):
     """What the bot needs from Signal. Group IDs are in ``group.<base64>`` form."""
 
     async def send_group_message(self, group_id: str, text: str) -> int:
-        """Send ``text`` to a group and return the sent message's timestamp (ms)."""
+        """Send ``text`` to a group and return the sent message's timestamp (ms).
+
+        Raises :class:`odin.signal.errors.SendResponseUnreadable` if the message was accepted but
+        its timestamp cannot be read: it is posted, so it must not be sent again. Any other
+        exception means it was not (or may not have been) posted.
+        """
         ...
 
     async def list_groups(self) -> list[Group]:

@@ -10,7 +10,7 @@ import pytest
 from odin.config import Config, parse_config
 from odin.engine import Account, Step, dinner_week, reconcile
 from odin.reactions import handle_reaction
-from odin.signal import FakeSignalClient, ReactionEvent
+from odin.signal import FakeSignalClient, ReactionEvent, SendResponseUnreadable
 from odin.store import Action, MessageKind, Outcome, Store
 
 TEMPLATES = {
@@ -371,6 +371,30 @@ def test_failed_send_blocks_later_steps(bot: Bot) -> None:
     bot.tick(local(9, 15, 15))
     assert bot.texts() == ["ASK 👍 bis 18:00", "ABGESAGT"]
     assert bot.outcomes()[Action.TALLY] is Outcome.SKIPPED
+
+
+def test_send_with_unreadable_response_is_recorded_and_not_resent(bot: Bot) -> None:
+    bot.run(local(5, 0), local(7, 18))
+    bot.client.fail_sends(SendResponseUnreadable("{}"), delivered=True)
+    steps = bot.tick(local(7, 18))  # the cancellation is posted, but its response is unreadable
+    assert steps == [Step(WEEK, Action.CANCELLATION, Outcome.SENT)]
+    bot.run(local(7, 18, 15), local(12, 0))
+    assert bot.texts() == ["ASK 👍 bis 18:00", "NUDGE 18:00", "ABGESAGT"]
+    assert bot.outcomes()[Action.CANCELLATION] is Outcome.SENT
+
+
+def test_tracked_send_with_unreadable_response_is_recorded_untracked(
+    bot: Bot, caplog: pytest.LogCaptureFixture
+) -> None:
+    bot.tick(local(6, 17, 45))
+    bot.client.fail_sends(SendResponseUnreadable("{}"), delivered=True)
+    assert bot.tick(local(6, 18)) == [Step(WEEK, Action.FLAT_ASK, Outcome.SENT)]
+    assert bot.store.tracked_message(WEEK, MessageKind.FLAT_POLL) is None
+    [error] = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert "flat_ask" in error.getMessage()
+    assert "reactions cannot be counted" in error.getMessage()
+    bot.tick(local(6, 18, 15))
+    assert bot.texts() == ["ASK 👍 bis 18:00"]
 
 
 # --- DST ----------------------------------------------------------------------------------------

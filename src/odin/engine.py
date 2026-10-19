@@ -14,6 +14,15 @@ so nothing is ever sent twice and a restart picks up where the last run stopped.
 recorded after its message went out; a failed send leaves it unrecorded and stops the tick, so the
 next tick retries it and later steps never overtake it.
 
+**Sending is at least once.** A send counts as failed only if Signal did not accept it: an HTTP
+error, no connection, or a timeout. A send that Signal accepted but whose response cannot be read
+(no timestamp) is recorded as sent — it was posted. Its message cannot be tracked then, so the
+reactions to it are not counted (an untracked flat poll has no confirmations, so the week is
+cancelled); that is logged as an error. A timeout while waiting for the response is the one case
+in which a message may be posted twice: it is retried, because a message that never went out —
+most of all the cancellation — is worse than a duplicate. The send timeout is long (see
+`odin.signal.rest`), so this stays rare.
+
 **Catch-up:** a step that is due is still performed while within its window: from its scheduled
 time until the catch-up grace has passed, but never after its expiry — the flat deadline for the
 flat ask and the nudge (after it, confirmations no longer count), dinner start for the decision
@@ -37,7 +46,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from odin.config import Config, WeeklyTime
 from odin.reactions import count_confirmations
-from odin.signal import SignalClient
+from odin.signal import SendResponseUnreadable, SignalClient
 from odin.store import Action, MessageKind, Outcome, Store
 
 logger = logging.getLogger(__name__)
@@ -344,14 +353,26 @@ class _Week:
         group = self.account.dinner_group_id if to_dinner else self.account.flat_group_id
         template = getattr(self.config.templates, action.value)
         text = template.render(**self.config.placeholder_values(), **values)
+        timestamp: int | None
         try:
             timestamp = await self.client.send_group_message(group, text)
+        except SendResponseUnreadable as e:
+            timestamp = None
+            if track is None:
+                logger.warning("sent %s for week %s, but %s", action, self.week, e)
+            else:
+                logger.error(
+                    "sent %s for week %s, but %s; its reactions cannot be counted",
+                    action,
+                    self.week,
+                    e,
+                )
         except Exception:
             logger.exception("sending %s for week %s failed; retrying next tick", action, self.week)
             raise _SendFailed from None
         with self.store.transaction():
             self.store.record_action(self.week, action, self.now)
-            if track is not None:
+            if track is not None and timestamp is not None:
                 self.store.track_message(self.week, track, group, self.account.number, timestamp)
         logger.info("sent %s for week %s", action, self.week)
         self.steps.append(Step(self.week, action, Outcome.SENT))
