@@ -110,11 +110,11 @@ uv run prek run --all-files
 
 In the same PR:
 
-1. Regenerate the reference: `uv run scripts/gen_reference.py`. It rewrites the command list in
-   `docs/reference/_generated/` from `COMMANDS`; commit the result.
-   `tests/test_reference_docs.py` fails while the committed files are stale.
-2. Add what the registry does not know to [Chat commands](../../reference/chat-commands.md):
-   argument syntax and the rules of the command.
+1. Regenerate the reference: `uv run scripts/gen_reference.py`. It rewrites the command table
+   (name, `!` alias, usage, summary) in `docs/reference/_generated/` from `COMMANDS`; commit the
+   result. `tests/test_reference_docs.py` fails while the committed files are stale.
+2. If the command changes something, add it to the "Behaviour" list of
+   [Chat commands](../../reference/chat-commands.md), linking to the page that explains it.
 3. If the command changes how the weekly cycle behaves, update the matching
    [explanation page](../../explanation/index.md); if it is a task flatmates will look up, add a
    page to the "In the chat" [how-to guides](../index.md) (`docs/how-to/chat/`, plus `nav` in
