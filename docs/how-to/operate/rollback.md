@@ -4,7 +4,12 @@
 
 Go back to an earlier image.
 
-All commands run as the `odin` user on the machine (`sudo machinectl shell odin@`).
+!!! note "Assumed setup"
+
+    Commands run as the `odin` user (`sudo machinectl shell odin@`), with files where
+    [First deployment](../../tutorials/first-deployment.md) puts them: see
+    [Host layout](../../reference/deployment-units.md#host-layout). Adjust the paths if your
+    setup differs.
 
 ## A new image does not start
 

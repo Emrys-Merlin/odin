@@ -4,9 +4,15 @@
 
 Edit the config file, check it, and restart ODIN.
 
-Commands on the machine run as the `odin` user (`sudo machinectl shell odin@`). Every key is listed in
-[Configuration](../../reference/configuration.md), the placeholders of the texts in
-[Templates](../../reference/templates.md).
+Every key is listed in [Configuration](../../reference/configuration.md), the placeholders of
+the texts in [Templates](../../reference/templates.md).
+
+!!! note "Assumed setup"
+
+    Commands run as the `odin` user (`sudo machinectl shell odin@`), with files where
+    [First deployment](../../tutorials/first-deployment.md) puts them: see
+    [Host layout](../../reference/deployment-units.md#host-layout). Adjust the paths if your
+    setup differs.
 
 !!! tip "Small changes work from the chat"
 

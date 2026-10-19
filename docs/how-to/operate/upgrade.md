@@ -4,8 +4,12 @@
 
 Let auto-update follow new releases, upgrade by hand, and move to a new major version.
 
-All commands run as the `odin` user on the machine: `sudo machinectl shell odin@` (not `sudo -u` or
-`su`, see [Troubleshoot](troubleshoot.md#failed-to-connect-to-bus)).
+!!! note "Assumed setup"
+
+    Commands run as the `odin` user (`sudo machinectl shell odin@`), with files where
+    [First deployment](../../tutorials/first-deployment.md) puts them: see
+    [Host layout](../../reference/deployment-units.md#host-layout). Adjust the paths if your
+    setup differs.
 
 ## Turn on automatic updates
 

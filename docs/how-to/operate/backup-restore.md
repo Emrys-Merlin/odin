@@ -15,7 +15,12 @@ Two volumes hold everything ODIN needs to survive ([Deployment units](../../refe
   [registering the number again](re-register-number.md), which needs the SIM.
 - `odin-data` — the state database: what was sent, reactions, the chosen groups.
 
-Commands on the machine run as the `odin` user (`sudo machinectl shell odin@`).
+!!! note "Assumed setup"
+
+    Commands run as the `odin` user (`sudo machinectl shell odin@`), with files where
+    [First deployment](../../tutorials/first-deployment.md) puts them: see
+    [Host layout](../../reference/deployment-units.md#host-layout). Adjust the paths if your
+    setup differs.
 
 !!! danger "Never run a second copy"
 

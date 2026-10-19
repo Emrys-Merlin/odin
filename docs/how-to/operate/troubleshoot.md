@@ -4,7 +4,12 @@
 
 Find out why ODIN is quiet or misbehaves: setup status, logs, common problems.
 
-Commands on the machine run as the `odin` user (`sudo machinectl shell odin@`).
+!!! note "Assumed setup"
+
+    Commands run as the `odin` user (`sudo machinectl shell odin@`), with files where
+    [First deployment](../../tutorials/first-deployment.md) puts them: see
+    [Host layout](../../reference/deployment-units.md#host-layout). Adjust the paths if your
+    setup differs.
 
 ## Check the state first
 

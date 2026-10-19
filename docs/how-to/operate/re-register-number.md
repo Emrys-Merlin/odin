@@ -8,7 +8,12 @@ You need this only when ODIN's account is gone — the `odin-signal` volume is l
 no backup — or when you deliberately start over. If a backup exists,
 [restore it](backup-restore.md) instead: it needs no SIM and keeps ODIN in its groups.
 
-Commands on the machine run as the `odin` user (`sudo machinectl shell odin@`).
+!!! note "Assumed setup"
+
+    Commands run as the `odin` user (`sudo machinectl shell odin@`), with files where
+    [First deployment](../../tutorials/first-deployment.md) puts them: see
+    [Host layout](../../reference/deployment-units.md#host-layout). Adjust the paths if your
+    setup differs.
 
 ## Before you start
 

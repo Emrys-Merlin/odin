@@ -4,7 +4,12 @@
 
 Point ODIN at another flat or dinner group.
 
-Commands on the machine run as the `odin` user (`sudo machinectl shell odin@`).
+!!! note "Assumed setup"
+
+    Commands run as the `odin` user (`sudo machinectl shell odin@`), with files where
+    [First deployment](../../tutorials/first-deployment.md) puts them: see
+    [Host layout](../../reference/deployment-units.md#host-layout). Adjust the paths if your
+    setup differs.
 
 ## Choose other groups
 
