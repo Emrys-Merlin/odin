@@ -2,8 +2,20 @@
 
 **Reference** — exact facts to look up.
 
-Every `odin` subcommand and option.
+Every `odin` subcommand and option. The env vars and the config file are described in
+[Configuration](configuration.md); how the commands fit into a deployment is in the
+[first deployment tutorial](../tutorials/first-deployment.md).
 
-!!! note "Coming soon"
+In the container image `odin` is the entry point and `run` the default command (see
+[Deployment units](deployment-units.md)).
 
-    This page is being written ([#105](https://github.com/Emrys-Merlin/odin/issues/105)).
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Success. For `odin setup --status`: ODIN is fully set up. |
+| `1` | A Signal API, HTTP or database error (printed as `odin: <Error>: <message>`). For `odin setup`: the wizard stopped before ODIN was set up; for `odin setup --status`: a step is missing. |
+| `2` | A configuration error (`odin: configuration error: …`), or invalid arguments. |
+| `130` | Interrupted with Ctrl+C. |
+
+--8<-- "docs/reference/_generated/cli.md"
