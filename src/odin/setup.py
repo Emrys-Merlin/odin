@@ -706,7 +706,7 @@ class _Wizard:
 # --- --status ------------------------------------------------------------------------------------
 
 
-async def setup_status(
+async def setup_status(  # noqa: C901 — to be split up in #138
     admin: SetupSignal,
     store: Store | None,
     config: Config,

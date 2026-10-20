@@ -158,7 +158,7 @@ def test_scripted_error_skips_default_effect() -> None:
 
 
 def test_script_unknown_method_fails() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="no method 'regsiter'"):
         FakeSignalAdmin().script("regsiter", None)
 
 

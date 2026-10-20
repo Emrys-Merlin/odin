@@ -312,7 +312,8 @@ def test_a_pending_change_wins_over_a_new_toml_weekday(store: Store) -> None:
     # The pending change waits for the week of Sun 18., so the TOML's new weekday waits too …
     assert effective_config(moved, store, oct(15, 13)) == SAT_COOK
     pending = pending_dinner(moved, store, oct(15, 13))
-    assert pending is not None and not pending.from_config
+    assert pending is not None
+    assert not pending.from_config
     assert pending.point == WeeklyTime(5, time(18, 0))
     # … and at the switch the chat change takes over, hiding the TOML's dinner time.
     assert effective_config(moved, store, oct(18, 18)).schedule.dinner == WeeklyTime(5, time(18))
@@ -914,7 +915,8 @@ def test_toml_change_shows_in_schedule_and_status(store: Store) -> None:
     )
     assert status[-1] == "Nächste Aktion: Zählung, Fr 14:00"
     pending = pending_dinner(TOML_MON, store, oct(15, 12))
-    assert pending is not None and pending.from_config
+    assert pending is not None
+    assert pending.from_config
     assert (pending.after_week, pending.switch) == (SUN_18, oct(18, 18))
 
 
@@ -1033,7 +1035,8 @@ def test_chat_change_wins_over_a_later_toml_change(store: Store) -> None:
     bot.run(oct(12, 9), oct(16, 9), {oct(15, 12): "/settime dinner sat 18:00"})
     # Restarted on Friday with Monday in the TOML: the chat change is still the pending one.
     pending = pending_dinner(TOML_MON_SAT_COOK, store, oct(16, 9))
-    assert pending is not None and not pending.from_config
+    assert pending is not None
+    assert not pending.from_config
     sent = bot.sent() + runs(store, (TOML_MON_SAT_COOK, oct(16, 9), local(11, 3, 9)))
     assert sent == SUNDAY_WEEK + SATURDAY_WEEKS
     assert stored(store) == {DINNER_KEY: ("sat 18:00", None)}
@@ -1052,7 +1055,8 @@ def test_chat_change_wins_over_a_waiting_toml_change(store: Store) -> None:
         "Diese Woche bleibt es beim Essen am So 18.10. um 18:00.",
     ]
     pending = pending_dinner(TOML_MON_SAT_COOK, store, oct(16, 10))
-    assert pending is not None and pending.point == WeeklyTime(5, time(18))
+    assert pending is not None
+    assert pending.point == WeeklyTime(5, time(18))
     sent = runs(store, (TOML_MON_SAT_COOK, oct(16, 9), local(11, 3, 9)))
     assert sent == [SUNDAY_WEEK[2], *SATURDAY_WEEKS]
     assert store.dropped_at(MON_19) is None
@@ -1067,7 +1071,8 @@ def test_resetting_the_chat_change_brings_back_the_toml_change(store: Store) -> 
     )
     assert reply.splitlines()[-1].startswith("Der Wechsel auf Mo 18:00 (ab Mo 26.10.) steht so")
     pending = pending_dinner(TOML_MON_SAT_COOK, store, oct(16, 10))
-    assert pending is not None and pending.from_config
+    assert pending is not None
+    assert pending.from_config
 
 
 def test_chat_can_keep_the_weekday_against_the_toml(store: Store) -> None:
@@ -1116,5 +1121,6 @@ def test_other_schedule_changes_work_while_a_toml_change_waits(
     assert config.schedule.dinner == CONFIG.schedule.dinner  # still Sunday this week
     assert config.schedule.tally == WeeklyTime(4, time(15))
     pending = pending_dinner(TOML_MON_SAT_COOK, store, oct(15, 14))
-    assert pending is not None and pending.from_config is not chat_pending
+    assert pending is not None
+    assert pending.from_config is not chat_pending
     assert send(store, "/nudge off", oct(15, 14), TOML_MON_SAT_COOK).startswith(SAVED)

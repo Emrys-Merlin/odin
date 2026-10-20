@@ -512,7 +512,8 @@ class _Week:
             if track is None:
                 logger.warning("sent %s for week %s, but %s", action, self.week, e)
             else:
-                logger.error(
+                # Expected and explained by the message; the traceback would only show rest.py.
+                logger.error(  # noqa: TRY400
                     "sent %s for week %s, but %s; its reactions cannot be counted",
                     action,
                     self.week,

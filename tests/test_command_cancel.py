@@ -247,7 +247,8 @@ def test_two_requests_at_once_track_only_the_first(world: World) -> None:
     # Both commands ran before either reply was sent, so both asked for a confirmation.
     assert len(replies) == 2
     request = world.store.tracked_message(WEEK, MessageKind.CANCEL_REQUEST)
-    assert request is not None and request.timestamp == world.client.sent[0].timestamp
+    assert request is not None
+    assert request.timestamp == world.client.sent[0].timestamp
 
 
 def test_an_unreadable_send_leaves_the_request_untracked(

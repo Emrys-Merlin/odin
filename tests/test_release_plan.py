@@ -8,7 +8,8 @@ import pytest
 
 _PATH = Path(__file__).parent.parent / "scripts" / "release_plan.py"
 _spec = importlib.util.spec_from_file_location("release_plan", _PATH)
-assert _spec is not None and _spec.loader is not None
+assert _spec is not None
+assert _spec.loader is not None
 release_plan = importlib.util.module_from_spec(_spec)
 sys.modules["release_plan"] = release_plan
 _spec.loader.exec_module(release_plan)
@@ -51,9 +52,15 @@ def test_bump_for_labels(labels, expected) -> None:
     assert release_plan.bump_for_labels(labels) is expected
 
 
-@pytest.mark.parametrize("labels", [["release:major", "release:patch"], ["release:typo"]])
-def test_bump_for_labels_rejects_conflicting_or_unknown_labels(labels) -> None:
-    with pytest.raises(ValueError):
+@pytest.mark.parametrize(
+    ("labels", "match"),
+    [
+        (["release:major", "release:patch"], "conflicting release labels"),
+        (["release:typo"], "unknown release label"),
+    ],
+)
+def test_bump_for_labels_rejects_conflicting_or_unknown_labels(labels, match) -> None:
+    with pytest.raises(ValueError, match=match):
         release_plan.bump_for_labels(labels)
 
 

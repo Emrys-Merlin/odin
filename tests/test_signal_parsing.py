@@ -137,7 +137,7 @@ def test_reaction_missing_fields_is_ignored() -> None:
 
 
 def test_malformed_json_raises() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(json.JSONDecodeError):
         parse_event("{not json")
 
 
@@ -224,7 +224,7 @@ def test_direct_message_unexpected_shapes_are_ignored(payload: str) -> None:
 
 
 def test_direct_message_malformed_json_raises() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(json.JSONDecodeError):
         parse_direct_message("{not json")
 
 

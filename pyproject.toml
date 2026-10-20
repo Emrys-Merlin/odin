@@ -65,6 +65,11 @@ select = [
     "B",   # flake8-bugbear
     "SIM", # flake8-simplify
     "RUF", # ruff-specific
+    "C90", # mccabe complexity (default max 10)
+    "BLE", # flake8-blind-except
+    "PT",  # flake8-pytest-style
+    "DTZ", # flake8-datetimez: no naive datetimes
+    "TRY400", # logger.exception rather than logger.error inside except
 ]
 # German UI strings (src/odin/commands/) use the en dash and the multiplication sign ("2× 👍").
 allowed-confusables = ["–", "×"]

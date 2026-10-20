@@ -168,7 +168,7 @@ def test_dinner_week_across_dst() -> None:
 
 def test_naive_now_is_rejected(bot: Bot) -> None:
     with pytest.raises(ValueError, match="naive"):
-        bot.tick(datetime(2026, 10, 6, 18, 0))
+        bot.tick(datetime(2026, 10, 6, 18, 0))  # noqa: DTZ001 — naive on purpose
 
 
 # --- Full weeks ---------------------------------------------------------------------------------
@@ -189,7 +189,8 @@ def test_week_without_confirmation_is_cancelled(bot: Bot) -> None:
         Action.TALLY: Outcome.SKIPPED,
     }
     poll = bot.store.tracked_message(WEEK, MessageKind.FLAT_POLL)
-    assert poll is not None and (poll.group_id, poll.author) == (FLAT, ACCOUNT.number)
+    assert poll is not None
+    assert (poll.group_id, poll.author) == (FLAT, ACCOUNT.number)
     assert bot.store.tracked_message(WEEK, MessageKind.DINNER_ANNOUNCEMENT) is None
 
 
@@ -214,7 +215,8 @@ def test_week_with_confirmation_is_on(bot: Bot) -> None:
         Action.TALLY: Outcome.SENT,
     }
     announcement = bot.store.tracked_message(WEEK, MessageKind.DINNER_ANNOUNCEMENT)
-    assert announcement is not None and announcement.group_id == DINNER
+    assert announcement is not None
+    assert announcement.group_id == DINNER
 
 
 def test_withdrawn_confirmation_cancels(bot: Bot) -> None:
