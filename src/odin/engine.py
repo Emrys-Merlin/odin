@@ -97,6 +97,15 @@ class Step:
     outcome: Outcome
 
 
+@dataclass(frozen=True)
+class SendFailure:
+    """A send that failed during a tick; the action stays unrecorded, so it is retried."""
+
+    week: date
+    action: Action
+    error: str  # the exception's class name: no message, it may hold personal data
+
+
 def dinner_week(config: Config, now: datetime) -> date:
     """The dinner week `now` belongs to, identified by its dinner date.
 
@@ -255,9 +264,15 @@ def record_transition(store: Store, weeks: Transition) -> None:
 
 
 async def reconcile(
-    config: Config, store: Store, client: SignalClient, account: Account, now: datetime
+    config: Config,
+    store: Store,
+    client: SignalClient,
+    account: Account,
+    now: datetime,
+    failures: list[SendFailure] | None = None,
 ) -> list[Step]:
-    """Perform what is due by `now` and not yet recorded. Returns what was recorded.
+    """Perform what is due by `now` and not yet recorded. Returns what was recorded; the sends
+    that failed are appended to `failures`, if given (see `odin.health`).
 
     Also finishes the earlier weeks, oldest first, so that a step missed there (the bot was down
     over dinner) is recorded as skipped instead of staying open forever: every week before
@@ -275,9 +290,10 @@ async def reconcile(
     if latest is None or latest <= previous:
         earlier.add(previous)
     steps: list[Step] = []
+    failures = [] if failures is None else failures
     weeks = [(week, True) for week in sorted(earlier)] + [(current, False)]
     for week, over in weeks:
-        cycle = _Week(config, store, client, account, week, over, now, steps)
+        cycle = _Week(config, store, client, account, week, over, now, steps, failures)
         try:
             await cycle.run()
         except _SendFailed:
@@ -301,6 +317,7 @@ class _Week:
     over: bool
     now: datetime
     steps: list[Step] = field(default_factory=list)
+    failures: list[SendFailure] = field(default_factory=list)
     # Set during `run`, by the step that decides them; later steps read them.
     _windows: dict[str, StepWindow] = field(init=False, default_factory=dict)
     _cancelled: bool = field(init=False, default=False)  # the cancellation went out
@@ -501,8 +518,9 @@ class _Week:
                     self.week,
                     e,
                 )
-        except Exception:
+        except Exception as e:
             logger.exception("sending %s for week %s failed; retrying next tick", action, self.week)
+            self.failures.append(SendFailure(self.week, action, type(e).__name__))
             return False
         with self.store.transaction():
             self.store.record_action(self.week, action, self.now)

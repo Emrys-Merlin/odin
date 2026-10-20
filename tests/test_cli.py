@@ -49,7 +49,7 @@ def admin(monkeypatch: pytest.MonkeyPatch) -> Iterator[ClosableFakeAdmin]:
     fake = ClosableFakeAdmin(number=NUMBER, groups=[FLAT, DINNER])
     urls: list[str] = []
 
-    def connect(url: str, number: str) -> ClosableFakeAdmin:
+    def connect(url: str, number: str, **_: object) -> ClosableFakeAdmin:
         urls.append(url)
         assert number == NUMBER
         return fake
@@ -67,16 +67,16 @@ def test_run_serves_until_sigterm_and_closes_the_client(
 ) -> None:
     served = []
 
-    async def serve(config, store, client, env_, clock, stop, admin) -> None:
-        served.append((store, client, admin, clock, env_.signal_number))
+    async def serve(config, store, client, env_, clock, stop, admin, health, health_port) -> None:
+        served.append((store, client, admin, clock, env_.signal_number, health_port))
         os.kill(os.getpid(), signal.SIGTERM)  # handled by the bot: sets stop
         await stop.wait()
 
     monkeypatch.setattr("odin.cli.serve", serve)
     assert main(["run"], env, CLOCK) == 0
-    [(store, client, admin_, clock, number)] = served
+    [(store, client, admin_, clock, number, health_port)] = served
     assert isinstance(store, Store)
-    assert (client, admin_, clock, number) == (admin, admin, CLOCK, NUMBER)
+    assert (client, admin_, clock, number, health_port) == (admin, admin, CLOCK, NUMBER, 8081)
     assert Path(env["ODIN_DB"]).exists()
     assert admin.closed
     # main() logs to stdout.
@@ -173,3 +173,74 @@ def test_an_unreachable_signal_api_exits_with_1(
     assert main(["list-groups"], env) == 1
     assert capsys.readouterr().err == "odin: ConnectError: connection refused\n"
     assert admin.closed
+
+
+# --- odin health --------------------------------------------------------------------------------
+
+
+def _health_answer(
+    monkeypatch: pytest.MonkeyPatch, status: int, body: object, urls: list[str] | None = None
+) -> None:
+    def get(url: str, **_: object) -> httpx.Response:
+        if urls is not None:
+            urls.append(url)
+        return httpx.Response(status, json=body, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("odin.cli.httpx.get", get)
+
+
+UP = {"status": "up", "reasons": [], "warnings": [], "setup_pending": False, "version": "1.2.3"}
+DOWN = {**UP, "status": "down", "reasons": ["Signal event connection not up yet"]}
+NOT_SET_UP = {**DOWN, "reasons": ["not ready: no flat group chosen"], "setup_pending": True}
+
+
+def test_health_up(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    urls: list[str] = []
+    warned = {**UP, "warnings": ["announcement for week 2026-10-11 sent, but …"]}
+    _health_answer(monkeypatch, 200, warned, urls)
+    assert main(["health"], {}) == 0  # needs no other env var
+    assert urls == ["http://localhost:8081/health"]
+    out = capsys.readouterr().out
+    assert "up (HTTP 200, version 1.2.3)" in out
+    assert "warning: announcement for week 2026-10-11 sent, but …" in out
+
+
+def test_health_down(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    urls: list[str] = []
+    _health_answer(monkeypatch, 503, DOWN, urls)
+    assert main(["health"], {"ODIN_HEALTH_PORT": "9000"}) == 1
+    assert urls == ["http://localhost:9000/health"]
+    assert "down: Signal event connection not up yet" in capsys.readouterr().out
+
+
+def test_health_setup_ok_passes_only_while_waiting_for_setup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _health_answer(monkeypatch, 503, NOT_SET_UP)
+    assert main(["health"], {}) == 1
+    assert main(["health", "--setup-ok"], {}) == 0
+    _health_answer(monkeypatch, 503, DOWN)
+    assert main(["health", "--setup-ok"], {}) == 1
+
+
+def test_health_unreachable(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def get(url: str, **_: object) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr("odin.cli.httpx.get", get)
+    assert main(["health", "--setup-ok"], {}) == 1
+    assert "no answer from http://localhost:8081/health: ConnectError" in capsys.readouterr().err
+
+
+def test_health_unexpected_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    _health_answer(monkeypatch, 200, ["up"])
+    assert main(["health"], {}) == 1
+
+
+def test_health_off(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    _health_answer(monkeypatch, 200, UP)
+    assert main(["health"], {"ODIN_HEALTH_PORT": "0"}) == 1
+    assert "the health endpoint is off" in capsys.readouterr().err
+    assert main(["health"], {"ODIN_HEALTH_PORT": "x"}) == 2

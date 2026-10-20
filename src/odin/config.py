@@ -24,6 +24,7 @@ class ConfigError(ValueError):
 # --- Env ----------------------------------------------------------------------------------------
 
 DEFAULT_SIGNAL_API_URL = "http://localhost:8080"
+DEFAULT_HEALTH_PORT = 8081
 _E164 = re.compile(r"\+[1-9]\d{6,14}")
 
 
@@ -45,6 +46,7 @@ class Env:
     signal_api_url: str
     config_path: Path
     db_path: Path
+    health_port: int  # 0: no health endpoint
 
 
 @dataclass(frozen=True)
@@ -79,6 +81,16 @@ def load_signal_env(environ: Mapping[str, str]) -> SignalEnv:
     return SignalEnv(signal_number=signal_number, signal_api_url=signal_api_url.rstrip("/"))
 
 
+def load_health_port(environ: Mapping[str, str]) -> int:
+    """`ODIN_HEALTH_PORT`: the port of `GET /health`, 0 for none. Default 8081."""
+    value = environ.get("ODIN_HEALTH_PORT", "").strip()
+    if not value:
+        return DEFAULT_HEALTH_PORT
+    if not value.isdigit() or int(value) > 65535:
+        raise ConfigError(f"ODIN_HEALTH_PORT must be a port number (0 for none), got {value!r}")
+    return int(value)
+
+
 def load_env(environ: Mapping[str, str]) -> Env:
     signal = load_signal_env(environ)
     return Env(
@@ -88,6 +100,7 @@ def load_env(environ: Mapping[str, str]) -> Env:
         signal_api_url=signal.signal_api_url,
         config_path=Path(_required(environ, "ODIN_CONFIG")),
         db_path=Path(_required(environ, "ODIN_DB")),
+        health_port=load_health_port(environ),
     )
 
 

@@ -52,6 +52,9 @@ follows Diátaxis. Details: `docs/how-to/develop/write-docs.md`.
   live once in `reference/`; other pages link there.
 - A PR that changes user-visible behaviour updates the matching docs page in the same PR.
 - Chat examples use the chat-mock HTML from `write-docs.md`, built from the real texts.
+- Write for any operator, not for Tim's homelab. Name tools from it (Uptime Kuma, Tailscale, Proxmox,
+  …) only as examples next to the general case ("any HTTP monitor", "a private network or VPN").
+  Tim-specific steps belong in the PR description, not in `docs/`.
 - Changed the CLI, a chat command or a template placeholder? Rerun `uv run scripts/gen_reference.py`
   (it writes `docs/reference/_generated/`; a test fails while it is stale).
 

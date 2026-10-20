@@ -14,7 +14,9 @@ Go back to an earlier image.
 ## A new image does not start
 
 Nothing to do: when a unit fails to start after an update, `podman auto-update` puts the previous
-image back by itself. Check that it did:
+image back by itself. For `odin`, "started" means healthy (`Notify=healthy`): an image whose bot
+runs but stays unhealthy for 15 minutes — say, it never reaches the Signal API, never finishes a
+tick or never opens its event connection — is rolled back too. Check that it did:
 
 ```bash
 journalctl --user -u podman-auto-update

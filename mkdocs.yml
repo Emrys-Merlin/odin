@@ -91,6 +91,7 @@ nav:
           - Re-register the number: how-to/operate/re-register-number.md
           - Change the groups: how-to/operate/change-groups.md
           - Change the config: how-to/operate/change-config.md
+          - Monitor: how-to/operate/monitor.md
           - Troubleshoot: how-to/operate/troubleshoot.md
       - In the chat:
           - Cancel a dinner: how-to/chat/cancel-dinner.md
@@ -110,6 +111,7 @@ nav:
       - Templates: reference/templates.md
       - Configuration: reference/configuration.md
       - Deployment units: reference/deployment-units.md
+      - Health endpoint: reference/health-endpoint.md
   - Explanation:
       - explanation/index.md
       - The weekly cycle: explanation/weekly-cycle.md

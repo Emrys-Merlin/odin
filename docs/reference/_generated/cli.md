@@ -14,7 +14,7 @@ odin [--version] <command> [options]
 
 ## Environment
 
-Configured by env vars: SIGNAL_NUMBER, SIGNAL_API_URL, ODIN_CONFIG, ODIN_DB, ODIN_LOG_LEVEL. The group IDs are stored in the database by odin setup; FLAT_GROUP_ID and DINNER_GROUP_ID optionally override them.
+Configured by env vars: SIGNAL_NUMBER, SIGNAL_API_URL, ODIN_CONFIG, ODIN_DB, ODIN_LOG_LEVEL, ODIN_HEALTH_PORT. The group IDs are stored in the database by odin setup; FLAT_GROUP_ID and DINNER_GROUP_ID optionally override them.
 
 ## `odin run`
 
@@ -59,3 +59,15 @@ odin check-config
 ```
 
 No options.
+
+## `odin health`
+
+Ask the running bot whether it is healthy (GET /health on ODIN_HEALTH_PORT); exit code 0 when it is up, 1 when it is down or does not answer.
+
+```
+odin health [--setup-ok]
+```
+
+| Option | Value | Description |
+|---|---|---|
+| `--setup-ok` | – | also exit with 0 while ODIN only waits for odin setup (the container health check, so that a first start before odin setup counts as started) |

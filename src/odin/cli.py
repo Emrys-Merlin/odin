@@ -1,4 +1,4 @@
-"""The `odin` command: run the bot, set it up, list its groups, or check the config."""
+"""The `odin` command: run the bot, set it up, list its groups, check the config or its health."""
 
 import argparse
 import asyncio
@@ -14,8 +14,16 @@ import httpx
 import odin
 from odin.app import SETUP_HINT, Source, resolve_account, serve
 from odin.clock import Clock, SystemClock
-from odin.config import ConfigError, Settings, load_settings, load_signal_env
+from odin.config import (
+    ConfigError,
+    Settings,
+    load_health_port,
+    load_settings,
+    load_signal_env,
+)
 from odin.engine import upcoming_actions
+from odin.health import PATH as HEALTH_PATH
+from odin.health import HealthState
 from odin.overrides import config_dinner_change
 from odin.setup import REDO_STEPS, SetupOptions, run_setup, setup_status
 from odin.signal import RestSignalClient, SignalApiError
@@ -25,6 +33,7 @@ from odin.terminal import ConsoleTerminal, Terminal
 logger = logging.getLogger("odin")
 
 DEFAULT_LOG_LEVEL = "INFO"
+HEALTH_TIMEOUT = 10  # seconds; below Podman's default health check timeout of 30 s
 
 
 def main(
@@ -55,6 +64,10 @@ def main(
                 asyncio.run(_list_groups(environ))
             case "check-config":
                 _check_config(load_settings(environ), clock)
+            case "health":
+                # Podman keeps the output of its health check; the request log is noise there.
+                logging.getLogger("httpx").setLevel(logging.WARNING)
+                return _health(environ, args.setup_ok)
     except ConfigError as e:
         print(f"odin: configuration error: {e}", file=sys.stderr)
         return 2
@@ -72,7 +85,7 @@ def _parser() -> argparse.ArgumentParser:
         prog="odin",
         description="Odin 🍽️ — a Signal bot for the weekly open Sunday dinner.",
         epilog="Configured by env vars: SIGNAL_NUMBER, SIGNAL_API_URL, ODIN_CONFIG, ODIN_DB, "
-        "ODIN_LOG_LEVEL. The group IDs are stored in the database by odin setup; "
+        "ODIN_LOG_LEVEL, ODIN_HEALTH_PORT. The group IDs are stored in the database by odin setup; "
         "FLAT_GROUP_ID and DINNER_GROUP_ID optionally override them.",
     )
     parser.add_argument("--version", action="version", version=odin.__version__)
@@ -114,6 +127,17 @@ def _parser() -> argparse.ArgumentParser:
         "check-config",
         help="validate the config file and env vars and print the next scheduled actions",
     )
+    health = commands.add_parser(
+        "health",
+        help="ask the running bot whether it is healthy (GET /health on ODIN_HEALTH_PORT); "
+        "exit code 0 when it is up, 1 when it is down or does not answer",
+    )
+    health.add_argument(
+        "--setup-ok",
+        action="store_true",
+        help="also exit with 0 while ODIN only waits for odin setup (the container health "
+        "check, so that a first start before odin setup counts as started)",
+    )
     return parser
 
 
@@ -138,11 +162,26 @@ async def _run(settings: Settings, clock: Clock) -> None:
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
 
-    client = RestSignalClient(env.signal_api_url, env.signal_number)
+    health = HealthState()
+    client = RestSignalClient(
+        env.signal_api_url,
+        env.signal_number,
+        on_connection=lambda up: health.event_connection(up, clock.now()),
+    )
     try:
         with Store(env.db_path) as store:
             logger.info("Odin 🍽️ starting (Signal API %s)", env.signal_api_url)
-            await serve(settings.config, store, client, env, clock, stop, admin=client)
+            await serve(
+                settings.config,
+                store,
+                client,
+                env,
+                clock,
+                stop,
+                admin=client,
+                health=health,
+                health_port=env.health_port,
+            )
     finally:
         await client.aclose()
 
@@ -212,3 +251,34 @@ def _check_config(settings: Settings, clock: Clock) -> None:
     for action in upcoming_actions(config, clock.now()):
         at = action.at.astimezone(config.timezone)
         print(f"  {at:%a %Y-%m-%d %H:%M}  {action.name} ({action.note})")
+
+
+def _health(environ: Mapping[str, str], setup_ok: bool) -> int:
+    """Print the bot's health; 0 when it is up (or, with `setup_ok`, waits for setup)."""
+    port = load_health_port(environ)
+    if port == 0:
+        print("odin: the health endpoint is off (ODIN_HEALTH_PORT=0)", file=sys.stderr)
+        return 1
+    url = f"http://localhost:{port}{HEALTH_PATH}"
+    try:
+        # No proxy from the environment: the bot is on this host.
+        response = httpx.get(url, timeout=HEALTH_TIMEOUT, trust_env=False)
+        body = response.json()
+    except (httpx.HTTPError, ValueError) as e:
+        print(f"odin: no answer from {url}: {type(e).__name__}: {e}", file=sys.stderr)
+        return 1
+    if not isinstance(body, dict):
+        print(f"odin: unexpected answer from {url}: {response.text[:200]}", file=sys.stderr)
+        return 1
+    status = body.get("status", "unknown")
+    print(f"{status} (HTTP {response.status_code}, version {body.get('version', '?')})")
+    for reason in body.get("reasons", []):
+        print(f"  down: {reason}")
+    for warning in body.get("warnings", []):
+        print(f"  warning: {warning}")
+    if response.status_code == 200 and status == "up":
+        return 0
+    if setup_ok and response.status_code == 503 and body.get("setup_pending") is True:
+        print("  (waits for odin setup; counts as healthy with --setup-ok)")
+        return 0
+    return 1

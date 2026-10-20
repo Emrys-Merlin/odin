@@ -13,7 +13,7 @@ Pod=odin.pod
 # Going live (1.0.0) means changing this to :1 by hand.
 Image=ghcr.io/emrys-merlin/odin:0
 AutoUpdate=registry
-# SIGNAL_NUMBER, optionally FLAT_GROUP_ID / DINNER_GROUP_ID / ODIN_LOG_LEVEL.
+# SIGNAL_NUMBER, optionally FLAT_GROUP_ID / DINNER_GROUP_ID / ODIN_LOG_LEVEL / ODIN_HEALTH_PORT.
 # SIGNAL_API_URL keeps its default http://localhost:8080 (the signal-api container in the pod).
 EnvironmentFile=%h/odin/odin.env
 # config.toml (and an optional avatar next to it), read-only. The image sets
@@ -21,10 +21,23 @@ EnvironmentFile=%h/odin/odin.env
 Volume=%h/odin/config:/config:ro
 # The state database (ODIN_DB=/data/odin.db): sent actions, reactions, chosen group IDs.
 Volume=odin-data.volume:/data
+# Podman's health check asks the bot itself (GET /health on ODIN_HEALTH_PORT). --setup-ok: while
+# ODIN only waits for `odin setup` (first start, a lost registration) it counts as healthy, so the
+# start below does not time out and kill a running wizard.
+HealthCmd=odin health --setup-ok
+HealthInterval=30s
+HealthTimeout=15s
+HealthRetries=3
+# The first tick and the event connection need the Signal API, which may still be starting.
+HealthStartPeriod=2m
+# The unit counts as started only once ODIN is healthy (the start waits up to TimeoutStartSec).
+# So `podman auto-update` also rolls back an image whose bot runs but cannot work.
+Notify=healthy
 
 [Service]
 Restart=always
 RestartSec=10
+# Covers pulling the image and waiting for the first healthy check.
 TimeoutStartSec=900
 
 [Install]

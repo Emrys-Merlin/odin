@@ -57,3 +57,28 @@ default until dinner starts — and skipped after that. A flat ask on Thursday i
 announcement after dinner has started is not. The window is `catch_up_grace` in the
 [configuration](../reference/configuration.md). Skipped actions are recorded as skipped, so
 `/status` can show them and they are not tried again.
+
+## Health
+
+ODIN can fail without crashing: Signal refuses its sends, or its event connection keeps dropping
+and reactions are lost. The logs say so, but nobody reads them until something has gone wrong,
+and a check from outside the VM only sees that the container runs. So ODIN reports whether it can
+do its job at `GET /health` (see [Health endpoint](../reference/health-endpoint.md)).
+
+**Healthy** means: the reconcile loop keeps finishing its ticks, no step has failed to send for
+more than 15 minutes, the event connection to the Signal API is up (a reconnect within 2 minutes
+does not count), and ODIN is not waiting for setup or for the API. A message whose reactions
+cannot be counted is only a warning: the flat group is told already, there is nothing for the
+operator to do.
+
+The endpoint is **pull-based**: ODIN pushes no alerts. Whoever wants to know asks — Podman's
+health check, or any uptime monitor that can reach the port. That needs no secret and no outbound configuration in
+ODIN, and nothing changes for an installation that never asks. An alert sent by ODIN would also
+fail exactly when it is needed most: when ODIN, or its Signal API, is the problem. Answering
+reads only what the loop already recorded, never the Signal API, so frequent polling adds no
+load and no new way to fail.
+
+The same answer serves Podman: the unit counts as started only once ODIN is healthy, so
+`podman auto-update` rolls back an image that runs but cannot work, not only one that crashes.
+Waiting for `odin setup` counts as healthy there, since a new image cannot fix that and a first
+start must not be stopped in the middle of the wizard. Steps: [Monitor ODIN](../how-to/operate/monitor.md).

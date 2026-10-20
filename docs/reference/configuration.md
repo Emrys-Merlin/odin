@@ -114,11 +114,12 @@ templates, which have no defaults.
 | `ODIN_CONFIG` | yes | — | Path to the config file. The container image sets `/config/config.toml`. |
 | `ODIN_DB` | yes | — | Path to the SQLite state database. The file is created if missing; its directory must exist. The container image sets `/data/odin.db`. |
 | `ODIN_LOG_LEVEL` | no | `INFO` | Log level of the output on stdout: `DEBUG`, `INFO`, `WARNING`, `ERROR` (case-insensitive). |
+| `ODIN_HEALTH_PORT` | no | `8081` | Port of the [health endpoint](health-endpoint.md) `GET /health`, on all interfaces inside the container; `0` turns it off. `odin health` asks this port on `localhost`. |
 | `FLAT_GROUP_ID` | no | — | Flat group ID, overriding the one `odin setup` stored. The `group.…` form `odin list-groups` prints. |
 | `DINNER_GROUP_ID` | no | — | Dinner group ID, overriding the one `odin setup` stored. Same form. |
 
 An empty or whitespace-only value counts as not set. `odin list-groups` needs only
-`SIGNAL_NUMBER` and `SIGNAL_API_URL`. In the [deployment units](deployment-units.md) the
+`SIGNAL_NUMBER` and `SIGNAL_API_URL`; `odin health` only `ODIN_HEALTH_PORT`. In the [deployment units](deployment-units.md) the
 variables come from the env file `~/odin/odin.env`.
 
 ## Precedence

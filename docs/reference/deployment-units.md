@@ -47,9 +47,10 @@ systemd instance (at boot, with lingering enabled).
 | Setting | Value | Effect |
 |---|---|---|
 | `PodName` | `odin-pod` | Not `odin`: pods and containers share one name space, and the bot container is `odin`. |
+| `PublishPort` | commented out: `127.0.0.1:8081:8081` | Opt-in: publishes the [health endpoint](health-endpoint.md) on one host address. See [Monitor ODIN](../how-to/operate/monitor.md#publish-the-port). |
 
 Both containers share the pod's network namespace: `odin` reaches the Signal API at
-`http://localhost:8080`. No port is published to the host.
+`http://localhost:8080`. By default no port is published to the host.
 
 ### `signal-api.container`
 
@@ -76,10 +77,25 @@ Both containers share the pod's network namespace: `odin` reaches the Signal API
 | `EnvironmentFile` | `%h/odin/odin.env` |
 | `Volume` | `%h/odin/config:/config:ro` |
 | `Volume` | `odin-data.volume:/data` |
+| `HealthCmd` | `odin health --setup-ok` |
+| `HealthInterval` | `30s` |
+| `HealthTimeout` | `15s` |
+| `HealthRetries` | `3` |
+| `HealthStartPeriod` | `2m` |
+| `Notify` | `healthy` |
 | `Restart` / `RestartSec` | `always` / `10` |
-| `TimeoutStartSec` | `900` |
+| `TimeoutStartSec` | `900` (pulling the image and waiting for the first healthy check) |
 
-`%h` is the home directory of the user running the units. The image's default command is
+`%h` is the home directory of the user running the units.
+
+The health check asks the bot's [health endpoint](health-endpoint.md). `--setup-ok` counts
+"waits for `odin setup`" (`setup_pending`) as healthy, so a first start before setup, or a
+re-registration, is not stopped. Failed checks within the first 2 minutes do not count.
+`Notify=healthy` makes `odin.service` count as started only once a check passed: until then
+`systemctl --user start` / `restart odin` waits (at most `TimeoutStartSec`, then the start fails
+and the unit restarts after `RestartSec`), and `podman auto-update` rolls back an image whose
+unit does not get healthy in that time. An unhealthy container is not restarted once it has
+started (no `HealthOnFailure=`); it only shows as `unhealthy` in `podman ps`. The image's default command is
 `odin run`, which waits instead of exiting while ODIN is not set up, so the container keeps
 running and `podman exec -it odin odin setup` works.
 
@@ -104,6 +120,7 @@ spaces around `=`.
 | `SIGNAL_NUMBER` | set, placeholder `+49XXXXXXXXXXX` |
 | `FLAT_GROUP_ID`, `DINNER_GROUP_ID` | commented out |
 | `ODIN_LOG_LEVEL` | commented out, `INFO` |
+| `ODIN_HEALTH_PORT` | commented out, `8081` |
 
 `SIGNAL_API_URL`, `ODIN_CONFIG` and `ODIN_DB` are not in the env file: the default URL and the
 image presets fit the pod. All variables: [Configuration](configuration.md#environment-variables).
