@@ -8,8 +8,8 @@ its next tick and records it like any other step, so it goes out at most once (s
 week's dinner starts.
 
 Refused when the dinner group has already been told the week is off (or ODIN deliberately did
-not tell it), for a week dropped by a dinner weekday change (its cancellation goes out anyway),
-and while a request of this week is open.
+not tell it), for a week dropped by a dinner weekday change or set as a skip date via `/skip`
+(their cancellation goes out anyway), and while a request of this week is open.
 """
 
 from datetime import UTC, datetime
@@ -37,6 +37,10 @@ DROPPED_WEEK = (
     "Das Essen am {day} fällt schon wegen des Wechsels des Essenstags aus; "
     "die Absage an die Essensgruppe schicke ich ohnehin."
 )
+SKIP_DATE = (
+    "Das Essen am {day} fällt schon per /skip aus; die Absage an die Essensgruppe schicke ich "
+    "zur üblichen Zeit ({at})."
+)
 ALREADY_REQUESTED = (
     "Die Absage für das Essen am {day} ist schon angefragt ({at}) – "
     "reagiert mit {emoji} auf meine Nachricht von da."
@@ -63,6 +67,11 @@ def run(ctx: CommandContext, args: str) -> list[str]:
             raise CommandError(CANCELLATION_SKIPPED.format(day=day))
     if store.dropped_at(week) is not None:
         raise CommandError(DROPPED_WEEK.format(day=day))
+    if store.skip_date(week) is not None and store.action_outcome(week, Action.FLAT_ASK) is not (
+        Outcome.SENT
+    ):
+        decision = config.when(config.schedule.flat_deadline, week)
+        raise CommandError(SKIP_DATE.format(day=day, at=local(decision)))
     request = store.tracked_message(week, MessageKind.CANCEL_REQUEST)
     if request is not None:
         requested_at = datetime.fromtimestamp(request.timestamp / 1000, UTC)

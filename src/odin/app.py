@@ -127,34 +127,62 @@ async def serve(
     So finishing `odin setup` takes effect without a restart.
     """
     stopped = asyncio.create_task(stop.wait())
-    waiting_for = ""
+    waiting = _WaitingLog()
     try:
         while not stop.is_set():
-            account, reason = readiness(env, store, clock.now())
-            if account is not None and admin is not None:
-                reason = await _registration_problem(admin, env.signal_number)
-                if reason:
-                    account = None
-            if account is None:
-                if reason != waiting_for:
-                    if reason == SETUP_RUNNING:
-                        logger.info("odin setup is running; waiting until it has finished")
-                    elif reason == API_UNREACHABLE:
-                        logger.warning("%s; waiting until it is", API_UNREACHABLE)
-                    else:
-                        logger.warning("ODIN is not set up yet (%s) — %s", reason, SETUP_HINT)
-                    waiting_for = reason
+            ready = await _ready_account(env, store, clock.now(), admin)
+            if isinstance(ready, str):
+                waiting.log(ready)
                 await asyncio.wait({stopped}, timeout=check_interval.total_seconds())
                 continue
-            waiting_for = ""
+            waiting.reset()
             _log_sources(env, store)
             await _supervise(
-                config, store, client, env, account, clock, stopped, check_interval, tick_interval
+                config, store, client, env, ready, clock, stopped, check_interval, tick_interval
             )
     finally:
         stopped.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await stopped
+
+
+async def _ready_account(
+    env: Env, store: Store, now: datetime, admin: SignalAdmin | None
+) -> Account | str:
+    """The account to run with, or why ODIN is not ready to run.
+
+    `readiness` (database only) first; with `admin`, then whether the number is registered.
+    """
+    account, reason = readiness(env, store, now)
+    if account is None:
+        return reason
+    if admin is not None:
+        problem = await _registration_problem(admin, env.signal_number)
+        if problem:
+            return problem
+    return account
+
+
+class _WaitingLog:
+    """Logs why `serve` waits, once per reason: again only when the reason changes."""
+
+    def __init__(self) -> None:
+        self._reason = ""
+
+    def log(self, reason: str) -> None:
+        if reason == self._reason:
+            return
+        if reason == SETUP_RUNNING:
+            logger.info("odin setup is running; waiting until it has finished")
+        elif reason == API_UNREACHABLE:
+            logger.warning("%s; waiting until it is", API_UNREACHABLE)
+        else:
+            logger.warning("ODIN is not set up yet (%s) — %s", reason, SETUP_HINT)
+        self._reason = reason
+
+    def reset(self) -> None:
+        """The bot runs; the next wait is logged whatever its reason."""
+        self._reason = ""
 
 
 async def _registration_problem(admin: SignalAdmin, number: str) -> str:

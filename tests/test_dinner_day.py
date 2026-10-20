@@ -488,6 +488,15 @@ def test_a_dropped_week_uses_the_template_set_via_chat(store: Store) -> None:
     assert bot.sent()[-1] == ("Sun 18.10. 18:00", "UMZUG Montag: 19.10. fällt aus, ab 26.10.")
 
 
+def test_a_skip_date_cancellation_ignores_the_dropped_template(store: Store) -> None:
+    config = parse_config({"templates": {**TEMPLATES, "weekday_change_cancellation": MOVED}})
+    store.add_skip_date(SUN_18, "Anna", oct(12, 9))
+    client = FakeSignalClient()
+    for now in (oct(13, 18), oct(14, 18)):  # no flat ask on a skip date; cancelled at the deadline
+        asyncio.run(reconcile(config, store, client, ACCOUNT, now))
+    assert [m.text for m in client.sent] == ["ABGESAGT Sonntag\n\nCANCELLED Sunday"]
+
+
 def test_a_normal_cancellation_ignores_the_dropped_template(store: Store) -> None:
     config = parse_config({"templates": {**TEMPLATES, "weekday_change_cancellation": MOVED}})
     client = FakeSignalClient()

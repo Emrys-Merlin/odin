@@ -5,7 +5,9 @@
 Cancel this week's dinner from the flat group with `/cancel`.
 
 This works before and after the announcement went out. "This week" is the dinner that has not
-started yet. Syntax and details: [Chat commands](../../reference/chat-commands.md).
+started yet. For a later week, enter the date with `/skip` instead; see
+[Skip a date in advance](skip-a-date.md). Syntax and details:
+[Chat commands](../../reference/chat-commands.md).
 
 ## 1. Send `/cancel` in the flat group
 
@@ -98,6 +100,8 @@ Wednesday's decision and the nudge is skipped, so the dinner group never sees an
   one now. Tell the dinner group yourself.
 - **Dropped by a weekday change:** that week is off anyway and its cancellation goes out on its
   own; see [Move dinner to another day](move-dinner-day.md).
+- **Skipped with `/skip`:** that week is off anyway; its cancellation goes out at the usual
+  decision time. See [Skip a date in advance](skip-a-date.md).
 
 Why it needs a reaction and when exactly it is sent: [Reactions](../../explanation/reactions.md)
 and [The weekly cycle](../../explanation/weekly-cycle.md).
