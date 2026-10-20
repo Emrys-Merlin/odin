@@ -22,7 +22,7 @@ In the order `/help` lists them. Usage and summary are the German texts `/help` 
 
 ## Argument values
 
-`<name>` (`/text`, `/settext`, `/resettext`, `/vars`) is one of the chat-editable templates: `flat_ask`, `nudge`, `announcement`, `cancellation`, `tally`.
+`<name>` (`/text`, `/settext`, `/resettext`, `/vars`) is one of the chat-editable templates: `flat_ask`, `nudge`, `announcement`, `cancellation`, `weekday_change_cancellation`, `tally`.
 
 `<punkt>` (`/settime`, `/resettime`) is one of the schedule points, in schedule order: `flat_ask`, `nudge`, `flat_deadline`, `rsvp_by`, `tally`, `cook`, `dinner`.
 

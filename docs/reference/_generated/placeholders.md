@@ -20,3 +20,5 @@ In the order `/vars` lists them. The description is the German text `/vars` show
 | `{dinner_day_de}` | Essen (Wochentag) | `Sonntag` | all templates |
 | `{dinner_day_en}` | Essen (Wochentag) | `Sunday` | all templates |
 | `{count}` | Anzahl Zusagen auf die Ankündigung | depends on the message | `tally` |
+| `{dropped_date}` | Datum des Essens, das beim Wechsel des Wochentags ausfällt | depends on the message | `weekday_change_cancellation` |
+| `{first_date}` | Datum des ersten Essens am neuen Wochentag | depends on the message | `weekday_change_cancellation` |

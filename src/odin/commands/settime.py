@@ -344,7 +344,7 @@ def _hardcoded_weekdays(config: Config) -> list[str]:
     return [
         HARDCODED_WEEKDAY.format(name=name)
         for name in EDITABLE_TEMPLATES
-        if _HARDCODED_DAY.search(getattr(config.templates, name).text)
+        if config.templates.is_set(name) and _HARDCODED_DAY.search(config.templates.get(name).text)
     ]
 
 

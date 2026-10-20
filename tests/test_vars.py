@@ -113,5 +113,20 @@ def test_vars_for_one_template(store: Store) -> None:
 def test_unknown_template(store: Store, name: str) -> None:
     reply = vars_reply(store, f"/vars {name}")
     assert reply == (
-        f"Unbekannte Vorlage „{name}“. Es gibt: flat_ask, nudge, announcement, cancellation, tally."
+        f"Unbekannte Vorlage „{name}“. Es gibt: "
+        "flat_ask, nudge, announcement, cancellation, weekday_change_cancellation, tally."
     )
+
+
+def test_vars_weekday_change_cancellation_lists_its_dates(store: Store) -> None:
+    lines = vars_reply(store, "/vars weekday_change_cancellation").splitlines()
+    assert lines[0] == "Platzhalter für weekday_change_cancellation:"
+    assert (
+        "{dropped_date} – Datum des Essens, das beim Wechsel des Wochentags ausfällt "
+        "(nur in weekday_change_cancellation)"
+    ) in lines
+    assert (
+        "{first_date} – Datum des ersten Essens am neuen Wochentag "
+        "(nur in weekday_change_cancellation)"
+    ) in lines
+    assert "{dinner_day_de} / {dinner_day_en} – Essen (Wochentag): Sonntag / Sunday" in lines

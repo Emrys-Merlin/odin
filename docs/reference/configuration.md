@@ -77,14 +77,16 @@ ODIN's Signal profile. Applied by `odin setup`, not by `odin run`.
 
 ### `[templates]`
 
-The message texts. Every template is **required** and has no default; a missing or empty one is
-an error. Leading and trailing whitespace is stripped.
+The message texts. Every template is **required** and has no default, except
+`weekday_change_cancellation`, which falls back to `cancellation` when it is left out; a missing
+or empty one is an error. Leading and trailing whitespace is stripped.
 
 | Key | Sent to | Language | When |
 |---|---|---|---|
 | `flat_ask` | flat group | German | at `flat_ask` |
 | `nudge` | flat group | German | at `nudge`, if nobody has confirmed |
 | `cancellation` | dinner group | German, blank line, English | at `flat_deadline` without confirmation, or after a confirmed `/cancel` |
+| `weekday_change_cancellation` | dinner group | German, blank line, English | optional: when a new dinner weekday takes over and drops a week; left out, `cancellation` is sent |
 | `announcement` | dinner group | German, blank line, English | at `flat_deadline` with a confirmation |
 | `tally` | flat group | German | at `tally`, if dinner is on |
 | `hello` | the operator, direct message | German | during `odin setup` |
@@ -123,7 +125,7 @@ variables come from the env file `~/odin/odin.env`.
 
 | Setting | Wins | Falls back to |
 |---|---|---|
-| Weekly templates (`flat_ask`, `nudge`, `announcement`, `cancellation`, `tally`) | change via chat (`/settext`) | config file |
+| Weekly templates (`flat_ask`, `nudge`, `announcement`, `cancellation`, `weekday_change_cancellation`, `tally`) | change via chat (`/settext`) | config file; for `weekday_change_cancellation` then `cancellation` |
 | Schedule points and `nudge.enabled` | change via chat (`/settime`, `/nudge`) | config file |
 | Group IDs | `FLAT_GROUP_ID` / `DINNER_GROUP_ID` env vars | IDs stored in the database by `odin setup` |
 

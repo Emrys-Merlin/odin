@@ -40,7 +40,14 @@ from odin.store import AppliedDinner, Override, Store
 logger = logging.getLogger(__name__)
 
 # The weekly templates that can be edited via chat (not `hello` / `flat_test`).
-EDITABLE_TEMPLATES = ("flat_ask", "nudge", "announcement", "cancellation", "tally")
+EDITABLE_TEMPLATES = (
+    "flat_ask",
+    "nudge",
+    "announcement",
+    "cancellation",
+    "weekday_change_cancellation",
+    "tally",
+)
 # The schedule points that can be moved via chat, in schedule order.
 SCHEDULE_POINTS = ("flat_ask", "nudge", "flat_deadline", "rsvp_by", "tally", "cook", "dinner")
 

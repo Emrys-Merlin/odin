@@ -22,8 +22,13 @@ A week of the new weekday whose steps would all lie before the switch (e.g. Sun 
 Monday right after the last Sunday dinner) is *dropped*. There is no dinner that week, and
 nothing goes to the flat group for it — asking now would be pointless.
 
-But guests may expect a dinner on the new day, so the dinner group gets the normal cancellation,
-once, as soon as the switch takes effect (with the new weekday's name). Like any
+But guests may expect a dinner on the new day, so the dinner group gets a cancellation, once, as
+soon as the switch takes effect. It is the first time guests hear of the new weekday at all, so it
+has a template of its own, `weekday_change_cancellation`, which can say that dinner moved, which
+date is dropped and when the first dinner on the new day is. That template is optional: while it
+is not set, the normal `cancellation` goes out instead (with the new weekday's name), so a config
+written before it existed keeps working. Either way it is recorded as the week's cancellation.
+Like any
 [late action](reliability.md#catch-up) it is skipped after the dropped week's dinner start, or
 once the catch-up grace counted from the switch has passed. The dropped week is stored in the
 state DB when the switch is applied, so a restart neither loses nor repeats it. `/cancel` is

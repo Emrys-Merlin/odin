@@ -460,6 +460,52 @@ def test_sun_to_mon_drops_one_week_and_never_asks_twice(store: Store) -> None:
     assert cancellation.text == "ABGESAGT Montag\n\nCANCELLED Monday"
 
 
+MOVED = (
+    "UMZUG {dinner_day_de}: {dropped_date} fällt aus, ab {first_date}\n\n"
+    "MOVED {dinner_day_en}: no dinner {dropped_date}, from {first_date}"
+)
+
+
+def test_a_dropped_week_gets_its_own_template_when_set(store: Store) -> None:
+    # Only the dropped week's cancellation uses it (#85); a normal one keeps `cancellation`.
+    config = parse_config({"templates": {**TEMPLATES, "weekday_change_cancellation": MOVED}})
+    bot = Bot(store, config)
+    bot.run(oct(12, 9), local(11, 3, 9), {oct(15, 12): "/settime dinner mon 18:00"})
+    [moved] = [m for m in bot.client.sent if m.text.startswith("UMZUG")]
+    assert moved.group_id == ACCOUNT.dinner_group_id
+    assert moved.text == (
+        "UMZUG Montag: 19.10. fällt aus, ab 26.10.\n\nMOVED Monday: no dinner 19.10., from 26.10."
+    )
+    assert bot.sent()[3] == ("Sun 18.10. 18:00", "UMZUG Montag: 19.10. fällt aus, ab 26.10.")
+    assert bot.outcomes(MON_19) == DROPPED
+    assert not any(text.startswith("ABGESAGT") for _, text in bot.sent())
+
+
+def test_a_dropped_week_uses_the_template_set_via_chat(store: Store) -> None:
+    send(store, "/settext weekday_change_cancellation\n" + MOVED, oct(12, 9))
+    bot = Bot(store, CONFIG)
+    bot.run(oct(12, 9), oct(19, 9), {oct(15, 12): "/settime dinner mon 18:00"})
+    assert bot.sent()[-1] == ("Sun 18.10. 18:00", "UMZUG Montag: 19.10. fällt aus, ab 26.10.")
+
+
+def test_a_skip_date_cancellation_ignores_the_dropped_template(store: Store) -> None:
+    config = parse_config({"templates": {**TEMPLATES, "weekday_change_cancellation": MOVED}})
+    store.add_skip_date(SUN_18, "Anna", oct(12, 9))
+    client = FakeSignalClient()
+    for now in (oct(13, 18), oct(14, 18)):  # no flat ask on a skip date; cancelled at the deadline
+        asyncio.run(reconcile(config, store, client, ACCOUNT, now))
+    assert [m.text for m in client.sent] == ["ABGESAGT Sonntag\n\nCANCELLED Sunday"]
+
+
+def test_a_normal_cancellation_ignores_the_dropped_template(store: Store) -> None:
+    config = parse_config({"templates": {**TEMPLATES, "weekday_change_cancellation": MOVED}})
+    client = FakeSignalClient()
+    for now in (oct(13, 18), oct(14, 18)):  # flat ask, then no 👍 by the deadline
+        asyncio.run(reconcile(config, store, client, ACCOUNT, now))
+    assert client.sent[-1].text == "ABGESAGT Sonntag\n\nCANCELLED Sunday"
+    assert store.action_outcome(SUN_18, Action.CANCELLATION) is Outcome.SENT
+
+
 def test_sun_to_mon_right_after_dinner(store: Store) -> None:
     bot = Bot(store, CONFIG)
     bot.run(oct(5, 9), oct(27, 9), {oct(11, 19): "/settime dinner mon 18:00"})

@@ -27,6 +27,8 @@ DESCRIPTIONS = {
     "dinner_day_de": "Essen (Wochentag)",
     "dinner_day_en": "Essen (Wochentag)",
     "count": "Anzahl Zusagen auf die Ankündigung",
+    "dropped_date": "Datum des Essens, das beim Wechsel des Wochentags ausfällt",
+    "first_date": "Datum des ersten Essens am neuen Wochentag",
 }
 
 HEADER_ALL = "Platzhalter für /settext:"
