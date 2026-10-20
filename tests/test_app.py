@@ -320,6 +320,10 @@ def test_a_failing_tick_does_not_stop_the_bot(store: Store) -> None:
 
     asyncio.run(scenario())
     assert client.failed
+    [sent] = client.sent
+    assert sent.group_id == ACCOUNT.flat_group_id
+    assert sent.text.startswith("Findet am Sonntag das offene Abendessen statt?")
+    assert store.has_action(WEEK, Action.FLAT_ASK)
 
 
 def test_a_tick_whose_reconcile_raises_is_logged_and_the_bot_keeps_running(

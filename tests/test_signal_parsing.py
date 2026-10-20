@@ -47,7 +47,10 @@ def test_reaction_remove_in_jsonrpc_envelope_with_hidden_number() -> None:
 
 
 def test_bytes_payload() -> None:
-    assert parse_event(fixture("reaction_add.json").encode()) is not None
+    text = fixture("reaction_add.json")
+    event = parse_event(text.encode())
+    assert isinstance(event, ReactionEvent)
+    assert event == parse_event(text)
 
 
 def test_group_message() -> None:
