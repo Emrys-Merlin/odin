@@ -48,8 +48,7 @@ From that follow a few principles:
 
 Tracked as separate issues where useful:
 
-- Cancelling a dinner in advance for a later week, or taking a `/cancel` back once it went out.
-- Skip dates / holiday calendar ([#12](https://github.com/Emrys-Merlin/odin/issues/12)).
+- Taking a `/cancel` back once it went out.
 - Counting plus-ones automatically ([#13](https://github.com/Emrys-Merlin/odin/issues/13)); guest
   names or lists.
 - More than one dinner per week; reminders to guests.

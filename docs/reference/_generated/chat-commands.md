@@ -16,6 +16,8 @@ In the order `/help` lists them. Usage and summary are the German texts `/help` 
 | `/resettime` | `!resettime` | `/resettime <punkt>` | Setzt einen Zeitpunkt auf den Wert aus der Config zurück. |
 | `/nudge` | `!nudge` | `/nudge on|off` | Schaltet die Erinnerung an die WG an oder aus. |
 | `/cancel` | `!cancel` | `/cancel` | Sagt das Essen dieser Woche ab – nach Bestätigung per Reaktion. |
+| `/skip` | `!skip` | `/skip [JJJJ-MM-TT]` | Trägt einen Tag ohne Essen im Voraus ein; ohne Datum: zeigt die Liste. |
+| `/unskip` | `!unskip` | `/unskip <JJJJ-MM-TT>` | Nimmt einen mit /skip eingetragenen Tag zurück. |
 | `/version` | `!version` | `/version` | Zeigt, welche Version von Odin läuft. |
 
 ## Argument values
@@ -23,3 +25,5 @@ In the order `/help` lists them. Usage and summary are the German texts `/help` 
 `<name>` (`/text`, `/settext`, `/resettext`, `/vars`) is one of the chat-editable templates: `flat_ask`, `nudge`, `announcement`, `cancellation`, `tally`.
 
 `<punkt>` (`/settime`, `/resettime`) is one of the schedule points, in schedule order: `flat_ask`, `nudge`, `flat_deadline`, `rsvp_by`, `tally`, `cook`, `dinner`.
+
+`<JJJJ-MM-TT>` (`/skip`, `/unskip`) is a dinner day as an ISO date, e.g. `2026-12-27`.

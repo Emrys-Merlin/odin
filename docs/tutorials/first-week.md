@@ -117,6 +117,8 @@ Das kann ich:<br>
 /resettime &lt;punkt&gt; – Setzt einen Zeitpunkt auf den Wert aus der Config zurück.<br>
 /nudge on|off – Schaltet die Erinnerung an die WG an oder aus.<br>
 /cancel – Sagt das Essen dieser Woche ab – nach Bestätigung per Reaktion.<br>
+/skip [JJJJ-MM-TT] – Trägt einen Tag ohne Essen im Voraus ein; ohne Datum: zeigt die Liste.<br>
+/unskip &lt;JJJJ-MM-TT&gt; – Nimmt einen mit /skip eingetragenen Tag zurück.<br>
 /version – Zeigt, welche Version von Odin läuft.
 
 Statt / geht auch !, also z. B. !help.
@@ -169,6 +171,8 @@ announcement right now.
 ## Next steps
 
 - [Cancel a dinner](../how-to/chat/cancel-dinner.md) after it was announced.
+- [Skip a date in advance](../how-to/chat/skip-a-date.md) when you already know there is no
+  dinner.
 - [Edit a text](../how-to/chat/edit-a-text.md) ODIN sends.
 - [Move dinner to another day](../how-to/chat/move-dinner-day.md).
 - [Pause the nudge](../how-to/chat/pause-nudge.md) or move other times.
