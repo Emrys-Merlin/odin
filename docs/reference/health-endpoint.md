@@ -2,8 +2,7 @@
 
 **Reference** — exact facts to look up.
 
-`GET /health`: whether ODIN can do its job, for Podman's health check and monitors such as
-Uptime Kuma.
+`GET /health`: whether ODIN can do its job, for Podman's health check and external monitors.
 
 `odin run` serves it on all interfaces inside the container, on port `ODIN_HEALTH_PORT` (default
 `8081`, `0` turns it off; see [Configuration](configuration.md#environment-variables)). The pod

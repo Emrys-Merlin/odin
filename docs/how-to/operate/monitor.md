@@ -2,7 +2,7 @@
 
 **How-to guide** — steps for one task you already know you want to do.
 
-Check whether ODIN can do its job, and get alerted by Uptime Kuma when it cannot.
+Check whether ODIN can do its job, and get alerted by an external monitor when it cannot.
 
 !!! note "Assumed setup"
 
@@ -14,7 +14,7 @@ Check whether ODIN can do its job, and get alerted by Uptime Kuma when it cannot
 ODIN answers `GET /health` on port 8081 inside the pod. What its answer means:
 [Health endpoint](../../reference/health-endpoint.md).
 
-## Check the health on the VM
+## Check the health on the host
 
 ```bash
 podman exec odin odin health        # "up" or "down", with the reasons; exit code 0 when up
@@ -27,23 +27,25 @@ waits for `odin setup`; `odin health` without the option does not.
 
 ## Publish the port
 
-Nothing is published by default. Publish the endpoint on one host address only:
+Nothing is published by default. To let a monitor outside the pod reach the endpoint, publish
+it on one host address only — one that your monitor can reach and others cannot:
 
-1. Add a `PublishPort=` line to the `[Pod]` section of `~/.config/containers/systemd/odin.pod`:
-   the VM's Tailscale address, so only the tailnet reaches it,
-
-    ```ini
-    PublishPort=100.64.0.12:8081:8081
-    ```
-
-    or `127.0.0.1`, for a monitor on the VM itself:
+1. Add a `PublishPort=` line to the `[Pod]` section of `~/.config/containers/systemd/odin.pod`,
+   for example `127.0.0.1` for a monitor on the same machine:
 
     ```ini
     PublishPort=127.0.0.1:8081:8081
     ```
 
-    Never publish it without an address (`8081:8081`): that opens it on every interface of the
-    VM. The body holds no personal data, but there is no reason to show it to anyone.
+    or the machine's address in a private network or VPN that the monitor is in (a LAN address,
+    a WireGuard or Tailscale address, …):
+
+    ```ini
+    PublishPort=192.168.1.20:8081:8081
+    ```
+
+    Avoid publishing it without an address (`8081:8081`): that opens it on every interface of
+    the machine. The body holds no personal data, but there is no reason to show it to anyone.
 
 2. Reload and restart the pod (both containers restart):
 
@@ -54,26 +56,30 @@ Nothing is published by default. Publish the endpoint on one host address only:
 3. Check it from a machine that should reach it:
 
     ```bash
-    curl -i http://100.64.0.12:8081/health
+    curl -i http://192.168.1.20:8081/health
     ```
 
     The first line is `HTTP/1.1 200 OK` while ODIN is up.
 
-## Add an Uptime Kuma monitor
+## Set up a monitor
 
-1. In Uptime Kuma, **Add New Monitor**.
-2. **Monitor Type**: *HTTP(s)*. Or, to look at the body as well, *HTTP(s) - Json Query*, with
-   the query `status` and the expected value `up`.
-3. **URL**: `http://100.64.0.12:8081/health` (your published address).
-4. **Heartbeat Interval**: 60 s. **Retries**: 2 or 3, so a restart (ODIN is `starting` for a few
-   seconds, longer after an update) does not alert.
-5. **Accepted Status Codes**: `200-299` (the default). ODIN answers `503` when it is down.
-6. Pick a notification that does **not** go through ODIN's Signal API — ntfy, e-mail, another
-   messenger. A Signal notification would need the same `signal-api` container that may be the
-   reason ODIN is down.
+Any monitor that can check an HTTP URL works (Uptime Kuma, Gatus, Healthchecks with a cron job,
+a hosted uptime service that can reach the address, …). Configure it like this:
 
-When the monitor goes down, the reasons in its message (or `podman exec odin odin health`) say
-what is wrong; [Troubleshoot](troubleshoot.md) covers the usual causes.
+1. **URL**: `http://<published address>:8081/health`.
+2. **Up** means HTTP status `200`; ODIN answers `503` when it is down. If the monitor can check
+   JSON, `status` is `up` or `down` as well.
+3. **Interval**: about a minute is plenty. Allow 2–3 failed checks before alerting, so a restart
+   (ODIN is `starting` for a few seconds, longer after an update) does not alert.
+4. **Alerts**: send them through a channel that does **not** depend on ODIN's Signal API — e-mail,
+   ntfy, another messenger. A Signal notification would need the same `signal-api` container that
+   may be the reason ODIN is down.
+
+For example, in Uptime Kuma: **Add New Monitor**, type *HTTP(s)* (or *HTTP(s) - Json Query* with
+the query `status` and the expected value `up`), the URL above, and **Retries** 2.
+
+When the monitor reports ODIN down, the reasons in the body (or `podman exec odin odin health`)
+say what is wrong; [Troubleshoot](troubleshoot.md) covers the usual causes.
 
 ## Turn the endpoint off
 

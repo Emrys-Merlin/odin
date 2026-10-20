@@ -72,7 +72,7 @@ cannot be counted is only a warning: the flat group is told already, there is no
 operator to do.
 
 The endpoint is **pull-based**: ODIN pushes no alerts. Whoever wants to know asks — Podman's
-health check, Uptime Kuma on the tailnet. That needs no secret and no outbound configuration in
+health check, or any uptime monitor that can reach the port. That needs no secret and no outbound configuration in
 ODIN, and nothing changes for an installation that never asks. An alert sent by ODIN would also
 fail exactly when it is needed most: when ODIN, or its Signal API, is the problem. Answering
 reads only what the loop already recorded, never the Signal API, so frequent polling adds no

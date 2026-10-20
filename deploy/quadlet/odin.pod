@@ -12,8 +12,8 @@ Description=ODIN pod (Signal API + bot)
 # Not "odin": pods and containers share one name space in podman, and the bot container is
 # called odin so that `podman exec -it odin odin setup` works.
 PodName=odin-pod
-# Opt-in: publish ODIN's health endpoint (GET /health, port 8081) for a monitor such as Uptime
-# Kuma, on one host address only, e.g. the VM's Tailscale IP or 127.0.0.1. See
+# Opt-in: publish ODIN's health endpoint (GET /health, port 8081) for an external monitor, on one
+# host address only (127.0.0.1, or an address in a private network or VPN). See
 # https://emrys-merlin.github.io/odin/how-to/operate/monitor/.
 #PublishPort=127.0.0.1:8081:8081
 
