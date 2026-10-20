@@ -493,7 +493,7 @@ def test_serve_fails_when_the_event_stream_ends(store: Store) -> None:
 
 def test_upcoming_actions_mid_week() -> None:
     upcoming = upcoming_actions(CONFIG, local(7, 13))  # Wednesday, after the nudge
-    assert [(u.name, u.at) for u in upcoming] == [
+    assert [(u.step.label, u.at) for u in upcoming] == [
         ("announcement / cancellation", local(7, 18)),
         ("tally", local(9, 14)),
         ("flat ask", local(13, 18)),
@@ -502,7 +502,7 @@ def test_upcoming_actions_mid_week() -> None:
 
 
 def test_upcoming_actions_include_one_due_right_now() -> None:
-    assert upcoming_actions(CONFIG, local(6, 18))[0].name == "flat ask"
+    assert upcoming_actions(CONFIG, local(6, 18))[0].step.label == "flat ask"
 
 
 # --- CLI ----------------------------------------------------------------------------------------

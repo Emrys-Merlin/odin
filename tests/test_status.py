@@ -229,7 +229,7 @@ def test_only_reads(store: Store) -> None:
 
 
 def test_every_upcoming_action_has_a_german_label() -> None:
-    assert {u.name for u in upcoming_actions(CONFIG, local(12, 10))} == STEP_LABELS.keys()
+    assert {u.step for u in upcoming_actions(CONFIG, local(12, 10))} == STEP_LABELS.keys()
 
 
 # --- A pending dinner weekday change (#77) -------------------------------------------------------

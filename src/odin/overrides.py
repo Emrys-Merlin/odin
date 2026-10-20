@@ -5,7 +5,7 @@ reset. Overrides are applied to the parsed `Config` and validated exactly like t
 effective config is always a valid one. Keys and values are strings:
 
 - ``templates.<name>`` — the template text, for the weekly templates in `EDITABLE_TEMPLATES`.
-- ``schedule.<point>`` — ``"<weekday> <HH:MM>"`` (e.g. ``"wed 18:00"``), for `SCHEDULE_POINTS`.
+- ``schedule.<point>`` — ``"<weekday> <HH:MM>"`` (e.g. ``"wed 18:00"``), for each `SchedulePoint`.
 - ``schedule.nudge.enabled`` — ``"true"`` or ``"false"``.
 - ``schedule.dinner.next`` (`PENDING_DINNER_KEY`) — a new dinner time on another weekday, as for
   ``schedule.dinner``, that waits for the running dinner week to end. Its `Override.after_week`
@@ -34,6 +34,7 @@ from odin.config import (
     _parse_time,
     _parse_weekday,
 )
+from odin.cycle import SchedulePoint
 from odin.engine import Transition, dinner_week, record_transition, transition
 from odin.store import AppliedDinner, Override, Store
 
@@ -48,8 +49,6 @@ EDITABLE_TEMPLATES = (
     "weekday_change_cancellation",
     "tally",
 )
-# The schedule points that can be moved via chat, in schedule order.
-SCHEDULE_POINTS = ("flat_ask", "nudge", "flat_deadline", "rsvp_by", "tally", "cook", "dinner")
 
 NUDGE_ENABLED_KEY = "schedule.nudge.enabled"
 _BOOLS = {"true": True, "false": False}
@@ -62,10 +61,8 @@ def template_key(name: str) -> str:
     return f"templates.{name}"
 
 
-def schedule_key(point: str) -> str:
+def schedule_key(point: SchedulePoint) -> str:
     """The override key for schedule point `point`, e.g. ``schedule.flat_deadline``."""
-    if point not in SCHEDULE_POINTS:
-        raise ValueError(f"not a schedule point: {point!r}")
     return f"schedule.{point}"
 
 
@@ -80,10 +77,10 @@ def format_bool(value: bool) -> str:
 
 
 TEMPLATE_KEYS = {template_key(name): name for name in EDITABLE_TEMPLATES}
-SCHEDULE_KEYS = {schedule_key(point): point for point in SCHEDULE_POINTS}
+SCHEDULE_KEYS = {schedule_key(point): point for point in SchedulePoint}
 # Every valid override key that `apply_overrides` takes.
 KEYS = frozenset({*TEMPLATE_KEYS, *SCHEDULE_KEYS, NUDGE_ENABLED_KEY})
-DINNER_KEY = schedule_key("dinner")
+DINNER_KEY = schedule_key(SchedulePoint.DINNER)
 PENDING_DINNER_KEY = "schedule.dinner.next"
 
 
@@ -110,8 +107,7 @@ def apply_overrides(base: Config, overrides: Mapping[str, str]) -> Config:
                 raise ConfigError(f"{key}: empty message text")
             templates[name] = Template.parse(value.strip(), TEMPLATE_PLACEHOLDERS[name], key)
         elif key in SCHEDULE_KEYS:
-            point = SCHEDULE_KEYS[key]
-            schedule["nudge_time" if point == "nudge" else point] = _parse_weekly_time(value, key)
+            schedule[SCHEDULE_KEYS[key].attr] = _parse_weekly_time(value, key)
         elif key == NUDGE_ENABLED_KEY:
             if value not in _BOOLS:
                 raise ConfigError(f'{key}: must be "true" or "false", got {value!r}')

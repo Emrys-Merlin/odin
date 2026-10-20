@@ -5,6 +5,7 @@ import pytest
 from odin.commands import CommandContext, handle
 from odin.commands.vars import DESCRIPTIONS
 from odin.config import COMMON_PLACEHOLDERS, TEMPLATE_PLACEHOLDERS, parse_config
+from odin.cycle import SchedulePoint
 from odin.overrides import EDITABLE_TEMPLATES, apply_overrides, schedule_key
 from odin.store import Store
 
@@ -78,14 +79,14 @@ def test_every_line_with_a_fixed_value_shows_it(store: Store) -> None:
 
 
 def test_a_schedule_override_changes_the_shown_value(store: Store) -> None:
-    reply = vars_reply(store, "/vars", {schedule_key("flat_deadline"): "thu 9:30"})
+    reply = vars_reply(store, "/vars", {schedule_key(SchedulePoint.FLAT_DEADLINE): "thu 9:30"})
     assert "{deadline} – Entscheidung der WG (Uhrzeit): 09:30" in reply
     assert "Donnerstag / Thursday" in reply
     assert "Mittwoch" not in reply
 
 
 def test_moving_the_flat_ask_changes_its_weekday(store: Store) -> None:
-    reply = vars_reply(store, "/vars", {schedule_key("flat_ask"): "mon 18:00"})
+    reply = vars_reply(store, "/vars", {schedule_key(SchedulePoint.FLAT_ASK): "mon 18:00"})
     assert "Frage an die WG (Wochentag): Montag / Monday" in reply
     assert "Dienstag" not in reply
 

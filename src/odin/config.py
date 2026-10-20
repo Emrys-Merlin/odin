@@ -16,6 +16,8 @@ from typing import Any
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from odin.cycle import SchedulePoint
+
 
 class ConfigError(ValueError):
     """The config file or the environment is invalid."""
@@ -146,15 +148,19 @@ class Schedule:
         """When the nudge is sent; None if it is disabled."""
         return self.nudge_time if self.nudge_enabled else None
 
+    def time_of(self, point: SchedulePoint) -> WeeklyTime:
+        """The time of `point`; the nudge's even while it is disabled."""
+        return getattr(self, point.attr)
 
-_DEFAULT_SCHEDULE: dict[str, tuple[str, str]] = {
-    "flat_ask": ("tue", "18:00"),
-    "nudge": ("wed", "12:00"),
-    "flat_deadline": ("wed", "18:00"),
-    "rsvp_by": ("fri", "14:00"),
-    "tally": ("fri", "14:00"),
-    "cook": ("sun", "17:00"),
-    "dinner": ("sun", "18:00"),
+
+_DEFAULT_SCHEDULE: dict[SchedulePoint, tuple[str, str]] = {
+    SchedulePoint.FLAT_ASK: ("tue", "18:00"),
+    SchedulePoint.NUDGE: ("wed", "12:00"),
+    SchedulePoint.FLAT_DEADLINE: ("wed", "18:00"),
+    SchedulePoint.RSVP_BY: ("fri", "14:00"),
+    SchedulePoint.TALLY: ("fri", "14:00"),
+    SchedulePoint.COOK: ("sun", "17:00"),
+    SchedulePoint.DINNER: ("sun", "18:00"),
 }
 
 
@@ -202,17 +208,17 @@ def _parse_weekly_time(
 
 def _parse_schedule(raw: object) -> Schedule:
     table = _table(raw, "schedule")
-    _reject_unknown(table, set(_DEFAULT_SCHEDULE), "schedule")
+    _reject_unknown(table, set(map(str, _DEFAULT_SCHEDULE)), "schedule")
     points: dict[str, WeeklyTime] = {}
     nudge_enabled = True
     for name, default in _DEFAULT_SCHEDULE.items():
+        can_disable = name is SchedulePoint.NUDGE
         point, enabled = _parse_weekly_time(
-            table.get(name), default, f"schedule.{name}", can_disable=name == "nudge"
+            table.get(name), default, f"schedule.{name}", can_disable=can_disable
         )
-        if name == "nudge":
-            points["nudge_time"], nudge_enabled = point, enabled
-        else:
-            points[name] = point
+        points[name.attr] = point
+        if can_disable:
+            nudge_enabled = enabled
     schedule = Schedule(**points, nudge_enabled=nudge_enabled)
     _check_order(schedule)
     return schedule
@@ -231,23 +237,27 @@ def _check_order(s: Schedule) -> None:
     def not_after(a: WeeklyTime, b: WeeklyTime) -> bool:
         return a.minutes_before(dinner) >= b.minutes_before(dinner)
 
-    rules: list[tuple[str, str, bool]] = [
-        ("flat_ask", "flat_deadline", before(s.flat_ask, s.flat_deadline)),
-        ("flat_deadline", "rsvp_by", not_after(s.flat_deadline, s.rsvp_by)),
-        ("flat_deadline", "tally", before(s.flat_deadline, s.tally)),
-        ("tally", "dinner", before(s.tally, dinner)),
-        ("flat_deadline", "cook", before(s.flat_deadline, s.cook)),
+    rules: list[tuple[SchedulePoint, SchedulePoint, bool]] = [
+        (SchedulePoint.FLAT_ASK, SchedulePoint.FLAT_DEADLINE, before(s.flat_ask, s.flat_deadline)),
+        (SchedulePoint.FLAT_DEADLINE, SchedulePoint.RSVP_BY, not_after(s.flat_deadline, s.rsvp_by)),
+        (SchedulePoint.FLAT_DEADLINE, SchedulePoint.TALLY, before(s.flat_deadline, s.tally)),
+        (SchedulePoint.TALLY, SchedulePoint.DINNER, before(s.tally, dinner)),
+        (SchedulePoint.FLAT_DEADLINE, SchedulePoint.COOK, before(s.flat_deadline, s.cook)),
     ]
     if s.nudge is not None:
         rules += [
-            ("flat_ask", "nudge", before(s.flat_ask, s.nudge)),
-            ("nudge", "flat_deadline", before(s.nudge, s.flat_deadline)),
+            (SchedulePoint.FLAT_ASK, SchedulePoint.NUDGE, before(s.flat_ask, s.nudge_time)),
+            (
+                SchedulePoint.NUDGE,
+                SchedulePoint.FLAT_DEADLINE,
+                before(s.nudge_time, s.flat_deadline),
+            ),
         ]
     for first, second, ok in rules:
         if not ok:
             raise ConfigError(
-                f"schedule: {first} ({getattr(s, first)}) must come before {second} "
-                f"({getattr(s, second)}) in the week leading up to dinner ({dinner})"
+                f"schedule: {first} ({s.time_of(first)}) must come before {second} "
+                f"({s.time_of(second)}) in the week leading up to dinner ({dinner})"
             )
 
 
