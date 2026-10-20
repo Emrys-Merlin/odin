@@ -1,6 +1,8 @@
 """Wiring: the running bot is the event consumer and a periodic reconcile tick, side by side.
 
 `serve` supervises it: the bot only runs while ODIN is set up and `odin setup` is not running.
+Both record what they see in a `HealthState`, which `serve` publishes at `GET /health` (see
+`odin.health`).
 """
 
 import asyncio
@@ -12,8 +14,9 @@ from enum import StrEnum
 
 from odin.clock import Clock
 from odin.config import Config, Env
-from odin.engine import Account, reconcile
+from odin.engine import Account, SendFailure, dinner_week, reconcile
 from odin.events import consume_events
+from odin.health import HealthState, start_server, untracked_warnings
 from odin.overrides import effective_config, pending_dinner
 from odin.signal import SignalAdmin, SignalClient
 from odin.store import Store
@@ -116,6 +119,8 @@ async def serve(
     check_interval: timedelta = SETUP_CHECK_INTERVAL,
     tick_interval: timedelta = TICK_INTERVAL,
     admin: SignalAdmin | None = None,
+    health: HealthState | None = None,
+    health_port: int = 0,
 ) -> None:
     """Run the bot whenever ODIN is set up, until `stop` is set.
 
@@ -125,7 +130,12 @@ async def serve(
     the same way). While the bot runs, the database check stops it (after the tick in progress)
     when the lock is taken or the group choice changes; then it starts over with the new state.
     So finishing `odin setup` takes effect without a restart.
+
+    With a `health_port`, `GET /health` is served on it, from `health`, while `serve` runs.
     """
+    health = health or HealthState()
+    health.tick_interval = tick_interval
+    server = await _start_health_server(health, clock, health_port)
     stopped = asyncio.create_task(stop.wait())
     waiting = _WaitingLog()
     try:
@@ -133,17 +143,44 @@ async def serve(
             ready = await _ready_account(env, store, clock.now(), admin)
             if isinstance(ready, str):
                 waiting.log(ready)
+                # Only an unreachable API is not for `odin setup` to fix.
+                health.wait(ready, setup_pending=ready != API_UNREACHABLE)
                 await asyncio.wait({stopped}, timeout=check_interval.total_seconds())
                 continue
             waiting.reset()
             _log_sources(env, store)
             await _supervise(
-                config, store, client, env, ready, clock, stopped, check_interval, tick_interval
+                config,
+                store,
+                client,
+                env,
+                ready,
+                clock,
+                stopped,
+                check_interval,
+                tick_interval,
+                health,
             )
     finally:
         stopped.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await stopped
+        if server is not None:
+            server.close()
+            await server.wait_closed()
+
+
+async def _start_health_server(
+    health: HealthState, clock: Clock, port: int
+) -> asyncio.Server | None:
+    """Serve `GET /health` on `port`, if not 0. A port in use is logged; the bot runs anyway."""
+    if not port:
+        return None
+    try:
+        return await start_server(health, clock, port)
+    except OSError as e:
+        logger.error("cannot serve the health endpoint on port %d: %s", port, e)
+        return None
 
 
 async def _ready_account(
@@ -205,11 +242,12 @@ async def _supervise(
     stopped: asyncio.Task[object],
     check_interval: timedelta,
     tick_interval: timedelta,
+    health: HealthState,
 ) -> None:
     """Run the bot with `account` until shutdown or until the setup state changes."""
     bot_stop = asyncio.Event()
     bot = asyncio.create_task(
-        run_bot(config, store, client, account, clock, bot_stop, tick_interval)
+        run_bot(config, store, client, account, clock, bot_stop, tick_interval, health)
     )
     try:
         while not bot.done():
@@ -243,6 +281,7 @@ async def run_bot(
     clock: Clock,
     stop: asyncio.Event,
     tick_interval: timedelta = TICK_INTERVAL,
+    health: HealthState | None = None,
 ) -> None:
     """Consume events (reactions, commands) and reconcile every `tick_interval` until stopped.
 
@@ -255,13 +294,17 @@ async def run_bot(
     The first tick runs right away. A tick in progress is finished before shutting down, so a
     sent message is always recorded. If the event stream ends or fails, the bot stops with an
     error: a container restart is the simplest way back to a working connection.
+
+    Each tick is recorded in `health`, if given.
     """
+    health = health or HealthState(tick_interval=tick_interval)
+    health.start_bot(clock.now())
     _log_pending_dinner(config, store, clock)
     consumer = asyncio.create_task(consume_events(client, store, config, account, clock))
     stopped = asyncio.create_task(stop.wait())
     try:
         while True:
-            await _tick(config, store, client, account, clock)
+            await _tick(config, store, client, account, clock, health)
             done, _ = await asyncio.wait(
                 {consumer, stopped},
                 timeout=tick_interval.total_seconds(),
@@ -299,10 +342,22 @@ def _log_pending_dinner(config: Config, store: Store, clock: Clock) -> None:
 
 
 async def _tick(
-    config: Config, store: Store, client: SignalClient, account: Account, clock: Clock
+    config: Config,
+    store: Store,
+    client: SignalClient,
+    account: Account,
+    clock: Clock,
+    health: HealthState,
 ) -> None:
+    now = clock.now()
+    health.start_tick(now)
+    failures: list[SendFailure] = []
     try:
-        now = clock.now()
-        await reconcile(effective_config(config, store, now), store, client, account, now)
+        effective = effective_config(config, store, now)
+        await reconcile(effective, store, client, account, now, failures)
+        warnings = untracked_warnings(store, dinner_week(effective, now))
     except Exception:
         logger.exception("reconcile tick failed; retrying next tick")
+        health.end_tick(clock.now(), None, [])
+        return
+    health.end_tick(clock.now(), failures, warnings)

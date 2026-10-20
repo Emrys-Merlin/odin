@@ -21,7 +21,9 @@ class FakeSignalClient:
 
     Sent messages get strictly increasing timestamps starting at ``first_timestamp``.
     ``events()`` yields injected events in order and ends once ``close()`` is called and
-    all earlier events are consumed. ``fail_sends()`` makes the next group sends raise.
+    all earlier events are consumed; like the real client, it tells ``on_connection`` that its
+    connection is up when it starts and down when it ends. ``fail_sends()`` makes the next group
+    sends raise.
     """
 
     def __init__(
@@ -29,9 +31,11 @@ class FakeSignalClient:
         number: str = "+490000000000",
         groups: list[Group] | None = None,
         first_timestamp: int = 1_000,
+        on_connection: Callable[[bool], None] | None = None,
     ) -> None:
         self.number = number
         self.groups = list(groups or [])
+        self.on_connection = on_connection
         self.sent: list[SentMessage] = []
         self._next_timestamp = first_timestamp
         self._queue: asyncio.Queue[Event | None] = asyncio.Queue()
@@ -60,8 +64,14 @@ class FakeSignalClient:
         return list(self.groups)
 
     async def events(self) -> AsyncIterator[Event]:
-        while (event := await self._queue.get()) is not None:
-            yield event
+        if self.on_connection is not None:
+            self.on_connection(True)
+        try:
+            while (event := await self._queue.get()) is not None:
+                yield event
+        finally:
+            if self.on_connection is not None:
+                self.on_connection(False)
 
     def inject(self, event: Event) -> None:
         self._queue.put_nowait(event)

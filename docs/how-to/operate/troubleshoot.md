@@ -14,11 +14,17 @@ Find out why ODIN is quiet or misbehaves: setup status, logs, common problems.
 ## Check the state first
 
 ```bash
+podman exec odin odin health                        # "up", or "down" with the reasons
 systemctl --user status odin-pod signal-api odin    # all "active (running)"
 podman ps                                           # odin-pod-infra, signal-api, odin
 podman exec odin odin setup --status                # ✓ / ✗ per setup step
 podman exec odin odin check-config                  # config, groups, next actions
 ```
+
+`odin health` asks the running bot what keeps it from working: a step that does not go out,
+the event connection to the Signal API, or that it waits for setup. Each reason is listed in
+[Health endpoint](../../reference/health-endpoint.md#reasons); to get alerted, see
+[Monitor ODIN](monitor.md).
 
 `odin setup --status` changes nothing. It checks that the Signal API is reachable, the number is
 registered, PIN, profile and hello are done, both groups are chosen and ODIN is still a
@@ -65,6 +71,13 @@ The Quadlet generator rejected a unit file. Find out why:
 
 It names the file and line. Also check that the files are in `~/.config/containers/systemd/` and
 that `podman --version` is 5.x.
+
+### `systemctl --user restart odin` does not return
+
+It waits until ODIN is healthy (`Notify=healthy`, see
+[Deployment units](../../reference/deployment-units.md#odincontainer)), usually for less than a
+minute. In a second shell, `podman exec odin odin health` says what it is waiting for. After
+15 minutes the start fails and the unit restarts. To not wait at all, add `--no-block`.
 
 ### A unit fails right away
 

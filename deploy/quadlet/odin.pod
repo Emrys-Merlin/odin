@@ -1,6 +1,6 @@
 # The pod that holds ODIN's two containers: signal-api and odin. Containers in a pod share one
 # network namespace, so odin reaches the Signal API at http://localhost:8080 and nothing is
-# published to the VM's network.
+# published to the VM's network by default.
 #
 # Quadlet turns this file into odin-pod.service. Needs podman >= 5.0 (Debian 13 has 5.4).
 # Install: see https://emrys-merlin.github.io/odin/tutorials/first-deployment/.
@@ -12,6 +12,10 @@ Description=ODIN pod (Signal API + bot)
 # Not "odin": pods and containers share one name space in podman, and the bot container is
 # called odin so that `podman exec -it odin odin setup` works.
 PodName=odin-pod
+# Opt-in: publish ODIN's health endpoint (GET /health, port 8081) for a monitor such as Uptime
+# Kuma, on one host address only, e.g. the VM's Tailscale IP or 127.0.0.1. See
+# https://emrys-merlin.github.io/odin/how-to/operate/monitor/.
+#PublishPort=127.0.0.1:8081:8081
 
 [Install]
 WantedBy=default.target

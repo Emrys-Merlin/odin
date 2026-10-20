@@ -349,3 +349,41 @@ def test_receive_reconnects_when_the_websocket_closes(
     assert len(dms) == 2
     assert connections == 2
     assert "Signal API WebSocket closed, reconnecting" in caplog.text
+
+
+def test_events_report_the_websocket_going_up_and_down(monkeypatch: pytest.MonkeyPatch) -> None:
+    message = (FIXTURES / "reaction_add.json").read_text()
+    seen: list[str] = []
+
+    async def dropped() -> AsyncIterator[str]:
+        seen.append("message")
+        yield message
+        raise websockets.ConnectionClosed(None, None)
+
+    async def connect(url: str) -> AsyncIterator[AsyncIterator[str]]:
+        for socket in (dropped(), dropped()):
+            yield socket
+
+    monkeypatch.setattr(rest.websockets, "connect", connect)
+    client = rest.RestSignalClient(
+        "http://signal-api:8080",
+        NUMBER,
+        httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(500))),
+        on_connection=lambda up: seen.append("up" if up else "down"),
+    )
+
+    async def collect() -> None:
+        async for _ in client.events():
+            pass
+
+    asyncio.run(collect())
+    assert seen == ["up", "message", "down", "up", "message", "down", "down"]
+    # The wizard's stream reports nothing.
+    seen.clear()
+    asyncio.run(collect_direct(client))
+    assert seen == ["message", "message"]
+
+
+async def collect_direct(client: rest.RestSignalClient) -> None:
+    async for _ in client.direct_messages():
+        pass

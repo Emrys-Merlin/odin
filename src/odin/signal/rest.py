@@ -33,11 +33,17 @@ class RestSignalClient:
     """Talks REST for sending, listing and administration, WebSocket for receiving."""
 
     def __init__(
-        self, base_url: str, number: str, http_client: httpx.AsyncClient | None = None
+        self,
+        base_url: str,
+        number: str,
+        http_client: httpx.AsyncClient | None = None,
+        on_connection: Callable[[bool], None] | None = None,
     ) -> None:
+        """`on_connection` is told whenever the WebSocket of `events()` goes up or down."""
         self.base_url = base_url.rstrip("/")
         self.number = number
         self._http = http_client or httpx.AsyncClient(timeout=TIMEOUT)
+        self._on_connection = on_connection
 
     async def send_group_message(self, group_id: str, text: str) -> int:
         return await self._send(group_id, text)
@@ -46,7 +52,7 @@ class RestSignalClient:
         return parse_groups(await self._request("GET", f"/v1/groups/{self.number}"))
 
     def events(self) -> AsyncIterator[Event]:
-        return self._receive(parse_event)
+        return self._receive(parse_event, self._on_connection)
 
     # SignalAdmin
 
@@ -128,19 +134,36 @@ class RestSignalClient:
         raise_for_api_error(response)
         return response
 
-    async def _receive[T](self, parse: Callable[[str | bytes], T | None]) -> AsyncIterator[T]:
-        """Yield what ``parse`` makes of each WebSocket message, skipping ``None``."""
+    async def _receive[T](
+        self,
+        parse: Callable[[str | bytes], T | None],
+        on_connection: Callable[[bool], None] | None = None,
+    ) -> AsyncIterator[T]:
+        """Yield what ``parse`` makes of each WebSocket message, skipping ``None``.
+
+        Tells ``on_connection`` whenever the WebSocket goes up or down.
+        """
+
+        def connection(up: bool) -> None:
+            if on_connection is not None:
+                on_connection(up)
+
         # Iterating over connect() reconnects with exponential backoff whenever the
         # connection drops or cannot be established.
-        async for ws in websockets.connect(self.receive_url):
-            try:
-                async for raw in ws:
-                    try:
-                        item = parse(raw)
-                    except ValueError:
-                        logger.warning("Ignoring malformed message from Signal API: %r", raw)
-                        continue
-                    if item is not None:
-                        yield item
-            except websockets.ConnectionClosed:
-                logger.warning("Signal API WebSocket closed, reconnecting")
+        try:
+            async for ws in websockets.connect(self.receive_url):
+                connection(True)
+                try:
+                    async for raw in ws:
+                        try:
+                            item = parse(raw)
+                        except ValueError:
+                            logger.warning("Ignoring malformed message from Signal API: %r", raw)
+                            continue
+                        if item is not None:
+                            yield item
+                except websockets.ConnectionClosed:
+                    logger.warning("Signal API WebSocket closed, reconnecting")
+                connection(False)
+        finally:
+            connection(False)
