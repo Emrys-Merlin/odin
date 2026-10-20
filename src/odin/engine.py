@@ -56,6 +56,12 @@ dinner has not started (an earlier, finished week never acts on it) and no cance
 recorded yet: before the decision it *is* the decision, after an announcement it follows it. From
 then on dinner is off: an open flat ask or nudge is skipped at once (the week needs no
 confirmations any more), and the tally is skipped at its time, as after any cancellation.
+
+**A skip date** (`/skip`, see `odin.commands.skip`) is a dinner week set in advance to have no
+dinner. It runs like a week whose flat ask was missed — the flat ask, nudge and tally are recorded
+as skipped, each at its time, so `/unskip` works until the flat ask is due — except that the
+dinner group still gets the cancellation at the usual decision time. A skip date only counts while
+the week's flat ask has not gone out; after that, skipping the week is `/cancel`.
 """
 
 import logging
@@ -109,6 +115,7 @@ class Upcoming:
 
     name: str
     at: datetime
+    week: date  # the dinner week the action belongs to
     note: str = ""
 
 
@@ -130,10 +137,11 @@ def upcoming_actions(config: Config, now: datetime) -> list[Upcoming]:
     week = dinner_week(config, now)
     upcoming = []
     for name, point, note in points:
-        at = config.when(point, week)
+        of, at = week, config.when(point, week)
         if at < now:
-            at = config.when(point, week + timedelta(weeks=1))
-        upcoming.append(Upcoming(name, at, note))
+            of = week + timedelta(weeks=1)
+            at = config.when(point, of)
+        upcoming.append(Upcoming(name, at, of, note))
     return sorted(upcoming, key=lambda u: u.at.astimezone(UTC))
 
 
@@ -302,13 +310,15 @@ class _Week:
         if not self.over and not self._recorded(Action.CANCELLATION) and self._cancel_confirmed():
             await self._send(Action.CANCELLATION)
         cancelled = self.store.action_outcome(self.week, Action.CANCELLATION) is Outcome.SENT
+        skip_date = not self.over and self.store.skip_date(self.week) is not None
 
-        # 1. Flat ask.
+        # 1. Flat ask; not asked on a skip date, but only skipped at its time (until then /unskip
+        # can take the skip date back).
         if not self._recorded(Action.FLAT_ASK):
             due_now = False if cancelled else due("flat_ask")
             if due_now is None:
                 return
-            if due_now:
+            if due_now and not skip_date:
                 await self._send(Action.FLAT_ASK, track=MessageKind.FLAT_POLL)
             else:
                 self._skip(Action.FLAT_ASK)
@@ -332,9 +342,11 @@ class _Week:
                 self._skip(Action.NUDGE)
 
         # 3. Decision: announcement or cancellation. A dropped week was never asked; it gets the
-        # cancellation, due from the switch that dropped it.
+        # cancellation, due from the switch that dropped it. A skip date was not asked either; it
+        # gets the cancellation at the usual time.
         if not (self._recorded(Action.ANNOUNCEMENT) or self._recorded(Action.CANCELLATION)):
             dropped = None if asked or self.over else self.store.dropped_at(self.week)
+            skipped = skip_date and not asked
             if dropped is not None:
                 due_now = dropped_cancellation_window(self.config, self.week, dropped).due(self.now)
             else:
@@ -343,7 +355,7 @@ class _Week:
                 return
             on = asked and self._confirmations() > 0
             decision = Action.ANNOUNCEMENT if on else Action.CANCELLATION
-            if due_now and (asked or dropped is not None):
+            if due_now and (asked or dropped is not None or skipped):
                 track = MessageKind.DINNER_ANNOUNCEMENT if on else None
                 await self._send(decision, track=track)
             else:

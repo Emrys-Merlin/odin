@@ -11,6 +11,7 @@ from odin.commands.help import HELP
 from odin.commands.schedule import SCHEDULE
 from odin.commands.settext import RESETTEXT, SETTEXT
 from odin.commands.settime import NUDGE, RESETTIME, SETTIME
+from odin.commands.skip import SKIP, UNSKIP
 from odin.commands.status import STATUS
 from odin.commands.texts import TEXT, TEXTS
 from odin.commands.vars import VARS
@@ -39,6 +40,8 @@ COMMANDS: list[Command] = [
     RESETTIME,
     NUDGE,
     CANCEL,
+    SKIP,
+    UNSKIP,
     VERSION,
 ]
 

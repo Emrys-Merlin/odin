@@ -4,7 +4,7 @@ Command replies are UI strings in code, not config templates; the config holds o
 of the weekly cycle. Strings that a single command uses live in that command's module.
 """
 
-from datetime import datetime, tzinfo
+from datetime import date, datetime, tzinfo
 
 from odin.config import WeeklyTime
 
@@ -20,6 +20,11 @@ WEEKDAYS_SHORT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 def weekly_time(point: WeeklyTime) -> str:
     """A schedule point in German: ``Di 18:00``."""
     return f"{WEEKDAYS_SHORT[point.weekday]} {point.time:%H:%M}"
+
+
+def short_date(day: date) -> str:
+    """A day with its year: ``So 27.12.2026``."""
+    return f"{WEEKDAYS_SHORT[day.weekday()]} {day:%d.%m.%Y}"
 
 
 def override_marker(changed_by: str, changed_at: datetime, timezone: tzinfo) -> str:

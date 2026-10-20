@@ -144,6 +144,8 @@ def render_chat_commands() -> str:
         "`<punkt>` (`/settime`, `/resettime`) is one of the schedule points, in schedule order: "
         + ", ".join(f"`{point}`" for point in SCHEDULE_POINTS)
         + ".",
+        "",
+        "`<JJJJ-MM-TT>` (`/skip`, `/unskip`) is a dinner day as an ISO date, e.g. `2026-12-27`.",
     ]
     return "\n".join(lines) + "\n"
 

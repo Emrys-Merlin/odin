@@ -11,7 +11,9 @@ Everything is keyed by the dinner week, identified by the date of its Sunday. Th
 - the **dropped weeks**: dinner weeks cut short by a new dinner weekday, and when that switch took
   effect (see `odin.engine.transition`),
 - the **applied dinner**: the dinner time the weeks are currently run under, and a dinner week a
-  new weekday from the config file waits for (see `odin.overrides.effective_config`).
+  new weekday from the config file waits for (see `odin.overrides.effective_config`),
+- the **skip dates**: dinner days set via `/skip` on which there is no dinner (see
+  `odin.commands.skip`).
 
 A Signal message is identified by its author and its (millisecond) Signal timestamp, which is also
 how incoming reactions refer to their target message.
@@ -100,6 +102,15 @@ class AppliedDinner:
     held_week: date | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class SkipDate:
+    """A dinner day without dinner, set via `/skip`: the dinner week `day` is cancelled."""
+
+    day: date
+    added_by: str  # the sender's name if known, else their number
+    added_at: datetime
+
+
 # Migration i brings the schema from user_version i to i + 1. Only ever append.
 _MIGRATIONS: tuple[str, ...] = (
     """
@@ -160,6 +171,13 @@ _MIGRATIONS: tuple[str, ...] = (
         id        INTEGER PRIMARY KEY CHECK (id = 1),
         point     TEXT NOT NULL,
         held_week TEXT
+    );
+    """,
+    """
+    CREATE TABLE skip_dates (
+        day      TEXT PRIMARY KEY,
+        added_by TEXT NOT NULL,
+        added_at TEXT NOT NULL
     );
     """,
 )
@@ -456,6 +474,39 @@ class Store:
             (point, None if held_week is None else held_week.isoformat()),
         )
 
+    # Skip dates
+
+    def add_skip_date(self, day: date, added_by: str, now: datetime) -> bool:
+        """Record that there is no dinner on ``day``.
+
+        Returns False (and keeps the original record) if it was already recorded.
+        """
+        cursor = self._conn.execute(
+            "INSERT OR IGNORE INTO skip_dates (day, added_by, added_at) VALUES (?, ?, ?)",
+            (day.isoformat(), added_by, _utc(now)),
+        )
+        return cursor.rowcount == 1
+
+    def delete_skip_date(self, day: date) -> bool:
+        """Forget the skip date ``day``. Returns whether it was recorded."""
+        cursor = self._conn.execute("DELETE FROM skip_dates WHERE day = ?", (day.isoformat(),))
+        return cursor.rowcount == 1
+
+    def skip_date(self, day: date) -> SkipDate | None:
+        """The skip date ``day``; None if there is none."""
+        row = self._conn.execute(
+            "SELECT day, added_by, added_at FROM skip_dates WHERE day = ?", (day.isoformat(),)
+        ).fetchone()
+        return None if row is None else _skip_date(row)
+
+    def skip_dates(self, since: date | None = None) -> list[SkipDate]:
+        """The skip dates on or after ``since`` (all if None), earliest first."""
+        rows = self._conn.execute(
+            "SELECT day, added_by, added_at FROM skip_dates WHERE day >= ? ORDER BY day",
+            ("" if since is None else since.isoformat(),),
+        ).fetchall()
+        return [_skip_date(row) for row in rows]
+
     # Setup lock: held by `odin setup` while it runs, so `odin run` stays out of its way. It is
     # a settings row "<token> <heartbeat>"; the holder refreshes the heartbeat, and a lock whose
     # heartbeat is older than SETUP_LOCK_TTL is stale, so a killed holder cannot block forever.
@@ -506,3 +557,8 @@ class Store:
 def _message(row: tuple[str, str, str, str, int]) -> TrackedMessage:
     week, kind, group_id, author, timestamp = row
     return TrackedMessage(date.fromisoformat(week), MessageKind(kind), group_id, author, timestamp)
+
+
+def _skip_date(row: tuple[str, str, str]) -> SkipDate:
+    day, added_by, added_at = row
+    return SkipDate(date.fromisoformat(day), added_by, datetime.fromisoformat(added_at))

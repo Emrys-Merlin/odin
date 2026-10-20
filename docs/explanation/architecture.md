@@ -12,7 +12,7 @@ flowchart LR
   sidecar <--> signal(("Signal"))
   config[/"config TOML<br/>(schedule, emoji, templates)"/] --> odin
   env[/"env vars<br/>(SIGNAL_NUMBER, API URL)"/] --> odin
-  odin <--> db[("SQLite state DB<br/>(sent actions, group IDs,<br/>chat overrides)")]
+  odin <--> db[("SQLite state DB<br/>(sent actions, group IDs,<br/>chat overrides, skip dates)")]
   sidecar <--> vol[("signal-cli data volume<br/>(account keys)")]
 ```
 
@@ -47,7 +47,7 @@ Settings come from three places, each for a different kind of value:
 - **Env vars** — deployment-specific values: `SIGNAL_NUMBER`, the signal API URL. What differs
   between installations and must not be in the repo.
 - **State DB** (SQLite) — what ODIN learns while running: every sent action, the group IDs, and
-  the changes flatmates make from the chat. The group IDs are chosen in `odin setup` and stored
+  the changes flatmates make from the chat, including the skip dates set with `/skip`. The group IDs are chosen in `odin setup` and stored
   there; `FLAT_GROUP_ID` / `DINNER_GROUP_ID` env vars override them when set. Until ODIN is set
   up, `odin run` waits instead of failing.
 

@@ -125,3 +125,35 @@ is refused once the cancellation went out (or was skipped as too late), for a we
 
 Steps: [Cancel a dinner](../how-to/chat/cancel-dinner.md). Exact syntax:
 [Chat commands](../reference/chat-commands.md).
+
+## Skipping a date in advance
+
+Some Sundays are known to be off long before: holidays, everyone away. `/skip` with the date
+enters such a *skip date* in the state DB; it is set from the chat only, there is no config key
+for it. No reaction is needed — a date weeks ahead is a plan, not a last-minute call, and
+`/unskip` takes it back.
+
+A skipped week runs like a cancelled one, but on the usual schedule:
+
+- The flat ask and the nudge are not sent. Nobody needs to confirm a dinner that is not
+  happening, so the flat group is not asked.
+- The cancellation goes to the dinner group at the usual decision time (Wed 18:00 by default),
+  not when the date is entered. Guests hear about every Sunday at the same point in the week, and
+  the template's "this Sunday" stays true.
+- The tally is skipped, as after any cancellation.
+
+The flat ask is only marked as skipped at its time, so `/unskip` works until then; after it the
+week stays cancelled, because nobody was asked.
+
+Once a week's flat ask has gone out, the flat is deciding that week already, and skipping it is
+the same thing as `/cancel`: `/skip` with this week's date answers exactly as `/cancel` does
+(confirmation by reaction, the same cancellation, sent once). There is one way to cancel a running
+week, not two. Conversely, `/cancel` is refused in a skipped week, since its cancellation goes out
+anyway.
+
+A skip date names a dinner day, so it must fall on the dinner weekday — the new one after a
+pending [dinner weekday change](weekday-change.md). A date entered before dinner moved to
+another weekday no longer matches any week; `/skip` marks it in the list.
+
+Steps: [Skip a date in advance](../how-to/chat/skip-a-date.md). Exact syntax:
+[Chat commands](../reference/chat-commands.md).
