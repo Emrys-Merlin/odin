@@ -1,10 +1,10 @@
 """/cancel end to end: the command, its tracked reply, the confirming reaction and the engine."""
 
 import asyncio
-from collections.abc import Iterator
 from datetime import date, datetime, timedelta
 
 import pytest
+from helpers import local, ms
 
 from odin.clock import FixedClock
 from odin.commands import CommandContext, TrackedReply, handle
@@ -32,7 +32,6 @@ TEMPLATES = {
 # Default schedule: ask Tue 18:00, nudge Wed 12:00, decision Wed 18:00, tally Fri 14:00,
 # dinner Sun 18:00.
 CONFIG = parse_config({"templates": TEMPLATES})
-BERLIN = CONFIG.timezone
 
 BOT = "+490000000000"
 FLAT, DINNER = "group.flat=", "group.dinner="
@@ -41,14 +40,6 @@ ANNA, BEN = "+4915100000001", "+4915100000002"
 
 WEEK = date(2026, 10, 11)
 CANCELLATION = "ABGESAGT Sonntag\n\nCANCELLED Sunday"
-
-
-def local(day: int, hour: int, minute: int = 0) -> datetime:
-    return datetime(2026, 10, day, hour, minute, tzinfo=BERLIN)
-
-
-def ms(moment: datetime) -> int:
-    return int(moment.timestamp() * 1000)
 
 
 class Client(FakeSignalClient):
@@ -132,12 +123,6 @@ def message(text: str, now: datetime) -> GroupMessage:
     return GroupMessage(
         sender=ANNA, sender_name="Anna", text=text, group_id=FLAT, timestamp=ms(now)
     )
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as s:
-        yield s
 
 
 @pytest.fixture

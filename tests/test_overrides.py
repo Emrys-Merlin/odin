@@ -1,6 +1,5 @@
 import datetime as dt
 import logging
-from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -38,12 +37,6 @@ def make_config(**overrides: Any) -> Config:
 
 
 BASE = make_config()
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as s:
-        yield s
 
 
 # --- keys ---------------------------------------------------------------------------------------

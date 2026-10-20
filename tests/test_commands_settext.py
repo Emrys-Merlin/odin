@@ -1,5 +1,4 @@
 import asyncio
-from collections.abc import Iterator
 from datetime import UTC, date, datetime
 
 import pytest
@@ -24,12 +23,6 @@ BASE = parse_config({"templates": TEMPLATES})
 BERLIN = BASE.timezone
 WEEK = date(2026, 10, 11)
 MONDAY = datetime(2026, 10, 5, 12, 0, tzinfo=BERLIN)  # nothing sent yet this week
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as store:
-        yield store
 
 
 def context(

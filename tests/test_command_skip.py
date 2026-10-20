@@ -1,10 +1,10 @@
 """/skip and /unskip end to end: the commands, the skip dates in the store, the engine, /status."""
 
 import asyncio
-from collections.abc import Iterator
 from datetime import date, datetime, timedelta
 
 import pytest
+from helpers import local, ms
 
 from odin.clock import FixedClock
 from odin.commands import CommandContext, TrackedReply, handle
@@ -41,7 +41,6 @@ TEMPLATES = {
 CONFIG = parse_config({"templates": TEMPLATES})
 # For a Sunday → Saturday dinner, cooking has to move off Sunday first.
 SAT_COOK = parse_config({"templates": TEMPLATES, "schedule": {"cook": {"weekday": "sat"}}})
-BERLIN = CONFIG.timezone
 
 BOT = "+490000000000"
 FLAT, DINNER = "group.flat=", "group.dinner="
@@ -53,20 +52,6 @@ WEEK = date(2026, 10, 11)
 NEXT = date(2026, 10, 18)
 XMAS = date(2026, 12, 27)
 CANCELLATION = "ABGESAGT Sonntag\n\nCANCELLED Sunday"
-
-
-def local(day: int, hour: int, minute: int = 0, month: int = 10) -> datetime:
-    return datetime(2026, month, day, hour, minute, tzinfo=BERLIN)
-
-
-def ms(moment: datetime) -> int:
-    return int(moment.timestamp() * 1000)
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as s:
-        yield s
 
 
 def run_command(store: Store, text: str, now: datetime, base: Config = CONFIG) -> list[str]:

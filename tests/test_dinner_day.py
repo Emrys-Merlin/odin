@@ -6,13 +6,13 @@ A week dropped by the switch gets the cancellation in the dinner group, exactly 
 import asyncio
 import logging
 import sqlite3
-from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
+from helpers import ms
 
 from odin.commands import CommandContext, handle
 from odin.commands.settime import RESET, SAVED
@@ -63,6 +63,7 @@ ACCOUNT = Account(number="+490000000000", flat_group_id="group.flat=", dinner_gr
 ANNA, BEN = "+4915100000001", "+4915100000002"
 
 
+# Not `helpers.local`: this module spans several months, so the month comes first.
 def local(month: int, day: int, hour: int, minute: int = 0) -> datetime:
     return datetime(2026, month, day, hour, minute, tzinfo=BERLIN)
 
@@ -73,12 +74,6 @@ def oct(day: int, hour: int, minute: int = 0) -> datetime:
 
 # October 2026: Sun 11., Tue 13., Thu 15., Sat 17., Sun 18., Mon 19., Sat 24., Sun 25., Mon 26.
 SUN_18, MON_19, SAT_24, SUN_25, MON_26 = (date(2026, 10, d) for d in (18, 19, 24, 25, 26))
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as store:
-        yield store
 
 
 def send(store: Store, text: str, now: datetime, base: Config = CONFIG) -> str:
@@ -367,7 +362,7 @@ class Bot:
                 target_timestamp=message.timestamp,
                 group_id=message.group_id,
                 is_remove=False,
-                timestamp=int(now.timestamp() * 1000),
+                timestamp=ms(now),
             )
             handle_reaction(event, self.store, config, now)
 
@@ -650,7 +645,7 @@ def test_late_reaction_on_the_old_poll_is_ignored(store: Store) -> None:
         target_timestamp=poll.timestamp,
         group_id=poll.group_id,
         is_remove=False,
-        timestamp=int(oct(14, 11).timestamp() * 1000),  # sent in time, delivered late
+        timestamp=ms(oct(14, 11)),  # sent in time, delivered late
     )
     later = oct(20, 9)
     assert not handle_reaction(event, store, effective_config(CONFIG, store, later), later)
@@ -827,7 +822,7 @@ def runs(store: Store, *runs: tuple[Config, datetime, datetime]) -> list[tuple[s
     for base, start, end in runs:
         bot = Bot(store, base)
         # Signal timestamps are wall-clock milliseconds, so a new client never reuses one.
-        first = int(start.timestamp() * 1000)
+        first = ms(start)
         bot.client = FakeSignalClient(number=ACCOUNT.number, first_timestamp=first)
         bot.run(start, end)
         sent += bot.sent()

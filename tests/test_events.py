@@ -1,8 +1,8 @@
 import asyncio
-from collections.abc import Iterator
 from datetime import date, datetime
 
 import pytest
+from helpers import ms
 
 from odin import commands
 from odin.clock import FixedClock
@@ -35,10 +35,6 @@ WEEK = date(2026, 10, 11)
 NOW = datetime(2026, 10, 6, 18, 30, tzinfo=BERLIN)
 
 
-def ms(moment: datetime) -> int:
-    return int(moment.timestamp() * 1000)
-
-
 def message(text: str, group_id: str = FLAT, sender: str = ANNA) -> GroupMessage:
     return GroupMessage(
         sender=sender, sender_name="Anna", text=text, group_id=group_id, timestamp=ms(NOW)
@@ -61,12 +57,6 @@ class World:
     def replies(self) -> list[str]:
         assert all(sent.group_id == FLAT for sent in self.client.sent)
         return [sent.text for sent in self.client.sent]
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as s:
-        yield s
 
 
 @pytest.fixture

@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-from collections.abc import Iterator
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -58,12 +57,6 @@ def running(*, ticked: bool = True, connected: bool = True) -> HealthState:
 
 def failure(action: Action = Action.ANNOUNCEMENT, error: str = "SignalApiError") -> SendFailure:
     return SendFailure(WEEK, action, error)
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as s:
-        yield s
 
 
 # --- check --------------------------------------------------------------------------------------

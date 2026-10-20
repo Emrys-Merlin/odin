@@ -1,10 +1,11 @@
 import asyncio
-from collections.abc import Callable, Iterator, Sequence
-from datetime import datetime, timedelta
+from collections.abc import Callable, Sequence
+from datetime import timedelta
 from pathlib import Path
 
 import httpx
 import pytest
+from helpers import local
 
 from odin.app import DINNER_GROUP_KEY, FLAT_GROUP_KEY, serve
 from odin.cli import main
@@ -42,7 +43,6 @@ from odin.terminal import ScriptedTerminal
 
 EXAMPLE = Path(__file__).parent.parent / "config.example.toml"
 CONFIG = load_config(EXAMPLE)
-BERLIN = CONFIG.timezone
 
 NUMBER = "+491701234567"
 TIM = "+4915100000009"
@@ -66,22 +66,12 @@ DINNER_INVITED = Group(DINNER.id, DINNER.internal_id, DINNER.name, member=False)
 PICK = ["y", "2", "1"]
 
 
-def local(day: int, hour: int, minute: int = 0) -> datetime:
-    return datetime(2026, 10, day, hour, minute, tzinfo=BERLIN)
-
-
 START = local(6, 18, 5)  # Tuesday, the flat ask is due
 
 
 @pytest.fixture(autouse=True)
 def fixed_pin(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("odin.setup.generate_pin", lambda: PIN)
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as s:
-        yield s
 
 
 @pytest.fixture
