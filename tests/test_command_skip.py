@@ -323,7 +323,7 @@ def test_cancel_in_a_skip_date_week_is_refused(store: Store) -> None:
     ]
 
 
-def test_skip_date_and_cancel_in_the_chat(store: Store) -> None:
+def test_skip_through_the_event_consumer(store: Store) -> None:
     """/skip through the event consumer, as in the running bot."""
     client = FakeSignalClient(number=BOT)
     now = local(5, 10)
