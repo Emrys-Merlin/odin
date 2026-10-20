@@ -11,6 +11,7 @@ import string
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -323,6 +324,23 @@ def dropped_placeholder_values(week: dt.date) -> dict[str, str]:
 TEMPLATE_FALLBACKS: dict[str, str] = {"weekday_change_cancellation": "cancellation"}
 
 
+class TemplateProblem(StrEnum):
+    """What `Template.parse` found wrong with a text."""
+
+    MALFORMED = "malformed"  # unbalanced braces
+    UNKNOWN_PLACEHOLDER = "unknown_placeholder"
+    PLACEHOLDER_SPEC = "placeholder_spec"  # a format spec or conversion such as {count:3} or {x!r}
+
+
+class TemplateError(ConfigError):
+    """An invalid template text: the kind of problem, and the placeholder it is about (if any)."""
+
+    def __init__(self, problem: TemplateProblem, message: str, field: str | None = None) -> None:
+        super().__init__(message)
+        self.problem = problem
+        self.field = field
+
+
 @dataclass(frozen=True)
 class Template:
     """A message text with `{placeholder}`s, checked against the allowed set at load time."""
@@ -332,23 +350,31 @@ class Template:
 
     @classmethod
     def parse(cls, text: str, allowed: frozenset[str], where: str) -> Template:
+        """Raises TemplateError on malformed braces, an unknown placeholder or a format spec."""
         used: set[str] = set()
         try:
             parsed = list(string.Formatter().parse(text))
         except ValueError as e:
-            raise ConfigError(
-                f"{where}: malformed template ({e}); write {{{{ for a literal {{"
+            raise TemplateError(
+                TemplateProblem.MALFORMED,
+                f"{where}: malformed template ({e}); write {{{{ for a literal {{",
             ) from None
         for _, field, spec, conversion in parsed:
             if field is None:
                 continue
             if field not in allowed:
-                raise ConfigError(
+                raise TemplateError(
+                    TemplateProblem.UNKNOWN_PLACEHOLDER,
                     f"{where}: unknown placeholder {{{field}}}; allowed: "
-                    + ", ".join(f"{{{name}}}" for name in sorted(allowed))
+                    + ", ".join(f"{{{name}}}" for name in sorted(allowed)),
+                    field,
                 )
             if spec or conversion:
-                raise ConfigError(f"{where}: placeholder {{{field}}} must not have a format spec")
+                raise TemplateError(
+                    TemplateProblem.PLACEHOLDER_SPEC,
+                    f"{where}: placeholder {{{field}}} must not have a format spec",
+                    field,
+                )
             used.add(field)
         return cls(text=text, placeholders=frozenset(used))
 

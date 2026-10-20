@@ -5,6 +5,13 @@ from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 
+def to_utc(moment: datetime) -> datetime:
+    """`moment` in UTC. Raises ValueError on a naive datetime: its time zone would be a guess."""
+    if moment.tzinfo is None or moment.utcoffset() is None:
+        raise ValueError(f"naive datetime not allowed: {moment!r}")
+    return moment.astimezone(UTC)
+
+
 class Clock(Protocol):
     def now(self) -> datetime:
         """The current time, timezone-aware."""

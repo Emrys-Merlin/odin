@@ -4,11 +4,16 @@
 TOML (placeholders, braces) before it is stored as an override; the reply shows how it renders.
 """
 
-import string
-
 from odin.commands.core import Command, CommandContext, CommandError
 from odin.commands.preview import render_preview
-from odin.config import TEMPLATE_PLACEHOLDERS, Config, ConfigError
+from odin.config import (
+    TEMPLATE_PLACEHOLDERS,
+    Config,
+    ConfigError,
+    Template,
+    TemplateError,
+    TemplateProblem,
+)
 from odin.engine import dinner_week
 from odin.overrides import (
     EDITABLE_TEMPLATES,
@@ -64,17 +69,15 @@ def _template_name(word: str) -> str:
 def _problem(name: str, text: str) -> str:
     """What is wrong with `text` as template `name`, in German."""
     try:
-        parsed = list(string.Formatter().parse(text))
-    except ValueError:
-        return MALFORMED
-    allowed = TEMPLATE_PLACEHOLDERS[name]
-    for _, field, spec, conversion in parsed:
-        if field is None:
-            continue
-        if field not in allowed:
-            return UNKNOWN_PLACEHOLDER.format(field=field)
-        if spec or conversion:
-            return PLACEHOLDER_SPEC.format(field=field)
+        Template.parse(text, TEMPLATE_PLACEHOLDERS[name], name)
+    except TemplateError as error:
+        match error.problem:
+            case TemplateProblem.MALFORMED:
+                return MALFORMED
+            case TemplateProblem.UNKNOWN_PLACEHOLDER:
+                return UNKNOWN_PLACEHOLDER.format(field=error.field)
+            case TemplateProblem.PLACEHOLDER_SPEC:
+                return PLACEHOLDER_SPEC.format(field=error.field)
     return INVALID
 
 
