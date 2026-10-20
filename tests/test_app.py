@@ -11,6 +11,8 @@ from odin.app import (
     FLAT_GROUP_KEY,
     GroupSetting,
     Source,
+    _ready_account,
+    _WaitingLog,
     readiness,
     resolve_account,
     run_bot,
@@ -117,6 +119,43 @@ def test_readiness_waits_for_the_setup_lock(store: Store) -> None:
     assert readiness(env, store, now) == (None, "odin setup is running")
     store.release_setup_lock(token)
     assert readiness(env, store, now) == (ACCOUNT, "")
+
+
+def test_ready_account_combines_the_database_and_the_signal_api(store: Store) -> None:
+    env = load_env(ENV)
+    now = local(6, 12)
+    admin = FakeSignalAdmin(number=ACCOUNT.number)
+    admin.script("list_accounts", ConnectionError("down"))
+
+    async def scenario() -> list[Account | str]:
+        return [
+            await _ready_account(env, store, now, None),
+            await _ready_account(env, store, now, admin),
+            await _ready_account(env, store, now, admin),
+            await _ready_account(load_env(NO_GROUPS), store, now, admin),
+        ]
+
+    assert asyncio.run(scenario()) == [
+        ACCOUNT,
+        "the Signal API is not reachable",
+        "SIGNAL_NUMBER is not registered with the Signal API",
+        "no flat and no dinner group chosen",
+    ]
+
+
+def test_waiting_log_logs_once_per_reason(caplog: pytest.LogCaptureFixture) -> None:
+    waiting = _WaitingLog()
+    with caplog.at_level("INFO", logger="odin"):
+        waiting.log("odin setup is running")
+        waiting.log("odin setup is running")
+        waiting.log("no dinner group chosen")
+        waiting.reset()
+        waiting.log("no dinner group chosen")
+    assert [r.getMessage() for r in caplog.records] == [
+        "odin setup is running; waiting until it has finished",
+        "ODIN is not set up yet (no dinner group chosen) — run: podman exec -it odin odin setup",
+        "ODIN is not set up yet (no dinner group chosen) — run: podman exec -it odin odin setup",
+    ]
 
 
 # --- run_bot ------------------------------------------------------------------------------------
