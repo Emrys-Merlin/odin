@@ -250,7 +250,7 @@ def _check_config(settings: Settings, clock: Clock) -> None:
     print("Next scheduled actions:")
     for action in upcoming_actions(config, clock.now()):
         at = action.at.astimezone(config.timezone)
-        print(f"  {at:%a %Y-%m-%d %H:%M}  {action.name} ({action.note})")
+        print(f"  {at:%a %Y-%m-%d %H:%M}  {action.step.label} ({action.note})")
 
 
 def _health(environ: Mapping[str, str], setup_ok: bool) -> int:

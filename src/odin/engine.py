@@ -72,6 +72,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from odin import notices
 from odin.config import Config, WeeklyTime, dropped_placeholder_values
+from odin.cycle import StepName
 from odin.reactions import count_confirmations
 from odin.signal import SendResponseUnreadable, SignalClient
 from odin.store import Action, MessageKind, Outcome, Store
@@ -124,7 +125,7 @@ def dinner_week(config: Config, now: datetime) -> date:
 class Upcoming:
     """A scheduled action and when it happens next."""
 
-    name: str
+    step: StepName
     at: datetime
     week: date  # the dinner week the action belongs to
     note: str = ""
@@ -136,23 +137,23 @@ def upcoming_actions(config: Config, now: datetime) -> list[Upcoming]:
     Schedule only: whether an action is actually sent depends on the state at that time.
     """
     s = config.schedule
-    points: list[tuple[str, WeeklyTime, str]] = [
-        ("flat ask", s.flat_ask, "flat group"),
+    points: list[tuple[StepName, WeeklyTime, str]] = [
+        (StepName.FLAT_ASK, s.flat_ask, "flat group"),
     ]
     if s.nudge is not None:
-        points.append(("nudge", s.nudge, "flat group, only if nobody confirmed"))
+        points.append((StepName.NUDGE, s.nudge, "flat group, only if nobody confirmed"))
     points += [
-        ("announcement / cancellation", s.flat_deadline, "dinner group"),
-        ("tally", s.tally, "flat group, only if dinner is on"),
+        (StepName.DECISION, s.flat_deadline, "dinner group"),
+        (StepName.TALLY, s.tally, "flat group, only if dinner is on"),
     ]
     week = dinner_week(config, now)
     upcoming = []
-    for name, point, note in points:
+    for step, point, note in points:
         of, at = week, config.when(point, week)
         if at < now:
             of = week + timedelta(weeks=1)
             at = config.when(point, of)
-        upcoming.append(Upcoming(name, at, of, note))
+        upcoming.append(Upcoming(step, at, of, note))
     return sorted(upcoming, key=lambda u: u.at.astimezone(UTC))
 
 
@@ -163,7 +164,7 @@ class StepWindow:
     `end` is the step's expiry, cut short by the catch-up grace if one is configured.
     """
 
-    name: str  # "flat_ask", "nudge", "decision", "tally"
+    name: StepName
     actions: tuple[Action, ...]  # the step is done once any of these is recorded
     start: datetime
     end: datetime
@@ -176,12 +177,16 @@ class StepWindow:
 
 
 def _window(
-    config: Config, name: str, actions: tuple[Action, ...], start: datetime, expiry: datetime
+    config: Config, name: StepName, actions: tuple[Action, ...], start: datetime, expiry: datetime
 ) -> StepWindow:
-    end = expiry
+    return StepWindow(name, actions, start, _grace_end(config, start, expiry))
+
+
+def _grace_end(config: Config, start: datetime, expiry: datetime) -> datetime:
+    """`expiry`, cut short by the catch-up grace counted from `start`."""
     if config.catch_up_grace is not None:
-        end = min(end, start + config.catch_up_grace)
-    return StepWindow(name, actions, start, end)
+        return min(expiry, start + config.catch_up_grace)
+    return expiry
 
 
 def step_windows(config: Config, week: date) -> list[StepWindow]:
@@ -196,16 +201,18 @@ def step_windows(config: Config, week: date) -> list[StepWindow]:
         return config.when(point, week).astimezone(UTC)
 
     def window(
-        name: str, actions: tuple[Action, ...], start: datetime, expiry: datetime
+        name: StepName, actions: tuple[Action, ...], start: datetime, expiry: datetime
     ) -> StepWindow:
         return _window(config, name, actions, start, expiry)
 
     deadline, dinner = at(schedule.flat_deadline), at(schedule.dinner)
-    windows = [window("flat_ask", (Action.FLAT_ASK,), at(schedule.flat_ask), deadline)]
+    windows = [window(StepName.FLAT_ASK, (Action.FLAT_ASK,), at(schedule.flat_ask), deadline)]
     if schedule.nudge is not None:
-        windows.append(window("nudge", (Action.NUDGE,), at(schedule.nudge), deadline))
-    windows.append(window("decision", (Action.ANNOUNCEMENT, Action.CANCELLATION), deadline, dinner))
-    windows.append(window("tally", (Action.TALLY,), at(schedule.tally), dinner))
+        windows.append(window(StepName.NUDGE, (Action.NUDGE,), at(schedule.nudge), deadline))
+    windows.append(
+        window(StepName.DECISION, (Action.ANNOUNCEMENT, Action.CANCELLATION), deadline, dinner)
+    )
+    windows.append(window(StepName.TALLY, (Action.TALLY,), at(schedule.tally), dinner))
     return windows
 
 
@@ -213,7 +220,7 @@ def dropped_cancellation_window(config: Config, week: date, switch: datetime) ->
     """When the cancellation of dropped week `week` is due: from the `switch` that dropped it
     until the week's dinner starts, cut short by the catch-up grace counted from the switch."""
     dinner = config.when(config.schedule.dinner, week).astimezone(UTC)
-    return _window(config, "decision", (Action.CANCELLATION,), _utc(switch), dinner)
+    return _window(config, StepName.DECISION, (Action.CANCELLATION,), _utc(switch), dinner)
 
 
 @dataclass(frozen=True)
@@ -319,7 +326,7 @@ class _Week:
     steps: list[Step] = field(default_factory=list)
     failures: list[SendFailure] = field(default_factory=list)
     # Set during `run`, by the step that decides them; later steps read them.
-    _windows: dict[str, StepWindow] = field(init=False, default_factory=dict)
+    _windows: dict[StepName, StepWindow] = field(init=False, default_factory=dict)
     _cancelled: bool = field(init=False, default=False)  # the cancellation went out
     _skip_date: bool = field(init=False, default=False)
     _asked: bool = field(init=False, default=False)  # the flat ask went out
@@ -338,7 +345,7 @@ class _Week:
             if not await step():
                 return
 
-    def _due(self, name: str) -> bool | None:
+    def _due(self, name: StepName) -> bool | None:
         return False if self.over else self._windows[name].due(self.now)
 
     async def _cancel(self) -> None:
@@ -352,7 +359,7 @@ class _Week:
         """1. Flat ask; not asked on a skip date, but only skipped at its time (until then /unskip
         can take the skip date back)."""
         if not self._recorded(Action.FLAT_ASK):
-            due_now = False if self._cancelled else self._due("flat_ask")
+            due_now = False if self._cancelled else self._due(StepName.FLAT_ASK)
             if due_now is None:
                 return False
             if due_now and not self._skip_date:
@@ -373,7 +380,7 @@ class _Week:
         """2. Nudge, if enabled."""
         if self.config.schedule.nudge is None or self._recorded(Action.NUDGE):
             return True
-        due_now = False if self._cancelled else self._due("nudge")
+        due_now = False if self._cancelled else self._due(StepName.NUDGE)
         if due_now is None:
             return False
         if due_now and self._asked and self._confirmations() == 0:
@@ -392,7 +399,7 @@ class _Week:
             if dropped is not None:
                 due_now = dropped_cancellation_window(self.config, self.week, dropped).due(self.now)
             else:
-                due_now = self._due("decision")
+                due_now = self._due(StepName.DECISION)
             if due_now is None:
                 return False
             on = self._asked and self._confirmations() > 0
@@ -425,7 +432,7 @@ class _Week:
         """4. Tally, if dinner is on."""
         if self._recorded(Action.TALLY):
             return True
-        due_now = self._due("tally")
+        due_now = self._due(StepName.TALLY)
         if due_now is None:
             return False
         if due_now and self._on:
@@ -486,8 +493,10 @@ class _Week:
         if not self.over:
             start = self.store.action_time(self.week, sent)
             assert start is not None
-            end = self.config.when(expiry, self.week).astimezone(UTC)
-            due_now = _window(self.config, notice.value, (notice,), start, end).due(self.now)
+            end = _grace_end(
+                self.config, start, self.config.when(expiry, self.week).astimezone(UTC)
+            )
+            due_now = None if self.now < start else self.now < end
         if due_now is None:
             return
         if not due_now:

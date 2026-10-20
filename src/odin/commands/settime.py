@@ -18,13 +18,13 @@ from datetime import date, datetime, time, timedelta
 from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError
 from odin.config import WEEKDAYS_DE, WEEKDAYS_EN, Config, ConfigError, WeeklyTime
+from odin.cycle import SchedulePoint, StepName
 from odin.engine import dinner_week, record_transition, step_windows, transition
 from odin.overrides import (
     DINNER_KEY,
     EDITABLE_TEMPLATES,
     NUDGE_ENABLED_KEY,
     PENDING_DINNER_KEY,
-    SCHEDULE_POINTS,
     PendingDinner,
     apply_overrides,
     current_values,
@@ -39,23 +39,23 @@ from odin.store import Action, Outcome
 
 # What each schedule point is, for replies.
 POINT_LABELS = {
-    "flat_ask": "Frage an die WG",
-    "nudge": "Erinnerung an die WG",
-    "flat_deadline": "Frist für die WG / Entscheidung",
-    "rsvp_by": "Rückmeldung der Gäste bis",
-    "tally": "Zählung der Gäste",
-    "cook": "Kochen",
-    "dinner": "Essen",
+    SchedulePoint.FLAT_ASK: "Frage an die WG",
+    SchedulePoint.NUDGE: "Erinnerung an die WG",
+    SchedulePoint.FLAT_DEADLINE: "Frist für die WG / Entscheidung",
+    SchedulePoint.RSVP_BY: "Rückmeldung der Gäste bis",
+    SchedulePoint.TALLY: "Zählung der Gäste",
+    SchedulePoint.COOK: "Kochen",
+    SchedulePoint.DINNER: "Essen",
 }
 # The steps of the weekly cycle (see `odin.engine.step_windows`), for the guard's message.
 STEP_LABELS = {
-    "flat_ask": "die Frage an die WG",
-    "nudge": "die Erinnerung",
-    "decision": "die Entscheidung",
-    "tally": "die Zählung",
+    StepName.FLAT_ASK: "die Frage an die WG",
+    StepName.NUDGE: "die Erinnerung",
+    StepName.DECISION: "die Entscheidung",
+    StepName.TALLY: "die Zählung",
 }
 
-POINT_LIST = ", ".join(SCHEDULE_POINTS)
+POINT_LIST = ", ".join(SchedulePoint)
 SETTIME_USAGE = (
     "So geht's: /settime <punkt> <tag> <HH:MM>, z. B. /settime flat_deadline thu 12:00.\n"
     f"Punkte: {POINT_LIST}"
@@ -138,11 +138,11 @@ _ORDER_ERROR = re.compile(r"schedule: (\w+) \(.*\) must come before (\w+) ")
 _HARDCODED_DAY = re.compile(r"\b(" + "|".join(WEEKDAYS_DE + WEEKDAYS_EN) + r")\b", re.IGNORECASE)
 
 
-def parse_point(word: str) -> str:
-    point = word.lower()
-    if point not in SCHEDULE_POINTS:
-        raise CommandError(UNKNOWN_POINT.format(point=word))
-    return point
+def parse_point(word: str) -> SchedulePoint:
+    try:
+        return SchedulePoint(word.lower())
+    except ValueError:
+        raise CommandError(UNKNOWN_POINT.format(point=word)) from None
 
 
 def parse_weekly_time(day: str, clock: str) -> WeeklyTime:
@@ -216,7 +216,7 @@ def check_change(
         before = old_windows.get(window.name)
         if before is not None and before.due(ctx.now) is not None:
             continue  # already due before this change; not caused by it
-        if window.name == "nudge" and due is False:
+        if window.name is StepName.NUDGE and due is False:
             continue  # past its window: the engine only records it as skipped
         raise CommandError(STEP_DUE.format(step=STEP_LABELS[window.name]))
     return new
@@ -255,53 +255,49 @@ def _from_config(ctx: CommandContext, pending: PendingDinner) -> str:
     )
 
 
-def _point(config: Config, point: str) -> WeeklyTime:
-    return getattr(config.schedule, "nudge_time" if point == "nudge" else point)
-
-
 # The engine step each schedule point triggers; the other points only appear in the texts.
 _STEP_ACTIONS = {
-    "flat_ask": (Action.FLAT_ASK,),
-    "nudge": (Action.NUDGE,),
-    "flat_deadline": (Action.ANNOUNCEMENT, Action.CANCELLATION),
-    "tally": (Action.TALLY,),
+    SchedulePoint.FLAT_ASK: (Action.FLAT_ASK,),
+    SchedulePoint.NUDGE: (Action.NUDGE,),
+    SchedulePoint.FLAT_DEADLINE: (Action.ANNOUNCEMENT, Action.CANCELLATION),
+    SchedulePoint.TALLY: (Action.TALLY,),
 }
 
 
-def _done(ctx: CommandContext, week: date, point: str) -> bool:
+def _done(ctx: CommandContext, week: date, point: SchedulePoint) -> bool:
     """Whether the step `point` triggers is already recorded for `week`."""
     return any(ctx.store.has_action(week, action) for action in _STEP_ACTIONS.get(point, ()))
 
 
-def _occurrence(ctx: CommandContext, config: Config, point: str) -> datetime:
+def _occurrence(ctx: CommandContext, config: Config, point: SchedulePoint) -> datetime:
     """The next time `point` happens, in the config's timezone: this week's, unless it is past
     or its step is already done; else next week's."""
     week = dinner_week(config, ctx.now)
-    when = config.when(_point(config, point), week)
+    when = config.when(config.schedule.time_of(point), week)
     if when <= ctx.now or _done(ctx, week, point):
-        when = config.when(_point(config, point), week + timedelta(weeks=1))
+        when = config.when(config.schedule.time_of(point), week + timedelta(weeks=1))
     return when
 
 
-def _point_line(ctx: CommandContext, config: Config, point: str) -> str:
+def _point_line(ctx: CommandContext, config: Config, point: SchedulePoint) -> str:
     nxt = _occurrence(ctx, config, point)
     return POINT_LINE.format(
         label=POINT_LABELS[point],
         point=point,
-        when=ui.weekly_time(_point(config, point)),
+        when=ui.weekly_time(config.schedule.time_of(point)),
         next=f"{ui.WEEKDAYS_SHORT[nxt.weekday()]} {nxt:%d.%m. um %H:%M}",
     )
 
 
-def _affects_this_week(ctx: CommandContext, new: Config, point: str) -> bool:
+def _affects_this_week(ctx: CommandContext, new: Config, point: SchedulePoint) -> bool:
     """Whether `point` changes this week: its time (or the nudge's on/off) changes, it is not in
     the past under both configs, and its step is not done yet."""
     week = dinner_week(ctx.config, ctx.now)
     if _done(ctx, week, point):
         return False
-    before = ctx.config.when(_point(ctx.config, point), week)
-    after = new.when(_point(new, point), week)
-    enabled_changed = point == "nudge" and (
+    before = ctx.config.when(ctx.config.schedule.time_of(point), week)
+    after = new.when(new.schedule.time_of(point), week)
+    enabled_changed = point is SchedulePoint.NUDGE and (
         ctx.config.schedule.nudge_enabled != new.schedule.nudge_enabled
     )
     if before == after and not enabled_changed:
@@ -318,7 +314,7 @@ def _warnings(ctx: CommandContext, new: Config) -> list[str]:
     if (
         before.flat_deadline != after.flat_deadline
         and asked
-        and not _done(ctx, week, "flat_deadline")
+        and not _done(ctx, week, SchedulePoint.FLAT_DEADLINE)
     ):
         lines.append(
             ASK_ALREADY_SENT.format(
@@ -328,13 +324,13 @@ def _warnings(ctx: CommandContext, new: Config) -> list[str]:
     # The announcement names rsvp_by, cook and dinner; it is out, and dinner is still to come.
     announced = ctx.store.action_outcome(week, Action.ANNOUNCEMENT) is Outcome.SENT
     if announced:
-        for point in ("rsvp_by", "cook", "dinner"):
-            if getattr(before, point) != getattr(after, point):
+        for point in (SchedulePoint.RSVP_BY, SchedulePoint.COOK, SchedulePoint.DINNER):
+            if before.time_of(point) != after.time_of(point):
                 lines.append(
                     ANNOUNCEMENT_ALREADY_SENT.format(
                         point=point,
-                        old=ui.weekly_time(getattr(before, point)),
-                        new=ui.weekly_time(getattr(after, point)),
+                        old=ui.weekly_time(before.time_of(point)),
+                        new=ui.weekly_time(after.time_of(point)),
                     )
                 )
     return lines + _hardcoded_weekdays(new)
@@ -348,9 +344,9 @@ def _hardcoded_weekdays(config: Config) -> list[str]:
     ]
 
 
-def _reply(ctx: CommandContext, new: Config, point: str, headline: str) -> list[str]:
+def _reply(ctx: CommandContext, new: Config, point: SchedulePoint, headline: str) -> list[str]:
     lines = [headline]
-    if point == "nudge" and not new.schedule.nudge_enabled:
+    if point is SchedulePoint.NUDGE and not new.schedule.nudge_enabled:
         lines.append(NUDGE_OFF_LINE)
         if ctx.config.schedule.nudge_time != new.schedule.nudge_time:
             lines.append(NUDGE_OFF_NOTE)
@@ -442,11 +438,13 @@ def run_settime(ctx: CommandContext, args: str) -> list[str]:
     point = parse_point(words[0])
     when = parse_weekly_time(words[1], words[2])
     value = format_weekly_time(when)
-    if point == "dinner" and when.weekday != ctx.config.schedule.dinner.weekday:
+    if point is SchedulePoint.DINNER and when.weekday != ctx.config.schedule.dinner.weekday:
         return set_dinner_day(ctx, value, SAVED)
     key = schedule_key(point)
     # The latest /settime dinner wins: a new time on today's weekday discards a pending one.
-    pending = pending_dinner(ctx.base, ctx.store, ctx.now) if point == "dinner" else None
+    pending = (
+        pending_dinner(ctx.base, ctx.store, ctx.now) if point is SchedulePoint.DINNER else None
+    )
     new = check_change(ctx, current_values(ctx.store) | {key: value}, keep_pending=pending is None)
     with ctx.store.transaction():
         ctx.store.set_override(key, value, _changed_by(ctx), ctx.now)
@@ -466,7 +464,7 @@ def run_nudge(ctx: CommandContext, args: str) -> list[str]:
     value = format_bool(_ON[words[0].lower()])
     new = check_change(ctx, current_values(ctx.store) | {NUDGE_ENABLED_KEY: value})
     ctx.store.set_override(NUDGE_ENABLED_KEY, value, _changed_by(ctx), ctx.now)
-    return _reply(ctx, new, "nudge", SAVED)
+    return _reply(ctx, new, SchedulePoint.NUDGE, SAVED)
 
 
 def run_resettime(ctx: CommandContext, args: str) -> list[str]:
@@ -474,7 +472,7 @@ def run_resettime(ctx: CommandContext, args: str) -> list[str]:
     if len(words) != 1:
         raise CommandError(RESETTIME_USAGE)
     point = parse_point(words[0])
-    if point == "dinner":
+    if point is SchedulePoint.DINNER:
         pending = pending_dinner(ctx.base, ctx.store, ctx.now)
         if pending is not None and pending.from_config:
             # Nothing to reset in the chat: the change comes from the config file.
@@ -492,17 +490,17 @@ def run_resettime(ctx: CommandContext, args: str) -> list[str]:
             if behind is not None and behind.from_config:
                 lines.append(_from_config(ctx, behind))
             return ["\n".join(lines)]
-    keys = [schedule_key(point)] + ([NUDGE_ENABLED_KEY] if point == "nudge" else [])
+    keys = [schedule_key(point)] + ([NUDGE_ENABLED_KEY] if point is SchedulePoint.NUDGE else [])
     stored = current_values(ctx.store)
     if (
-        point == "dinner"
+        point is SchedulePoint.DINNER
         and DINNER_KEY in stored
         and ctx.base.schedule.dinner.weekday != ctx.config.schedule.dinner.weekday
     ):
         return set_dinner_day(ctx, None, RESET)
     if not any(key in stored for key in keys):
-        when = ui.weekly_time(_point(ctx.config, point))
-        if point == "nudge":
+        when = ui.weekly_time(ctx.config.schedule.time_of(point))
+        if point is SchedulePoint.NUDGE:
             state = "an" if ctx.config.schedule.nudge_enabled else "aus"
             return [NUDGE_NOT_OVERRIDDEN.format(state=state, when=when)]
         return [NOT_OVERRIDDEN.format(label=POINT_LABELS[point], point=point, when=when)]

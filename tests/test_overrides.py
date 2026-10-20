@@ -7,11 +7,11 @@ from typing import Any
 import pytest
 
 from odin.config import Config, ConfigError, WeeklyTime, parse_config
+from odin.cycle import SchedulePoint
 from odin.overrides import (
     EDITABLE_TEMPLATES,
     KEYS,
     NUDGE_ENABLED_KEY,
-    SCHEDULE_POINTS,
     apply_overrides,
     effective_config,
     format_bool,
@@ -51,19 +51,17 @@ def store() -> Iterator[Store]:
 
 def test_keys() -> None:
     assert template_key("flat_ask") == "templates.flat_ask"
-    assert schedule_key("flat_deadline") == "schedule.flat_deadline"
+    assert schedule_key(SchedulePoint.FLAT_DEADLINE) == "schedule.flat_deadline"
     assert NUDGE_ENABLED_KEY == "schedule.nudge.enabled"
-    assert len(KEYS) == len(EDITABLE_TEMPLATES) + len(SCHEDULE_POINTS) + 1
+    assert len(KEYS) == len(EDITABLE_TEMPLATES) + len(SchedulePoint) + 1
     with pytest.raises(ValueError, match="hello"):
         template_key("hello")
-    with pytest.raises(ValueError, match="lunch"):
-        schedule_key("lunch")
 
 
 def test_formatted_values_round_trip() -> None:
     point = WeeklyTime(5, dt.time(9, 5))
     assert format_weekly_time(point) == "sat 09:05"
-    config = apply_overrides(BASE, {schedule_key("tally"): format_weekly_time(point)})
+    config = apply_overrides(BASE, {schedule_key(SchedulePoint.TALLY): format_weekly_time(point)})
     assert config.schedule.tally == point
     assert format_bool(False) == "false"
     config = apply_overrides(BASE, {NUDGE_ENABLED_KEY: format_bool(False)})

@@ -23,7 +23,8 @@ from odin.cli import _parser
 from odin.commands import COMMANDS
 from odin.commands.vars import DESCRIPTIONS, _order
 from odin.config import TEMPLATE_PLACEHOLDERS, load_config
-from odin.overrides import EDITABLE_TEMPLATES, SCHEDULE_POINTS
+from odin.cycle import SchedulePoint
+from odin.overrides import EDITABLE_TEMPLATES
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "docs" / "reference" / "_generated"
@@ -142,7 +143,7 @@ def render_chat_commands() -> str:
         "templates: " + ", ".join(f"`{name}`" for name in EDITABLE_TEMPLATES) + ".",
         "",
         "`<punkt>` (`/settime`, `/resettime`) is one of the schedule points, in schedule order: "
-        + ", ".join(f"`{point}`" for point in SCHEDULE_POINTS)
+        + ", ".join(f"`{point}`" for point in SchedulePoint)
         + ".",
         "",
         "`<JJJJ-MM-TT>` (`/skip`, `/unskip`) is a dinner day as an ISO date, e.g. `2026-12-27`.",

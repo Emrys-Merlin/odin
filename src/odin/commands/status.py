@@ -21,22 +21,23 @@ from odin.commands import ui
 from odin.commands.core import Command, CommandContext
 from odin.commands.schedule import DROPPED, FROM_CONFIG
 from odin.config import WEEKDAYS_DE, Config, WeeklyTime
+from odin.cycle import StepName
 from odin.store import Action, MessageKind, Outcome, Store
 
 if TYPE_CHECKING:
     from odin.engine import Upcoming
     from odin.overrides import PendingDinner
 
-# German labels for the steps, keyed by the names `upcoming_actions` uses.
+# German labels for the steps.
 FLAT_ASK = "Frage an die WG"
 NUDGE = "Erinnerung"
 DECISION = "Entscheidung"
 TALLY = "Zählung"
 STEP_LABELS = {
-    "flat ask": FLAT_ASK,
-    "nudge": NUDGE,
-    "announcement / cancellation": DECISION,
-    "tally": TALLY,
+    StepName.FLAT_ASK: FLAT_ASK,
+    StepName.NUDGE: NUDGE,
+    StepName.DECISION: DECISION,
+    StepName.TALLY: TALLY,
 }
 
 SENT = "✅"
@@ -281,29 +282,29 @@ def _next_action(
     candidates = [*_upcoming(config, now, pending), *_upcoming(config, dinner, pending)]
     for upcoming in candidates:
         note = ""
-        label = STEP_LABELS[upcoming.name]
+        label = STEP_LABELS[upcoming.step]
         if _skipping(current.store, upcoming.week):
             # No flat ask, nudge or tally; the cancellation goes out at the decision time.
-            if upcoming.name != "announcement / cancellation" or (
+            if upcoming.step is not StepName.DECISION or (
                 upcoming.week == current.week and current.decided
             ):
                 continue
             label = CANCELLATION_STEP
         elif engine.dinner_week(config, upcoming.at) == current.week:
-            match upcoming.name:
-                case "flat ask":
+            match upcoming.step:
+                case StepName.FLAT_ASK:
                     if current.outcome(Action.FLAT_ASK) is not None:
                         continue
-                case "nudge":
+                case StepName.NUDGE:
                     if current.outcome(Action.NUDGE) is not None or (
                         current.asked and current.confirmations() > 0
                     ):
                         continue
                     note = ONLY_IF_UNCONFIRMED.format(emoji=config.emoji)
-                case "announcement / cancellation":
+                case StepName.DECISION:
                     if current.decided:
                         continue
-                case "tally":
+                case StepName.TALLY:
                     if current.outcome(Action.TALLY) is not None or (
                         current.decided and not current.dinner_on
                     ):
@@ -312,7 +313,7 @@ def _next_action(
             # so for a flat ask past its window, e.g. of a week dropped by a weekday change.
             if current.outcome(Action.FLAT_ASK) is Outcome.SKIPPED or flat_ask_missed:
                 continue
-        elif upcoming.name == "nudge":
+        elif upcoming.step is StepName.NUDGE:
             note = ONLY_IF_UNCONFIRMED.format(emoji=config.emoji)
         at = upcoming.at.astimezone(config.timezone)
         text = f"{label}, {ui.WEEKDAYS_SHORT[at.weekday()]} {at:%H:%M}"

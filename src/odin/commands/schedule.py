@@ -6,24 +6,23 @@ also one that comes from the config file.
 
 from odin.commands import ui
 from odin.commands.core import Command, CommandContext
-from odin.config import Schedule, WeeklyTime
+from odin.cycle import SchedulePoint
 from odin.overrides import (
     NUDGE_ENABLED_KEY,
     PENDING_DINNER_KEY,
-    SCHEDULE_POINTS,
     pending_dinner,
     schedule_key,
 )
 
 # German descriptions of the schedule points, in schedule order.
-POINT_DESCRIPTIONS: dict[str, str] = {
-    "flat_ask": "Frage an die WG",
-    "nudge": "Erinnerung",
-    "flat_deadline": "Entscheidung",
-    "rsvp_by": "Rückmeldung bis",
-    "tally": "Zählung",
-    "cook": "Mitkochen",
-    "dinner": "Essen",
+POINT_DESCRIPTIONS: dict[SchedulePoint, str] = {
+    SchedulePoint.FLAT_ASK: "Frage an die WG",
+    SchedulePoint.NUDGE: "Erinnerung",
+    SchedulePoint.FLAT_DEADLINE: "Entscheidung",
+    SchedulePoint.RSVP_BY: "Rückmeldung bis",
+    SchedulePoint.TALLY: "Zählung",
+    SchedulePoint.COOK: "Mitkochen",
+    SchedulePoint.DINNER: "Essen",
 }
 
 NUDGE_OFF = "(aus)"
@@ -33,25 +32,20 @@ FROM_CONFIG = "(laut Config-Datei)"
 FOOTER = "Ändern: /settime <punkt> <tag> <HH:MM> · Zurücksetzen: /resettime <punkt>"
 
 
-def point_time(schedule: Schedule, point: str) -> WeeklyTime:
-    """The time of schedule point `point` (one of `SCHEDULE_POINTS`); the nudge's even if off."""
-    return schedule.nudge_time if point == "nudge" else getattr(schedule, point)
-
-
 def run(ctx: CommandContext, args: str) -> list[str]:
     schedule = ctx.config.schedule
     overrides = ctx.store.overrides()
     pending = pending_dinner(ctx.base, ctx.store, ctx.now)
     lines = []
-    for point in SCHEDULE_POINTS:
-        when = ui.weekly_time(point_time(schedule, point))
+    for point in SchedulePoint:
+        when = ui.weekly_time(schedule.time_of(point))
         line = f"{point} – {POINT_DESCRIPTIONS[point]}: {when}"
         keys = [schedule_key(point)]
-        if point == "nudge":
+        if point is SchedulePoint.NUDGE:
             if not schedule.nudge_enabled:
                 line += f" {NUDGE_OFF}"
             keys.append(NUDGE_ENABLED_KEY)
-        if point == "dinner" and pending is not None:
+        if point is SchedulePoint.DINNER and pending is not None:
             first = pending.transition.first_week
             line += " " + PENDING.format(first=first, when=ui.weekly_time(pending.point))
             dropped = pending.transition.dropped_week
