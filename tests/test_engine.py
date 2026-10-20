@@ -1,11 +1,11 @@
 import asyncio
-from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
+from helpers import local, ms
 
 from odin.config import Config, parse_config
 from odin.engine import Account, Step, dinner_week, reconcile
@@ -37,14 +37,6 @@ ANNA, BEN, CARL = "+4915100000001", "+4915100000002", "+4915100000003"
 
 # A plain week (no DST change): dinner on Sunday 2026-10-11.
 WEEK = date(2026, 10, 11)
-
-
-def local(day: int, hour: int, minute: int = 0, month: int = 10, year: int = 2026) -> datetime:
-    return datetime(year, month, day, hour, minute, tzinfo=BERLIN)
-
-
-def ms(moment: datetime) -> int:
-    return int(moment.timestamp() * 1000)
 
 
 @dataclass(frozen=True)
@@ -124,12 +116,6 @@ class Bot:
     def outcomes(self, week: date = WEEK) -> dict[Action, Outcome]:
         found = {action: self.store.action_outcome(week, action) for action in Action}
         return {action: outcome for action, outcome in found.items() if outcome is not None}
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as s:
-        yield s
 
 
 @pytest.fixture

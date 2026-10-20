@@ -1,7 +1,7 @@
-from collections.abc import Iterator
 from datetime import date, datetime
 
 import pytest
+from helpers import local
 
 from odin.commands import CommandContext, handle
 from odin.commands.status import STEP_LABELS
@@ -25,7 +25,6 @@ CONFIG = parse_config({"templates": TEMPLATES})
 NO_NUDGE = parse_config({"templates": TEMPLATES, "schedule": {"nudge": {"enabled": False}}})
 # For a Sunday → Saturday dinner, cooking has to move off Sunday first.
 SAT_COOK = parse_config({"templates": TEMPLATES, "schedule": {"cook": {"weekday": "sat"}}})
-BERLIN = CONFIG.timezone
 
 # Dinner on Sunday 2026-10-18; flat ask on Tuesday 2026-10-13.
 WEEK = date(2026, 10, 18)
@@ -33,16 +32,6 @@ MON_19 = date(2026, 10, 19)
 BOT = "+490000000000"
 FLAT, DINNER = "group.flat=", "group.dinner="
 ANNA, BEN, CARL = "+4915100000001", "+4915100000002", "+4915100000003"
-
-
-def local(day: int, hour: int, minute: int = 0) -> datetime:
-    return datetime(2026, 10, day, hour, minute, tzinfo=BERLIN)
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as s:
-        yield s
 
 
 def status(store: Store, now: datetime, config: Config = CONFIG) -> list[str]:

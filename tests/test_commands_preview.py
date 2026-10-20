@@ -1,4 +1,3 @@
-from collections.abc import Iterator
 from datetime import date, datetime
 
 import pytest
@@ -22,12 +21,6 @@ NOW = datetime(2026, 10, 8, 10, 0, tzinfo=CONFIG.timezone)  # Thu; dinner week o
 WEEK = date(2026, 10, 11)
 GROUP = "group.dinner"
 BOT = "+4915100000001"
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as store:
-        yield store
 
 
 def announce(store: Store, week: date, reactions: dict[str, str]) -> None:

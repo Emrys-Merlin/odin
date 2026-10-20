@@ -77,7 +77,8 @@ Pick the level that fits what you change:
   The tests use short dummy templates (`TEMPLATES` at the top of the file), so assertions stay
   readable; `bot.texts()` keeps only the first line of each message.
 - **Whole app** — `tests/test_app.py` runs ODIN's main loop with a `FakeSignalClient` and a
-  `FixedClock`, injects group messages and reactions, and waits with `until(condition)`.
+  `FixedClock` inside `async with running_bot(store, client, clock):`, injects group messages and
+  reactions, and waits with `until(condition)`.
 - **Chat commands** — call `handle(text, ctx)` from `odin.commands` with a `CommandContext` on an
   in-memory `Store(":memory:")`; see the `ctx` fixture in `tests/test_commands.py` and
   [Add a chat command](add-a-chat-command.md).
@@ -86,6 +87,9 @@ Pick the level that fits what you change:
 - **Signal API shapes** — `tests/fixtures/signal/` holds JSON responses of
   signal-cli-rest-api for the parsing and REST client tests; its `README.md` says where they
   come from.
+- **Shared helpers** — `tests/conftest.py` provides the in-memory `store` fixture to every module;
+  `tests/helpers.py` has `local(day, hour, minute)` (a moment in October 2026, Berlin time) and
+  `ms(moment)` (a Signal timestamp). Import them explicitly: `from helpers import local, ms`.
 
 ## Check a config file
 

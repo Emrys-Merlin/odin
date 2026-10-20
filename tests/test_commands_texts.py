@@ -1,5 +1,4 @@
 import json
-from collections.abc import Iterator
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -25,12 +24,6 @@ CONFIG = parse_config({"templates": TEMPLATES})
 NOW = datetime(2026, 10, 8, 10, 0, tzinfo=CONFIG.timezone)  # Thu; dinner week of Sun 11 Oct
 WEEK = date(2026, 10, 11)
 FIXTURES = Path(__file__).parent / "fixtures" / "signal"
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as store:
-        yield store
 
 
 def context(store: Store) -> CommandContext:

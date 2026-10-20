@@ -1,7 +1,4 @@
-from collections.abc import Iterator
 from datetime import UTC, datetime
-
-import pytest
 
 from odin.commands import CommandContext, handle
 from odin.commands.schedule import POINT_DESCRIPTIONS
@@ -31,12 +28,6 @@ DEFAULT_LINES = [
     "cook – Mitkochen: So 17:00",
     "dinner – Essen: So 18:00",
 ]
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as store:
-        yield store
 
 
 def context(store: Store, base: Config = CONFIG) -> CommandContext:

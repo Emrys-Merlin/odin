@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 import pytest
+from helpers import ms
 
 from odin.clock import FixedClock
 from odin.config import Config, parse_config
@@ -35,10 +36,6 @@ WEEK = date(2026, 10, 11)
 FLAT_ASK = datetime(2026, 10, 6, 18, 0, tzinfo=BERLIN)
 DEADLINE = datetime(2026, 10, 7, 18, 0, tzinfo=BERLIN)
 TALLY = datetime(2026, 10, 9, 14, 0, tzinfo=BERLIN)
-
-
-def ms(moment: datetime) -> int:
-    return int(moment.timestamp() * 1000)
 
 
 class World:

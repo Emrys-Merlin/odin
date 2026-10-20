@@ -1,14 +1,17 @@
 import asyncio
-from collections.abc import Callable, Iterator
-from datetime import date, datetime, timedelta
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
+from helpers import local, ms
 
 from odin.app import (
     DINNER_GROUP_KEY,
     FLAT_GROUP_KEY,
+    TICK_INTERVAL,
     GroupSetting,
     Source,
     _ready_account,
@@ -27,7 +30,6 @@ from odin.store import Action, MessageKind, Store
 
 EXAMPLE = Path(__file__).parent.parent / "config.example.toml"
 CONFIG = load_config(EXAMPLE)
-BERLIN = CONFIG.timezone
 
 ENV = {
     "SIGNAL_NUMBER": "+491701234567",
@@ -47,8 +49,23 @@ ANNA = "+4915100000001"
 WEEK = date(2026, 10, 11)
 
 
-def local(day: int, hour: int, minute: int = 0) -> datetime:
-    return datetime(2026, 10, day, hour, minute, tzinfo=BERLIN)
+@asynccontextmanager
+async def running_bot(
+    store: Store,
+    client: FakeSignalClient,
+    clock: FixedClock,
+    tick_interval: timedelta = timedelta(0),
+) -> AsyncIterator[None]:
+    """Run `run_bot` in the background for the body of the `async with`; stop it on exit."""
+    stop = asyncio.Event()
+    bot = asyncio.create_task(
+        run_bot(CONFIG, store, client, ACCOUNT, clock, stop, tick_interval=tick_interval)
+    )
+    try:
+        yield
+    finally:
+        stop.set()
+        await bot
 
 
 async def until(condition: Callable[[], bool]) -> None:
@@ -58,12 +75,6 @@ async def until(condition: Callable[[], bool]) -> None:
             return
         await asyncio.sleep(0)
     raise AssertionError("condition never became true")
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as s:
-        yield s
 
 
 # --- group IDs: env, then database, then not set up ----------------------------------------------
@@ -166,11 +177,8 @@ def test_one_tick_sends_the_flat_ask_and_shuts_down(store: Store) -> None:
     clock = FixedClock(local(6, 18, 5))
 
     async def scenario() -> None:
-        stop = asyncio.Event()
-        bot = asyncio.create_task(run_bot(CONFIG, store, client, ACCOUNT, clock, stop))
-        await until(lambda: len(client.sent) == 1)
-        stop.set()
-        await bot
+        async with running_bot(store, client, clock, tick_interval=TICK_INTERVAL):
+            await until(lambda: len(client.sent) == 1)
 
     asyncio.run(scenario())
 
@@ -186,30 +194,25 @@ def test_reactions_are_consumed_while_ticking(store: Store) -> None:
     clock = FixedClock(local(6, 18, 5))
 
     async def scenario() -> None:
-        stop = asyncio.Event()
-        bot = asyncio.create_task(
-            run_bot(CONFIG, store, client, ACCOUNT, clock, stop, tick_interval=timedelta(0))
-        )
-        await until(lambda: len(client.sent) == 1)
-        poll = store.tracked_message(WEEK, MessageKind.FLAT_POLL)
-        assert poll is not None
-        client.inject(
-            ReactionEvent(
-                emoji="👍",
-                reactor=ANNA,
-                target_author=poll.author,
-                target_timestamp=poll.timestamp,
-                group_id=poll.group_id,
-                is_remove=False,
-                timestamp=int(local(6, 20).timestamp() * 1000),
+        async with running_bot(store, client, clock):
+            await until(lambda: len(client.sent) == 1)
+            poll = store.tracked_message(WEEK, MessageKind.FLAT_POLL)
+            assert poll is not None
+            client.inject(
+                ReactionEvent(
+                    emoji="👍",
+                    reactor=ANNA,
+                    target_author=poll.author,
+                    target_timestamp=poll.timestamp,
+                    group_id=poll.group_id,
+                    is_remove=False,
+                    timestamp=ms(local(6, 20)),
+                )
             )
-        )
-        await until(lambda: len(store.reactions_for(poll)) == 1)
+            await until(lambda: len(store.reactions_for(poll)) == 1)
 
-        clock.set(local(7, 18))
-        await until(lambda: len(client.sent) == 2)
-        stop.set()
-        await bot
+            clock.set(local(7, 18))
+            await until(lambda: len(client.sent) == 2)
 
     asyncio.run(scenario())
 
@@ -224,20 +227,15 @@ def test_commands_are_answered_while_ticking(store: Store) -> None:
     clock = FixedClock(local(6, 12))  # nothing due
 
     def message(text: str, group_id: str) -> GroupMessage:
-        return GroupMessage(ANNA, "Anna", text, group_id, int(clock.now().timestamp() * 1000))
+        return GroupMessage(ANNA, "Anna", text, group_id, ms(clock.now()))
 
     async def scenario() -> None:
-        stop = asyncio.Event()
-        bot = asyncio.create_task(
-            run_bot(CONFIG, store, client, ACCOUNT, clock, stop, tick_interval=timedelta(0))
-        )
-        client.inject(message("/help", ACCOUNT.dinner_group_id))
-        client.inject(message("/help", ACCOUNT.flat_group_id))
-        await until(lambda: len(client.sent) == 1)
-        for _ in range(50):
-            await asyncio.sleep(0)
-        stop.set()
-        await bot
+        async with running_bot(store, client, clock):
+            client.inject(message("/help", ACCOUNT.dinner_group_id))
+            client.inject(message("/help", ACCOUNT.flat_group_id))
+            await until(lambda: len(client.sent) == 1)
+            for _ in range(50):
+                await asyncio.sleep(0)
 
     asyncio.run(scenario())
 
@@ -251,43 +249,38 @@ def test_overrides_apply_without_a_restart(store: Store) -> None:
     clock = FixedClock(local(6, 18, 5))
 
     async def scenario() -> None:
-        stop = asyncio.Event()
-        bot = asyncio.create_task(
-            run_bot(CONFIG, store, client, ACCOUNT, clock, stop, tick_interval=timedelta(0))
-        )
-        await until(lambda: len(client.sent) == 1)  # flat ask
-        poll = store.tracked_message(WEEK, MessageKind.FLAT_POLL)
-        assert poll is not None
+        async with running_bot(store, client, clock):
+            await until(lambda: len(client.sent) == 1)  # flat ask
+            poll = store.tracked_message(WEEK, MessageKind.FLAT_POLL)
+            assert poll is not None
 
-        # Mid-week, via chat: the flat deadline moves from Wednesday to Thursday 18:00.
-        store.set_override("schedule.flat_deadline", "thu 18:00", "Tim", clock.now())
+            # Mid-week, via chat: the flat deadline moves from Wednesday to Thursday 18:00.
+            store.set_override("schedule.flat_deadline", "thu 18:00", "Tim", clock.now())
 
-        # Wednesday 18:30: only the nudge (Wed 12:00) is due; no decision yet.
-        clock.set(local(7, 18, 30))
-        await until(lambda: len(client.sent) == 2)
-        for _ in range(50):
-            await asyncio.sleep(0)
-        assert len(client.sent) == 2
-        assert not store.has_action(WEEK, Action.CANCELLATION)
+            # Wednesday 18:30: only the nudge (Wed 12:00) is due; no decision yet.
+            clock.set(local(7, 18, 30))
+            await until(lambda: len(client.sent) == 2)
+            for _ in range(50):
+                await asyncio.sleep(0)
+            assert len(client.sent) == 2
+            assert not store.has_action(WEEK, Action.CANCELLATION)
 
-        # A confirmation after the TOML deadline still counts under the new one.
-        client.inject(
-            ReactionEvent(
-                emoji="👍",
-                reactor=ANNA,
-                target_author=poll.author,
-                target_timestamp=poll.timestamp,
-                group_id=poll.group_id,
-                is_remove=False,
-                timestamp=int(local(7, 19).timestamp() * 1000),
+            # A confirmation after the TOML deadline still counts under the new one.
+            client.inject(
+                ReactionEvent(
+                    emoji="👍",
+                    reactor=ANNA,
+                    target_author=poll.author,
+                    target_timestamp=poll.timestamp,
+                    group_id=poll.group_id,
+                    is_remove=False,
+                    timestamp=ms(local(7, 19)),
+                )
             )
-        )
-        await until(lambda: len(store.reactions_for(poll)) == 1)
+            await until(lambda: len(store.reactions_for(poll)) == 1)
 
-        clock.set(local(8, 18))
-        await until(lambda: len(client.sent) == 3)
-        stop.set()
-        await bot
+            clock.set(local(8, 18))
+            await until(lambda: len(client.sent) == 3)
 
     asyncio.run(scenario())
 
@@ -310,13 +303,8 @@ def test_a_failing_tick_does_not_stop_the_bot(store: Store) -> None:
     clock = FixedClock(local(6, 18, 5))
 
     async def scenario() -> None:
-        stop = asyncio.Event()
-        bot = asyncio.create_task(
-            run_bot(CONFIG, store, client, ACCOUNT, clock, stop, tick_interval=timedelta(0))
-        )
-        await until(lambda: len(client.sent) == 1)
-        stop.set()
-        await bot
+        async with running_bot(store, client, clock):
+            await until(lambda: len(client.sent) == 1)
 
     asyncio.run(scenario())
     assert client.failed
@@ -342,13 +330,8 @@ def test_a_tick_whose_reconcile_raises_is_logged_and_the_bot_keeps_running(
     clock = FixedClock(local(6, 18, 5))
 
     async def scenario() -> None:
-        stop = asyncio.Event()
-        bot = asyncio.create_task(
-            run_bot(CONFIG, store, client, ACCOUNT, clock, stop, tick_interval=timedelta(0))
-        )
-        await until(lambda: calls >= 2)  # ticked again after the failure
-        stop.set()
-        await bot
+        async with running_bot(store, client, clock):
+            await until(lambda: calls >= 2)  # ticked again after the failure
 
     with caplog.at_level("ERROR", logger="odin"):
         asyncio.run(scenario())

@@ -1,4 +1,3 @@
-from collections.abc import Iterator
 from datetime import datetime
 
 import pytest
@@ -20,12 +19,6 @@ TEMPLATES = {
 }
 CONFIG = parse_config({"templates": TEMPLATES})
 NOW = datetime(2026, 10, 6, 19, 0, tzinfo=CONFIG.timezone)
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as store:
-        yield store
 
 
 def make_ctx(store: Store, overrides: dict[str, str] | None = None) -> CommandContext:

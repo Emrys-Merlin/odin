@@ -1,9 +1,9 @@
 import asyncio
-from collections.abc import Iterator
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
 import pytest
+from helpers import local, ms
 
 from odin.commands import CommandContext, handle
 from odin.commands.settime import (
@@ -40,21 +40,10 @@ def make_config(**data: Any) -> Config:
 
 CONFIG = make_config()
 NO_NUDGE = make_config(schedule={"nudge": {"enabled": False}})
-BERLIN = CONFIG.timezone
 # Default schedule; the week whose dinner is on Sunday 2026-10-11:
 # flat ask Tue 6. 18:00, nudge Wed 7. 12:00, deadline Wed 7. 18:00, tally Fri 9. 14:00,
 # dinner Sun 11. 18:00.
 WEEK = date(2026, 10, 11)
-
-
-def local(day: int, hour: int, minute: int = 0) -> datetime:
-    return datetime(2026, 10, day, hour, minute, tzinfo=BERLIN)
-
-
-@pytest.fixture
-def store() -> Iterator[Store]:
-    with Store(":memory:") as store:
-        yield store
 
 
 def send(store: Store, text: str, now: datetime, base: Config = CONFIG) -> str:
@@ -497,7 +486,7 @@ def test_engine_sends_the_tally_at_the_new_time(store: Store) -> None:
                 target_timestamp=poll.timestamp,
                 group_id=poll.group_id,
                 is_remove=False,
-                timestamp=int(now.timestamp() * 1000),
+                timestamp=ms(now),
             )
             handle_reaction(event, store, effective_config(CONFIG, store, now), now)
         now += timedelta(minutes=30)

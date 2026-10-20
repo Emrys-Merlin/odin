@@ -22,12 +22,6 @@ TUE = datetime(2026, 10, 6, 18, 0, tzinfo=BERLIN)
 BOT = "+4915100000000"
 
 
-@pytest.fixture
-def store():
-    with Store(":memory:") as s:
-        yield s
-
-
 def test_record_action_is_idempotent(store: Store) -> None:
     assert not store.has_action(WEEK, Action.FLAT_ASK)
     assert store.action_time(WEEK, Action.FLAT_ASK) is None
