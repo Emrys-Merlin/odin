@@ -301,61 +301,84 @@ class _Week:
     over: bool
     now: datetime
     steps: list[Step] = field(default_factory=list)
+    # Set during `run`, by the step that decides them; later steps read them.
+    _windows: dict[str, StepWindow] = field(init=False, default_factory=dict)
+    _cancelled: bool = field(init=False, default=False)  # the cancellation went out
+    _skip_date: bool = field(init=False, default=False)
+    _asked: bool = field(init=False, default=False)  # the flat ask went out
+    _on: bool = field(init=False, default=False)  # dinner is on: announced and not cancelled
 
     async def run(self) -> None:
-        windows = {} if self.over else {w.name: w for w in step_windows(self.config, self.week)}
+        """Run the week's steps in schedule order.
 
-        def due(name: str) -> bool | None:
-            return False if self.over else windows[name].due(self.now)
+        Each step returns whether the run goes on: False means the step is not due yet, so
+        neither it nor any later step is done this tick.
+        """
+        if not self.over:
+            self._windows = {w.name: w for w in step_windows(self.config, self.week)}
+        await self._cancel()
+        for step in (self._flat_ask, self._nudge, self._decide, self._tally):
+            if not await step():
+                return
 
-        # 0. Cancellation via /cancel, once confirmed: it overtakes every other step.
+    def _due(self, name: str) -> bool | None:
+        return False if self.over else self._windows[name].due(self.now)
+
+    async def _cancel(self) -> None:
+        """0. Cancellation via /cancel, once confirmed: it overtakes every other step."""
         if not self.over and not self._recorded(Action.CANCELLATION) and self._cancel_confirmed():
             await self._send(Action.CANCELLATION)
-        cancelled = self.store.action_outcome(self.week, Action.CANCELLATION) is Outcome.SENT
-        skip_date = not self.over and self.store.skip_date(self.week) is not None
+        self._cancelled = self.store.action_outcome(self.week, Action.CANCELLATION) is Outcome.SENT
+        self._skip_date = not self.over and self.store.skip_date(self.week) is not None
 
-        # 1. Flat ask; not asked on a skip date, but only skipped at its time (until then /unskip
-        # can take the skip date back).
+    async def _flat_ask(self) -> bool:
+        """1. Flat ask; not asked on a skip date, but only skipped at its time (until then /unskip
+        can take the skip date back)."""
         if not self._recorded(Action.FLAT_ASK):
-            due_now = False if cancelled else due("flat_ask")
+            due_now = False if self._cancelled else self._due("flat_ask")
             if due_now is None:
-                return
-            if due_now and not skip_date:
+                return False
+            if due_now and not self._skip_date:
                 await self._send(Action.FLAT_ASK, track=MessageKind.FLAT_POLL)
             else:
                 self._skip(Action.FLAT_ASK)
-        asked = self.store.action_outcome(self.week, Action.FLAT_ASK) is Outcome.SENT
-        if asked and not cancelled:  # a cancelled week needs no confirmations
+        self._asked = self.store.action_outcome(self.week, Action.FLAT_ASK) is Outcome.SENT
+        if self._asked and not self._cancelled:  # a cancelled week needs no confirmations
             await self._notify_untracked(
                 Action.FLAT_ASK,
                 MessageKind.FLAT_POLL,
                 Action.FLAT_ASK_RETRY,
                 self.config.schedule.flat_deadline,
             )
+        return True
 
-        # 2. Nudge, if enabled.
-        if self.config.schedule.nudge is not None and not self._recorded(Action.NUDGE):
-            due_now = False if cancelled else due("nudge")
-            if due_now is None:
-                return
-            if due_now and asked and self._confirmations() == 0:
-                await self._send(Action.NUDGE)
-            else:
-                self._skip(Action.NUDGE)
+    async def _nudge(self) -> bool:
+        """2. Nudge, if enabled."""
+        if self.config.schedule.nudge is None or self._recorded(Action.NUDGE):
+            return True
+        due_now = False if self._cancelled else self._due("nudge")
+        if due_now is None:
+            return False
+        if due_now and self._asked and self._confirmations() == 0:
+            await self._send(Action.NUDGE)
+        else:
+            self._skip(Action.NUDGE)
+        return True
 
-        # 3. Decision: announcement or cancellation. A dropped week was never asked; it gets the
-        # cancellation, due from the switch that dropped it. A skip date was not asked either; it
-        # gets the cancellation at the usual time.
+    async def _decide(self) -> bool:
+        """3. Decision: announcement or cancellation. A dropped week was never asked; it gets the
+        cancellation, due from the switch that dropped it. A skip date was not asked either; it
+        gets the cancellation at the usual time."""
         if not (self._recorded(Action.ANNOUNCEMENT) or self._recorded(Action.CANCELLATION)):
-            dropped = None if asked or self.over else self.store.dropped_at(self.week)
-            skipped = skip_date and not asked
+            dropped = None if self._asked or self.over else self.store.dropped_at(self.week)
+            skipped = self._skip_date and not self._asked
             if dropped is not None:
                 due_now = dropped_cancellation_window(self.config, self.week, dropped).due(self.now)
             else:
-                due_now = due("decision")
+                due_now = self._due("decision")
             if due_now is None:
-                return
-            on = asked and self._confirmations() > 0
+                return False
+            on = self._asked and self._confirmations() > 0
             decision = Action.ANNOUNCEMENT if on else Action.CANCELLATION
             if due_now and dropped is not None:
                 dates = dropped_placeholder_values(self.week)
@@ -365,38 +388,40 @@ class _Week:
                     dropped_date=dates["dropped_date"],
                     first_date=dates["first_date"],
                 )
-            elif due_now and (asked or skipped):
+            elif due_now and (self._asked or skipped):
                 track = MessageKind.DINNER_ANNOUNCEMENT if on else None
                 await self._send(decision, track=track)
             else:
                 self._skip(decision)
         announced = self.store.action_outcome(self.week, Action.ANNOUNCEMENT) is Outcome.SENT
-        on = announced and not cancelled
-        if on:
+        self._on = announced and not self._cancelled
+        if self._on:
             await self._notify_untracked(
                 Action.ANNOUNCEMENT,
                 MessageKind.DINNER_ANNOUNCEMENT,
                 Action.ANNOUNCEMENT_NOTICE,
                 self.config.schedule.dinner,
             )
+        return True
 
-        # 4. Tally, if dinner is on.
-        if not self._recorded(Action.TALLY):
-            due_now = due("tally")
-            if due_now is None:
-                return
-            if due_now and on:
-                announcement = self.store.tracked_message(
-                    self.week, MessageKind.DINNER_ANNOUNCEMENT
-                )
-                count = (
-                    0
-                    if announcement is None
-                    else count_confirmations(self.store, announcement, self.config.emoji)
-                )
-                await self._send(Action.TALLY, count=count)
-            else:
-                self._skip(Action.TALLY)
+    async def _tally(self) -> bool:
+        """4. Tally, if dinner is on."""
+        if self._recorded(Action.TALLY):
+            return True
+        due_now = self._due("tally")
+        if due_now is None:
+            return False
+        if due_now and self._on:
+            announcement = self.store.tracked_message(self.week, MessageKind.DINNER_ANNOUNCEMENT)
+            count = (
+                0
+                if announcement is None
+                else count_confirmations(self.store, announcement, self.config.emoji)
+            )
+            await self._send(Action.TALLY, count=count)
+        else:
+            self._skip(Action.TALLY)
+        return True
 
     def _recorded(self, action: Action) -> bool:
         return self.store.has_action(self.week, action)
