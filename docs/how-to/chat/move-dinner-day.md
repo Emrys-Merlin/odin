@@ -48,7 +48,7 @@ Das gilt schon ab dieser Woche: nächstes Essen am Mo 26.10. um 19:00.
 
 **After Tuesday's question**, this week's dinner stays and the new day takes over afterwards.
 Here a Monday right after the last Sunday would have had its question before the switch, so that
-Monday is dropped. ODIN says so, and the dinner group gets a cancellation for it:
+Monday is dropped. ODIN says so, and the dinner group gets a cancellation for it (below):
 
 <div class="chat" data-group="Flat group" markdown>
 <div class="msg me" markdown>
@@ -63,6 +63,24 @@ Achtung: Am Mo 26.10. gibt es kein Essen – diese Woche fällt beim Wechsel aus
 Die Absage für den Mo 26.10. schicke ich der Essensgruppe beim Wechsel (So 25.10. um 18:00).
 </div>
 </div>
+
+At the switch (here Sunday 18:00) the dinner group gets the text `weekday_change_cancellation`,
+with the default text:
+
+<div class="chat" data-group="Dinner group" markdown>
+<div class="msg" markdown>
+<span class="sender">Odin 🍽️</span>
+Das offene Abendessen zieht um: Ab jetzt ist es jeden Montag um 19:00. 🍽️<br>
+Am Montag, 26.10., fällt es noch aus. Los geht's am Montag, 02.11. – bis dann!
+
+The open dinner is moving: from now on it is every Monday at 19:00. 🍽️<br>
+There is no dinner on Monday, 26.10., yet. The first one is on Monday, 02.11. – see you then!
+</div>
+</div>
+
+Check it with `/text weekday_change_cancellation` before the switch and change it as in
+[Edit a text](edit-a-text.md). If it is not set at all, ODIN sends the normal `cancellation`
+instead.
 
 ### 2. If ODIN says "Das passt nicht"
 

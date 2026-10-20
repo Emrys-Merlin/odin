@@ -4,8 +4,9 @@
 
 Look at and change the texts ODIN sends each week.
 
-Five texts can be changed from the flat group: `flat_ask`, `nudge`, `announcement`,
-`cancellation` and `tally`. The example changes Friday's tally. Exact syntax:
+Six texts can be changed from the flat group: `flat_ask`, `nudge`, `announcement`,
+`cancellation`, `weekday_change_cancellation` and `tally`. The example changes Friday's tally.
+Exact syntax:
 [Chat commands](../../reference/chat-commands.md); all placeholders:
 [Templates](../../reference/templates.md).
 
@@ -22,6 +23,7 @@ flat_ask (WG-Gruppe) – Frage, ob das Essen stattfindet<br>
 nudge (WG-Gruppe) – Erinnerung, wenn noch niemand bestätigt hat<br>
 announcement (Essensgruppe) – Ankündigung mit Bitte um Rückmeldung<br>
 cancellation (Essensgruppe) – Absage<br>
+weekday_change_cancellation (Essensgruppe) – Absage beim Wechsel des Wochentags<br>
 tally (WG-Gruppe) – Anzahl der Zusagen zum Bestellen
 
 Anzeigen: /text &lt;name&gt;
@@ -83,7 +85,8 @@ dinner moves to another day. Plain `/vars` lists the placeholders of all texts.
 
 Copy ODIN's `/settext tally` message, edit the text below the first line, and send it. The
 command stays alone on the first line; the new text starts on the next one. For the dinner-group
-texts (`announcement`, `cancellation`) keep German first, a blank line, then English.
+texts (`announcement`, `cancellation`, `weekday_change_cancellation`) keep German first, a
+blank line, then English.
 
 <div class="chat" data-group="Flat group" markdown>
 <div class="msg me" markdown>

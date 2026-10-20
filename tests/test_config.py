@@ -11,6 +11,7 @@ from odin.config import (
     Config,
     ConfigError,
     WeeklyTime,
+    dropped_placeholder_values,
     load_config,
     load_env,
     load_settings,
@@ -78,8 +79,11 @@ def test_example_config_loads_and_matches_defaults() -> None:
 
 def test_example_dinner_texts_are_bilingual() -> None:
     c = load_config(EXAMPLE)
-    for template in (c.templates.announcement, c.templates.cancellation):
-        german, english = template.render(**c.placeholder_values()).split("\n\n")
+    moved = c.templates.get("weekday_change_cancellation")
+    assert c.templates.is_set("weekday_change_cancellation")
+    values = c.placeholder_values() | dropped_placeholder_values(dt.date(2026, 10, 25))
+    for template in (c.templates.announcement, c.templates.cancellation, moved):
+        german, english = template.render(**values).split("\n\n")
         assert "Sonntag" in german
         assert "Sunday" in english
 
@@ -306,6 +310,35 @@ def test_bad_placeholder_syntax(text: str) -> None:
 def test_literal_braces() -> None:
     c = parse_config({"templates": {**TEMPLATES, "tally": "{{{count}}}"}})
     assert c.templates.tally.render(count=3) == "{3}"
+
+
+def test_weekday_change_cancellation_falls_back_to_cancellation() -> None:
+    # Optional (#85): a config written before it existed keeps working.
+    c = parse_config(config())
+    assert c.templates.weekday_change_cancellation is None
+    assert not c.templates.is_set("weekday_change_cancellation")
+    assert c.templates.get("weekday_change_cancellation") == c.templates.cancellation
+
+
+def test_weekday_change_cancellation_when_set() -> None:
+    text = "Ab jetzt {dinner_day_de}; {dropped_date} fällt aus, los geht's am {first_date}"
+    c = parse_config({"templates": {**TEMPLATES, "weekday_change_cancellation": text}})
+    template = c.templates.get("weekday_change_cancellation")
+    assert c.templates.is_set("weekday_change_cancellation")
+    values = c.placeholder_values() | dropped_placeholder_values(dt.date(2026, 10, 26))
+    assert template.render(**values) == "Ab jetzt Sonntag; 26.10. fällt aus, los geht's am 02.11."
+
+
+def test_dropped_dates_only_in_weekday_change_cancellation() -> None:
+    templates = {**TEMPLATES, "cancellation": "{dropped_date} fällt aus"}
+    with pytest.raises(ConfigError, match=r"templates\.cancellation: unknown placeholder"):
+        parse_config({"templates": templates})
+
+
+def test_empty_weekday_change_cancellation_is_rejected() -> None:
+    templates = {**TEMPLATES, "weekday_change_cancellation": "  "}
+    with pytest.raises(ConfigError, match=r"templates\.weekday_change_cancellation: missing"):
+        parse_config({"templates": templates})
 
 
 @pytest.mark.parametrize("name", list(TEMPLATES))

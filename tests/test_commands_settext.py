@@ -133,6 +133,26 @@ def test_count_is_allowed_in_tally_only(store: Store) -> None:
     assert stored(store) == {"templates.tally": "{count} kommen."}
 
 
+def test_dropped_dates_are_allowed_in_weekday_change_cancellation_only(store: Store) -> None:
+    [reply] = run(store, "/settext cancellation\n{dropped_date} fällt aus.")
+    assert reply.startswith("Unbekannter Platzhalter {dropped_date}.")
+
+    replies = run(store, "/settext weekday_change_cancellation\n{dropped_date} fällt aus.")
+    assert replies == [
+        "Gespeichert ✅ So sieht weekday_change_cancellation jetzt aus:\n"
+        "(Mit Beispieldaten: als fiele das nächste Essen aus.)",
+        "11.10. fällt aus.",
+    ]
+    assert stored(store) == {"templates.weekday_change_cancellation": "{dropped_date} fällt aus."}
+
+
+def test_resettext_weekday_change_cancellation_falls_back_to_cancellation(store: Store) -> None:
+    run(store, "/settext weekday_change_cancellation\nUmzug.")
+    replies = run(store, "/resettext weekday_change_cancellation")
+    assert replies[1] == "Abgesagt.\n\nCancelled."
+    assert stored(store) == {}
+
+
 def test_tally_preview_counts_this_weeks_confirmations(store: Store) -> None:
     message = store.track_message(WEEK, MessageKind.DINNER_ANNOUNCEMENT, "group.d=", "+49", 1)
     store.set_reaction(message, "+491", "👍", MONDAY)
@@ -144,7 +164,7 @@ def test_unknown_name(store: Store, name: str) -> None:
     [reply] = run(store, f"/settext {name}\nText")
     assert reply == (
         f"Einen Text „{name}“ gibt es nicht. Ändern lassen sich: "
-        "flat_ask, nudge, announcement, cancellation, tally."
+        "flat_ask, nudge, announcement, cancellation, weekday_change_cancellation, tally."
     )
     assert stored(store) == {}
 

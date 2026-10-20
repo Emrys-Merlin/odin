@@ -8,22 +8,26 @@ The weekly message templates and their placeholders. Where the templates are set
 
 ## Templates
 
-Templates have no defaults: every one must be set in the `[templates]` table of the config file.
-The texts of `config.example.toml` are a starting point.
+Templates have no defaults: every one must be set in the `[templates]` table of the config file,
+except `weekday_change_cancellation`, which falls back to `cancellation` while it is not set. The
+texts of `config.example.toml` are a starting point.
 
 | Template | Sent to | Language | When | Editable via chat |
 |---|---|---|---|---|
 | `flat_ask` | flat group | German | flat ask: does dinner take place? | yes |
 | `nudge` | flat group | German | nudge, only if nobody confirmed yet | yes |
 | `announcement` | dinner group | German, blank line, English | decision, if someone confirmed | yes |
-| `cancellation` | dinner group | German, blank line, English | decision, if nobody confirmed; also after `/cancel` and for a week dropped by a weekday change | yes |
+| `cancellation` | dinner group | German, blank line, English | decision, if nobody confirmed; also after `/cancel` | yes |
+| `weekday_change_cancellation` | dinner group | German, blank line, English | when a new dinner weekday takes over and drops a week (see [Changing the dinner weekday](../explanation/weekday-change.md#dropped-weeks)); optional, falls back to `cancellation` | yes |
 | `tally` | flat group | German | tally, only if dinner is on | yes |
 | `hello` | the operator, direct message | German | `odin setup`, step `hello` | no |
 | `flat_test` | flat group | German | end of `odin setup`, optional test | no |
 
 When each step happens is explained in [The weekly cycle](../explanation/weekly-cycle.md). A chat
 change (`/settext`) overrides the config file's text until `/resettext`; see
-[Chat commands](chat-commands.md).
+[Chat commands](chat-commands.md). While `weekday_change_cancellation` is not set (neither in the
+config file nor via chat), `/texts` and `/text` mark it with "nicht gesetzt, es gilt
+cancellation", and a change of `cancellation` changes it too.
 
 ## Syntax
 
@@ -38,6 +42,7 @@ change (`/settext`) overrides the config file's text until `/resettext`; see
 
 Weekdays have a German (`_de`) and an English (`_en`) variant; times are `HH:MM`. Using the
 placeholders instead of writing weekday names and times keeps the texts right when the schedule
-changes. `/vars` lists the same placeholders in the chat, with their current values.
+changes. Dates are `DD.MM.` (`26.10.`). `/vars` lists the same placeholders in the chat, with
+their current values.
 
 --8<-- "docs/reference/_generated/placeholders.md"

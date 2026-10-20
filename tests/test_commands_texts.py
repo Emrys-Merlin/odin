@@ -59,6 +59,8 @@ def test_texts(store: Store) -> None:
         "nudge (WG-Gruppe) – Erinnerung, wenn noch niemand bestätigt hat\n"
         "announcement (Essensgruppe) – Ankündigung mit Bitte um Rückmeldung\n"
         "cancellation (Essensgruppe) – Absage\n"
+        "weekday_change_cancellation (Essensgruppe) – Absage beim Wechsel des Wochentags "
+        "(nicht gesetzt, es gilt cancellation)\n"
         "tally (WG-Gruppe) – Anzahl der Zusagen zum Bestellen\n"
         "\n"
         "Anzeigen: /text <name>"
@@ -77,7 +79,7 @@ def test_texts_marks_overrides(store: Store) -> None:
 
 def test_texts_lists_only_the_editable_templates(store: Store) -> None:
     [reply] = handle("/texts", context(store))
-    listed = [line.split()[0] for line in reply.splitlines()[1:6]]
+    listed = [line.split()[0] for line in reply.splitlines()[1:7]]
     assert listed == list(EDITABLE_TEMPLATES)
     assert "hello" not in reply
     assert "flat_test" not in reply
@@ -138,12 +140,52 @@ def test_text_tally_with_announcement(store: Store) -> None:
 def test_text_unknown_name(store: Store, text: str) -> None:
     name = text.split()[1]
     assert handle(text, context(store)) == [
-        f"Unbekannter Text „{name}“. Möglich: flat_ask, nudge, announcement, cancellation, tally"
+        f"Unbekannter Text „{name}“. Möglich: "
+        "flat_ask, nudge, announcement, cancellation, weekday_change_cancellation, tally"
     ]
 
 
 def test_text_without_name(store: Store) -> None:
     assert handle("/text", context(store)) == [
-        "Welcher Text? Möglich: flat_ask, nudge, announcement, cancellation, tally\n"
+        "Welcher Text? Möglich: "
+        "flat_ask, nudge, announcement, cancellation, weekday_change_cancellation, tally\n"
         "Z. B. /text announcement"
     ]
+
+
+# --- weekday_change_cancellation (#85) ----------------------------------------------------------
+
+MOVED = "Ab jetzt {dinner_day_de}, {dropped_date} fällt aus, ab {first_date}"
+
+
+def test_text_weekday_change_cancellation_falls_back_to_cancellation(store: Store) -> None:
+    raw, preview = handle("/text weekday_change_cancellation", context(store))
+    assert raw == "/settext weekday_change_cancellation\n" + TEMPLATES["cancellation"]
+    assert preview == (
+        "Vorschau (Beispiel: als fiele das nächste Essen aus) "
+        "(nicht gesetzt, es gilt cancellation):\nAbgesagt.\n\nCancelled."
+    )
+
+
+def test_text_weekday_change_cancellation_with_sample_dates(store: Store) -> None:
+    override(store, "weekday_change_cancellation", MOVED)
+    [listing] = handle("/texts", context(store))
+    assert (
+        "weekday_change_cancellation (Essensgruppe) – Absage beim Wechsel des Wochentags "
+        "✏️ 12.10. von Tim"
+    ) in listing.splitlines()
+    raw, preview = handle("/text weekday_change_cancellation", context(store))
+    assert raw == "/settext weekday_change_cancellation\n" + MOVED
+    assert preview == (
+        "Vorschau (Beispiel: als fiele das nächste Essen aus): ✏️ 12.10. von Tim\n"
+        "Ab jetzt Sonntag, 11.10. fällt aus, ab 18.10."
+    )
+
+
+def test_text_weekday_change_cancellation_of_a_dropped_week(store: Store) -> None:
+    override(store, "weekday_change_cancellation", MOVED)
+    store.record_dropped_week(WEEK, NOW)
+    _, preview = handle("/text weekday_change_cancellation", context(store))
+    assert preview == (
+        "Vorschau (diese Woche): ✏️ 12.10. von Tim\nAb jetzt Sonntag, 11.10. fällt aus, ab 18.10."
+    )

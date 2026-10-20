@@ -39,6 +39,7 @@ SAVED = "Gespeichert ✅ So sieht {name} jetzt aus:"
 RESET = "Zurückgesetzt auf den Standardtext ✅ So sieht {name} jetzt aus:"
 NOT_CHANGED = "{name} war nicht geändert."
 SAMPLE_NOTE = "(Mit der Beispielzahl 3 für {count}.)"
+SAMPLE_DATES_NOTE = "(Mit Beispieldaten: als fiele das nächste Essen aus.)"
 NEXT_WEEK = "Für diese Woche ist das schon gelaufen – der Text gilt ab nächster Woche."
 
 # The weekly actions that send each template; once one of them is recorded for the current
@@ -48,6 +49,7 @@ _ACTIONS: dict[str, tuple[Action, ...]] = {
     "nudge": (Action.NUDGE,),
     "announcement": (Action.ANNOUNCEMENT, Action.CANCELLATION),
     "cancellation": (Action.ANNOUNCEMENT, Action.CANCELLATION),
+    "weekday_change_cancellation": (Action.ANNOUNCEMENT, Action.CANCELLATION),
     "tally": (Action.TALLY,),
 }
 
@@ -86,7 +88,7 @@ def _replies(header: str, config: Config, ctx: CommandContext, name: str) -> lis
     preview, is_sample = render_preview(config, ctx.store, name, ctx.now)
     lines = [header]
     if is_sample:
-        lines.append(SAMPLE_NOTE)
+        lines.append(SAMPLE_NOTE if name == "tally" else SAMPLE_DATES_NOTE)
     if _done_this_week(config, ctx, name):
         lines.append(NEXT_WEEK)
     return ["\n".join(lines), preview]

@@ -47,7 +47,9 @@ so the engine knows it from state. A dropped week runs like a week whose flat as
 its flat ask, nudge and tally are recorded as skipped — except that the dinner group still gets
 the cancellation: it is due from the switch (see `dropped_cancellation_window`), so it goes out on
 the first tick after the switch, and is skipped like any late step after the dropped week's dinner
-start or once the catch-up grace counted from the switch has passed.
+start or once the catch-up grace counted from the switch has passed. Its text is the
+`weekday_change_cancellation` template (which falls back to `cancellation` while it is not set);
+it is recorded as the week's cancellation like any other.
 
 **Cancelled via chat** (`/cancel`, see `odin.commands.cancel`): ODIN's reply to `/cancel` is
 tracked as the week's cancel request. Once anyone reacts to it with the configured emoji, the next
@@ -63,7 +65,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
 from odin import notices
-from odin.config import Config, WeeklyTime
+from odin.config import Config, WeeklyTime, dropped_placeholder_values
 from odin.reactions import count_confirmations
 from odin.signal import SendResponseUnreadable, SignalClient
 from odin.store import Action, MessageKind, Outcome, Store
@@ -343,7 +345,15 @@ class _Week:
                 return
             on = asked and self._confirmations() > 0
             decision = Action.ANNOUNCEMENT if on else Action.CANCELLATION
-            if due_now and (asked or dropped is not None):
+            if due_now and dropped is not None:
+                dates = dropped_placeholder_values(self.week)
+                await self._send(
+                    decision,
+                    template="weekday_change_cancellation",
+                    dropped_date=dates["dropped_date"],
+                    first_date=dates["first_date"],
+                )
+            elif due_now and asked:
                 track = MessageKind.DINNER_ANNOUNCEMENT if on else None
                 await self._send(decision, track=track)
             else:
@@ -392,12 +402,19 @@ class _Week:
         return count_confirmations(self.store, poll, self.config.emoji)
 
     async def _send(
-        self, action: Action, *, track: MessageKind | None = None, **values: object
+        self,
+        action: Action,
+        *,
+        track: MessageKind | None = None,
+        template: str | None = None,
+        **values: object,
     ) -> None:
+        """Post `action` with its template, or with the template named `template` instead."""
         to_dinner = action in (Action.ANNOUNCEMENT, Action.CANCELLATION)
         group = self.account.dinner_group_id if to_dinner else self.account.flat_group_id
-        template = getattr(self.config.templates, action.value)
-        text = template.render(**self.config.placeholder_values(), **values)
+        text = self.config.templates.get(template or action.value).render(
+            **self.config.placeholder_values(), **values
+        )
         if not await self._post(action, group, text, track):
             raise _SendFailed
 
