@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="docs/assets/logo.png" width="160"
+       alt="ODIN logo: an indigo raven perched in a dinner plate, fork and knife crossed behind it.">
+</p>
+
 # ODIN — Open Dinner Invitation Notifier
 
 [![CI](https://github.com/Emrys-Merlin/odin/actions/workflows/ci.yml/badge.svg)](https://github.com/Emrys-Merlin/odin/actions/workflows/ci.yml)

@@ -1,5 +1,7 @@
 # ODIN — Open Dinner Invitation Notifier
 
+![ODIN logo: an indigo raven perched in a dinner plate, fork and knife crossed behind it.](assets/logo.png){ width="160" align="right" }
+
 ODIN is a Signal bot that organises a weekly open dinner. Every week it asks the flatmates
 whether dinner takes place, tells the guests (or cancels), and counts who is coming so there is
 enough food.
