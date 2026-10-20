@@ -52,7 +52,9 @@ async def _in_thread(read: Callable[[], str]) -> str:
     def target() -> None:
         try:
             result = read()
-        except BaseException as e:  # EOFError above all; handed to the waiting coroutine
+        # EOFError above all, but anything: it is handed to the waiting coroutine, which would
+        # otherwise wait forever.
+        except BaseException as e:  # noqa: BLE001
             loop.call_soon_threadsafe(resolve, None, e)
         else:
             loop.call_soon_threadsafe(resolve, result, None)

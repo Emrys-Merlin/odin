@@ -55,9 +55,13 @@ def test_action_outcome(store: Store) -> None:
 
 
 def test_transaction_rolls_back_on_error(store: Store) -> None:
-    with pytest.raises(RuntimeError), store.transaction():
-        store.record_action(WEEK, Action.FLAT_ASK, TUE)
-        raise RuntimeError
+    def record_then_fail() -> None:
+        with store.transaction():
+            store.record_action(WEEK, Action.FLAT_ASK, TUE)
+            raise RuntimeError("inside the transaction")
+
+    with pytest.raises(RuntimeError, match="inside the transaction"):
+        record_then_fail()
     assert not store.has_action(WEEK, Action.FLAT_ASK)
 
     with store.transaction():
@@ -67,7 +71,7 @@ def test_transaction_rolls_back_on_error(store: Store) -> None:
 
 def test_naive_datetimes_are_rejected(store: Store) -> None:
     with pytest.raises(ValueError, match="naive"):
-        store.record_action(WEEK, Action.FLAT_ASK, datetime(2026, 10, 6, 18, 0))
+        store.record_action(WEEK, Action.FLAT_ASK, datetime(2026, 10, 6, 18, 0))  # noqa: DTZ001 — naive on purpose
 
 
 def test_track_and_find_message(store: Store) -> None:

@@ -8,7 +8,8 @@ import pytest
 
 _PATH = Path(__file__).parent.parent / "scripts" / "gen_reference.py"
 _spec = importlib.util.spec_from_file_location("gen_reference", _PATH)
-assert _spec is not None and _spec.loader is not None
+assert _spec is not None
+assert _spec.loader is not None
 gen_reference = importlib.util.module_from_spec(_spec)
 sys.modules["gen_reference"] = gen_reference
 _spec.loader.exec_module(gen_reference)

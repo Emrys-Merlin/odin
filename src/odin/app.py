@@ -179,7 +179,8 @@ async def _start_health_server(
     try:
         return await start_server(health, clock, port)
     except OSError as e:
-        logger.error("cannot serve the health endpoint on port %d: %s", port, e)
+        # An expected setup error that the message fully explains; a traceback adds nothing.
+        logger.error("cannot serve the health endpoint on port %d: %s", port, e)  # noqa: TRY400
         return None
 
 
@@ -226,7 +227,8 @@ async def _registration_problem(admin: SignalAdmin, number: str) -> str:
     """Why `number` cannot be used with the Signal API right now; empty if it can."""
     try:
         accounts = await admin.list_accounts()
-    except Exception as e:  # whatever it is, the API is not usable yet; keep waiting
+    # Whatever it is, the API is not usable yet; keep waiting rather than crash the wait loop.
+    except Exception as e:  # noqa: BLE001
         logger.debug("listing the Signal API's accounts failed: %r", e)
         return API_UNREACHABLE
     return "" if number in accounts else NOT_REGISTERED

@@ -213,7 +213,7 @@ def config_dinner_change(base: Config, store: Store) -> tuple[WeeklyTime, Weekly
     return None if point.weekday == target.weekday else (point, target)
 
 
-def _resolve(base: Config, store: Store, now: datetime) -> tuple[Config, PendingDinner | None]:
+def _resolve(base: Config, store: Store, now: datetime) -> tuple[Config, PendingDinner | None]:  # noqa: C901 — to be split up in #138
     stored = store.overrides()
     pending = stored.pop(PENDING_DINNER_KEY, None)
     target, valid = _apply_valid(base, store, stored)

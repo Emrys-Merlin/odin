@@ -16,7 +16,7 @@ def test_fixed_clock_stands_still_until_moved() -> None:
 
 def test_fixed_clock_rejects_naive_datetimes() -> None:
     with pytest.raises(ValueError, match="naive"):
-        FixedClock(datetime(2026, 10, 6, 16, 0))
+        FixedClock(datetime(2026, 10, 6, 16, 0))  # noqa: DTZ001 — naive on purpose
 
 
 def test_fixed_clock_sleep_advances_the_time() -> None:

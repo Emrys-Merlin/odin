@@ -121,7 +121,8 @@ def test_skip_of_this_week_after_its_flat_ask_is_cancel(store: Store) -> None:
     store.record_action(WEEK, Action.FLAT_ASK, local(6, 18))
     [skip] = run_command(store, "/skip 2026-10-11", local(6, 20))
     [cancel] = run_command(store, "/cancel", local(6, 20))
-    assert isinstance(skip, TrackedReply) and isinstance(cancel, TrackedReply)
+    assert isinstance(skip, TrackedReply)
+    assert isinstance(cancel, TrackedReply)
     assert (skip, skip.week, skip.kind) == (cancel, cancel.week, cancel.kind)
     assert store.skip_dates() == []
 

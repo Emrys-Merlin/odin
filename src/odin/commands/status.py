@@ -131,7 +131,7 @@ class _WeekStatus:
     def confirmations(self) -> int:
         return self._count(MessageKind.FLAT_POLL) or 0
 
-    def lines(self) -> list[str]:
+    def lines(self) -> list[str]:  # noqa: C901 — to be split up in #138
         schedule = self.config.schedule
 
         off = f"{OFF} {{label}}: " + DROPPED_STEP.format(reason=BY_SKIP)
@@ -264,7 +264,7 @@ def _upcoming(config: Config, now: datetime, pending: PendingDinner | None) -> l
     return [u for u in upcoming if u.at < pending.switch] + engine.upcoming_actions(new, first_ask)
 
 
-def _next_action(
+def _next_action(  # noqa: C901 — to be split up in #138
     config: Config, current: _WeekStatus, now: datetime, pending: PendingDinner | None
 ) -> str | None:
     """The first scheduled action that will (or may) still happen, in German."""
