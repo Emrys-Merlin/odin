@@ -9,6 +9,9 @@ most once (see `odin.engine`).
 Unlike `/cancel`, it is not about a dinner week: it can be sent any number of times (e.g. after
 new guests joined), changes nothing in the weekly cycle and does not show in `/status`. A request
 lapses `INTRODUCTION_LAPSE` after it was sent, or when a newer `/introduce` replaces it.
+
+It is refused during a hiatus (`/hiatus`): the introduction describes the weekly cycle, which is
+asleep then. A request still open when a hiatus starts is dropped by the engine, never posted.
 """
 
 from odin.clock import to_utc
@@ -28,12 +31,15 @@ LAPSES = (
     "Ohne {emoji} passiert nichts; die Anfrage verfällt am {at} oder mit dem nächsten /introduce."
 )
 LAST = "Zuletzt vorgestellt: {at}."
+HIATUS = "Ich mache gerade Pause – /resume beendet sie, danach kann ich mich vorstellen."
 
 
 def run(ctx: CommandContext, args: str) -> list[str]:
     if args:
         raise CommandError(USAGE)
     config = ctx.config
+    if ctx.store.active_hiatus() is not None:
+        raise CommandError(HIATUS)
     template = config.templates.find(TemplateName.INTRODUCTION)
     if template is None:
         raise CommandError(ui.NOT_SET.format(name=TemplateName.INTRODUCTION))

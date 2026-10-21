@@ -10,7 +10,7 @@ from helpers import local, ms
 
 from odin.clock import FixedClock
 from odin.commands import CommandContext, TrackedReply, handle, ui
-from odin.commands.introduce import USAGE
+from odin.commands.introduce import HIATUS, USAGE
 from odin.config import Config, parse_config
 from odin.engine import Account, SendFailure, reconcile
 from odin.events import consume_events
@@ -117,6 +117,12 @@ class World:
             timestamp=ms(now),
         )
         self.chat(now, event)
+
+    def hiatus(self, now: datetime) -> None:
+        """/hiatus at `now`, confirmed a minute later; it takes effect on the next tick."""
+        self.say(now, "/hiatus")
+        [request] = self.store.tracked_messages(MessageKind.HIATUS_REQUEST)
+        self.react(now + timedelta(minutes=1), request)
 
     def dinner_texts(self) -> list[str]:
         return [sent.text for sent in self.client.sent if sent.group_id == DINNER]
@@ -338,6 +344,60 @@ def test_the_weekly_cycle_is_not_touched(world: World) -> None:
     [reply] = run_command(world.store, "/status", local(12, 1))
     assert "introduc" not in reply.lower()
     assert "Vorstell" not in reply
+
+
+# --- During a hiatus ---------------------------------------------------------------------------
+
+
+def test_refused_during_a_hiatus(world: World) -> None:
+    world.hiatus(local(5, 9))
+    world.tick(local(5, 9, 2))
+    before = world.dinner_texts()
+    assert world.introduce(local(5, 10)) == [HIATUS]
+    assert world.store.tracked_messages(MessageKind.INTRODUCTION_REQUEST) == []
+    world.run(local(5, 10), local(5, 12))
+    assert world.dinner_texts() == before
+    assert INTRODUCTION not in before
+
+
+def test_a_confirmed_request_is_dropped_when_a_hiatus_starts(
+    world: World, caplog: pytest.LogCaptureFixture
+) -> None:
+    world.introduce(local(5, 10))
+    world.react(local(5, 10, 1))
+    world.hiatus(local(5, 10, 2))  # both confirmed before the next tick
+    with caplog.at_level(logging.WARNING):
+        world.run(local(5, 10, 5), local(5, 12))
+    assert INTRODUCTION not in world.dinner_texts()
+    assert world.store.tracked_messages(MessageKind.INTRODUCTION_REQUEST) == []
+    assert caplog.text.count("requested before the hiatus") == 1
+
+    world.say(local(5, 12), "/resume")
+    world.run(local(5, 12), local(5, 14))
+    assert INTRODUCTION not in world.dinner_texts()
+
+
+def test_an_open_request_is_never_posted_after_a_hiatus_started(world: World) -> None:
+    world.introduce(local(5, 10))
+    request = world.request()
+    world.hiatus(local(5, 10, 1))
+    world.tick(local(5, 10, 5))
+    assert world.store.tracked_messages(MessageKind.INTRODUCTION_REQUEST) == []
+    world.say(local(5, 11), "/resume")
+    world.react(local(5, 11, 1), request)  # within its 24 hours, but it was dropped
+    world.run(local(5, 11, 5), local(5, 13))
+    assert INTRODUCTION not in world.dinner_texts()
+
+
+def test_works_again_after_resume(world: World) -> None:
+    world.hiatus(local(5, 9))
+    world.tick(local(5, 9, 2))
+    world.say(local(5, 10), "/resume")
+    [reply] = world.introduce(local(5, 10, 1))
+    assert reply.endswith(INTRODUCTION)
+    world.react(local(5, 10, 2))
+    world.tick(local(5, 10, 5))
+    assert world.dinner_texts()[-1] == INTRODUCTION
 
 
 # --- The template -------------------------------------------------------------------------------
