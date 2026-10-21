@@ -9,8 +9,9 @@ The weekly message templates and their placeholders. Where the templates are set
 ## Templates
 
 Templates have no defaults: every one must be set in the `[templates]` table of the config file,
-except `weekday_change_cancellation`, which falls back to `cancellation` while it is not set. The
-texts of `config.example.toml` are a starting point.
+except two optional ones: `weekday_change_cancellation`, which falls back to `cancellation` while
+it is not set, and `introduction`, without which `/introduce` asks for a text instead of sending
+anything. The texts of `config.example.toml` are a starting point.
 
 | Template | Sent to | Language | When | Editable via chat |
 |---|---|---|---|---|
@@ -20,6 +21,7 @@ texts of `config.example.toml` are a starting point.
 | `cancellation` | dinner group | German, blank line, English | decision, if nobody confirmed; also after `/cancel` | yes |
 | `weekday_change_cancellation` | dinner group | German, blank line, English | when a new dinner weekday takes over and drops a week (see [Changing the dinner weekday](../explanation/weekday-change.md#dropped-weeks)); optional, falls back to `cancellation` | yes |
 | `tally` | flat group | German | tally, only if dinner is on | yes |
+| `introduction` | dinner group | German, blank line, English | after a confirmed `/introduce`, any number of times; not part of the weekly cycle; optional, no fallback | yes |
 | `hello` | the operator, direct message | German | `odin setup`, step `hello` | no |
 | `flat_test` | flat group | German | end of `odin setup`, optional test | no |
 
@@ -27,7 +29,11 @@ When each step happens is explained in [The weekly cycle](../explanation/weekly-
 change (`/settext`) overrides the config file's text until `/resettext`; see
 [Chat commands](chat-commands.md). While `weekday_change_cancellation` is not set (neither in the
 config file nor via chat), `/texts` and `/text` mark it with "nicht gesetzt, es gilt
-cancellation", and a change of `cancellation` changes it too.
+cancellation", and a change of `cancellation` changes it too. While `introduction` is not set,
+`/texts` marks it with "nicht gesetzt", and `/text introduction` and `/introduce` answer
+`introduction ist nicht gesetzt. Anlegen: /settext introduction – und in den Zeilen darunter der
+Text.`; `/resettext introduction` of a text set only via chat answers `Zurückgesetzt ✅
+introduction ist jetzt nicht gesetzt.`
 
 ## Syntax
 

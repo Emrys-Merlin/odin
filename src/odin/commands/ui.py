@@ -17,6 +17,11 @@ UNTRACKED = "{emoji} nicht zählbar"
 
 WEEKDAYS_SHORT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 
+# An optional template without a fallback that is not set (`introduction`).
+NOT_SET = (
+    "{name} ist nicht gesetzt. Anlegen: /settext {name} – und in den Zeilen darunter der Text."
+)
+
 
 def editable_template(word: str) -> TemplateName | None:
     """The template named `word` (in any case) if it can be changed via chat, else None."""
@@ -30,6 +35,12 @@ def editable_template(word: str) -> TemplateName | None:
 def weekly_time(point: WeeklyTime) -> str:
     """A schedule point in German: ``Di 18:00``."""
     return f"{WEEKDAYS_SHORT[point.weekday]} {point.time:%H:%M}"
+
+
+def moment(at: datetime, timezone: tzinfo) -> str:
+    """A moment in ``timezone``, in German: ``Di 06.10. 18:00``."""
+    local = at.astimezone(timezone)
+    return f"{WEEKDAYS_SHORT[local.weekday()]} {local:%d.%m. %H:%M}"
 
 
 def short_date(day: date) -> str:

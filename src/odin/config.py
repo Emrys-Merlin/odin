@@ -305,6 +305,7 @@ TEMPLATE_PLACEHOLDERS: dict[TemplateName, frozenset[str]] = {
     TemplateName.WEEKDAY_CHANGE_CANCELLATION: COMMON_PLACEHOLDERS | DROPPED_PLACEHOLDERS,
     TemplateName.ANNOUNCEMENT: COMMON_PLACEHOLDERS,  # dinner group, bilingual
     TemplateName.TALLY: COMMON_PLACEHOLDERS | {"count"},  # flat group, German
+    TemplateName.INTRODUCTION: COMMON_PLACEHOLDERS,  # dinner group, bilingual; via /introduce
     TemplateName.HELLO: COMMON_PLACEHOLDERS,  # direct message to the operator during `odin setup`
     # flat group, optional test at the end of `odin setup`
     TemplateName.FLAT_TEST: COMMON_PLACEHOLDERS,
@@ -320,8 +321,14 @@ def dropped_placeholder_values(week: dt.date) -> dict[str, str]:
     }
 
 
-# Optional templates -> the template used while one is not set, so that a config written before
-# it existed keeps working. The fallback's placeholders must be a subset of the template's.
+# Optional templates: None while not set, so that a config written before one existed keeps
+# working. One in `TEMPLATE_FALLBACKS` uses its fallback's text meanwhile; one without a fallback
+# is not sent at all (`/introduce` asks for a text first).
+OPTIONAL_TEMPLATES = frozenset(
+    {TemplateName.WEEKDAY_CHANGE_CANCELLATION, TemplateName.INTRODUCTION}
+)
+# Optional template -> the template used while it is not set. The fallback's placeholders must be
+# a subset of the template's.
 TEMPLATE_FALLBACKS = {TemplateName.WEEKDAY_CHANGE_CANCELLATION: TemplateName.CANCELLATION}
 
 
@@ -395,13 +402,24 @@ class Templates:
     tally: Template
     hello: Template
     flat_test: Template
-    # Optional (see `TEMPLATE_FALLBACKS`): None while not set.
+    # Optional (see `OPTIONAL_TEMPLATES`): None while not set.
     weekday_change_cancellation: Template | None = None
+    introduction: Template | None = None
+
+    def find(self, name: TemplateName) -> Template | None:
+        """Template `name`, or its fallback while an optional template is not set; None for an
+        optional template without a fallback that is not set."""
+        template = getattr(self, name)
+        if template is None and name in TEMPLATE_FALLBACKS:
+            return getattr(self, TEMPLATE_FALLBACKS[name])
+        return template
 
     def get(self, name: TemplateName) -> Template:
-        """Template `name`, or its fallback while an optional template is not set."""
-        template = getattr(self, name)
-        return getattr(self, TEMPLATE_FALLBACKS[name]) if template is None else template
+        """Like `find`, but raises LookupError for an optional template that is not set."""
+        template = self.find(name)
+        if template is None:
+            raise LookupError(f"template {name} is not set")
+        return template
 
     def is_set(self, name: TemplateName) -> bool:
         """Whether template `name` has a text of its own (always true for a required one)."""
@@ -415,7 +433,7 @@ def _parse_templates(raw: object) -> Templates:
     for name, allowed in TEMPLATE_PLACEHOLDERS.items():
         where = f"templates.{name}"
         text = table.get(name)
-        if text is None and name in TEMPLATE_FALLBACKS:
+        if text is None and name in OPTIONAL_TEMPLATES:
             continue
         if not isinstance(text, str) or not text.strip():
             raise ConfigError(f"{where}: missing or empty message text")

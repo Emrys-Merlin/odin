@@ -12,7 +12,7 @@ flowchart LR
   sidecar <--> signal(("Signal"))
   config[/"config TOML<br/>(schedule, emoji, templates)"/] --> odin
   env[/"env vars<br/>(SIGNAL_NUMBER, API URL)"/] --> odin
-  odin <--> db[("SQLite state DB<br/>(sent actions, group IDs,<br/>chat overrides, skip dates)")]
+  odin <--> db[("SQLite state DB<br/>(sent actions, group IDs,<br/>chat overrides, skip dates,<br/>introductions)")]
   sidecar <--> vol[("signal-cli data volume<br/>(account keys)")]
 ```
 
