@@ -132,69 +132,94 @@ class _WeekStatus:
     def confirmations(self) -> int:
         return self._count(MessageKind.FLAT_POLL) or 0
 
-    def lines(self) -> list[str]:  # noqa: C901 — to be split up in #138
-        schedule = self.config.schedule
+    def lines(self) -> list[str]:
+        """The lines of the week's steps: flat ask, nudge, decision (with a /cancel), tally."""
+        return [
+            self._flat_ask_line(),
+            self._nudge_line(),
+            *self._decision_lines(),
+            self._tally_line(),
+        ]
 
-        off = f"{OFF} {{label}}: " + DROPPED_STEP.format(reason=BY_SKIP)
+    def _flat_ask_line(self) -> str:
+        """The flat ask; once sent, with a second ask and the confirmations on it."""
         if self.skipping and self.outcome(Action.FLAT_ASK) is None:
-            flat_ask = off.format(label=FLAT_ASK)
-        else:
-            flat_ask = self._step(
-                Action.FLAT_ASK, FLAT_ASK, "Frage an die WG gesendet", schedule.flat_ask
-            )
+            return self._dropped_by_skip(FLAT_ASK)
+        line = self._step(
+            Action.FLAT_ASK, FLAT_ASK, "Frage an die WG gesendet", self.config.schedule.flat_ask
+        )
         if self.asked:
             if self.outcome(Action.FLAT_ASK_RETRY) is Outcome.SENT:
-                flat_ask += f", {ASKED_AGAIN} ({self._sent_at(Action.FLAT_ASK_RETRY)})"
-            flat_ask += " – " + self._reactions(MessageKind.FLAT_POLL)
+                line += f", {ASKED_AGAIN} ({self._sent_at(Action.FLAT_ASK_RETRY)})"
+            line += " – " + self._reactions(MessageKind.FLAT_POLL)
+        return line
 
+    def _nudge_line(self) -> str:
+        """The nudge: off, dropped by a skip date, or its step."""
+        schedule = self.config.schedule
         if schedule.nudge is None and self.outcome(Action.NUDGE) is None:
-            nudge = f"{OFF} {NUDGE}: aus"
-        elif self.skipping and self.outcome(Action.NUDGE) is None:
-            nudge = off.format(label=NUDGE)
-        else:
-            nudge = self._step(Action.NUDGE, NUDGE, "Erinnerung gesendet", schedule.nudge_time)
+            return f"{OFF} {NUDGE}: aus"
+        if self.skipping and self.outcome(Action.NUDGE) is None:
+            return self._dropped_by_skip(NUDGE)
+        return self._step(Action.NUDGE, NUDGE, "Erinnerung gesendet", schedule.nudge_time)
 
-        decisions = []
-        cancellation = ""
-        if self.cancelled:
-            cancellation = f"{CANCELLED} Absage gesendet ({self._sent_at(Action.CANCELLATION)})"
-            if self.cancel_confirmed:
-                cancellation += f" – {BY_CANCEL}"
-            elif self.skipping:
-                cancellation += f" – {BY_SKIP}"
+    def _decision_lines(self) -> list[str]:
+        """The decision; then a cancellation via /cancel after the announcement, and an open
+        /cancel request."""
+        lines = [self._decision_line()]
+        if self.outcome(Action.ANNOUNCEMENT) is Outcome.SENT and self.cancelled:
+            lines.append(self._cancellation_line())
+        request = self._cancel_request_line()
+        if request is not None:
+            lines.append(request)
+        return lines
+
+    def _decision_line(self) -> str:
+        """The announcement with its RSVPs, the cancellation, or the decision still ahead."""
         if self.outcome(Action.ANNOUNCEMENT) is Outcome.SENT:
-            decision = f"{SENT} Einladung gesendet ({self._sent_at(Action.ANNOUNCEMENT)})"
-            decision += " – " + self._reactions(MessageKind.DINNER_ANNOUNCEMENT)
-            if cancellation:  # cancelled via /cancel after the announcement
-                decisions.append(cancellation)
-        elif self.cancelled:
-            decision = cancellation
-        elif self.decided:
-            decision = f"{SKIPPED} {DECISION}: übersprungen"
-        elif self.skipping:
-            when = ui.weekly_time(schedule.flat_deadline)
-            decision = f"{PENDING} {CANCELLATION_STEP}: {when} – {BY_SKIP}"
-        else:
-            decision = f"{PENDING} {DECISION}: {ui.weekly_time(schedule.flat_deadline)}"
+            line = f"{SENT} Einladung gesendet ({self._sent_at(Action.ANNOUNCEMENT)})"
+            return line + " – " + self._reactions(MessageKind.DINNER_ANNOUNCEMENT)
+        if self.cancelled:
+            return self._cancellation_line()
+        if self.decided:
+            return f"{SKIPPED} {DECISION}: übersprungen"
+        when = ui.weekly_time(self.config.schedule.flat_deadline)
+        if self.skipping:
+            return f"{PENDING} {CANCELLATION_STEP}: {when} – {BY_SKIP}"
+        return f"{PENDING} {DECISION}: {when}"
 
+    def _cancellation_line(self) -> str:
+        """The sent cancellation, and whether /cancel or /skip caused it."""
+        line = f"{CANCELLED} Absage gesendet ({self._sent_at(Action.CANCELLATION)})"
+        if self.cancel_confirmed:
+            return f"{line} – {BY_CANCEL}"
+        if self.skipping:
+            return f"{line} – {BY_SKIP}"
+        return line
+
+    def _cancel_request_line(self) -> str | None:
+        """A /cancel request whose cancellation is not sent yet, and whether it is confirmed."""
         request = self.store.tracked_message(self.week, MessageKind.CANCEL_REQUEST)
-        if request is not None and self.outcome(Action.CANCELLATION) is None:
-            at = datetime.fromtimestamp(request.timestamp / 1000, UTC)
-            line = REQUESTED.format(at=self._local(at))
-            awaiting = AWAITING.format(emoji=self.config.emoji)
-            state = CONFIRMED if self.cancel_confirmed else awaiting
-            decisions.append(f"{line} – {state}")
+        if request is None or self.outcome(Action.CANCELLATION) is not None:
+            return None
+        at = datetime.fromtimestamp(request.timestamp / 1000, UTC)
+        line = REQUESTED.format(at=self._local(at))
+        awaiting = AWAITING.format(emoji=self.config.emoji)
+        state = CONFIRMED if self.cancel_confirmed else awaiting
+        return f"{line} – {state}"
 
+    def _tally_line(self) -> str:
+        """The tally: dropped or skipped without a dinner, else its step."""
         if self.outcome(Action.TALLY) is None and (
             (self.decided and not self.dinner_on) or self.skipping
         ):
-            tally = f"{OFF} {TALLY}: entfällt ({NO_DINNER})"
-        elif self.outcome(Action.TALLY) is Outcome.SKIPPED and not self.dinner_on:
-            tally = f"{SKIPPED} {TALLY}: übersprungen ({NO_DINNER})"
-        else:
-            tally = self._step(Action.TALLY, TALLY, "Zählung gesendet", schedule.tally)
+            return f"{OFF} {TALLY}: entfällt ({NO_DINNER})"
+        if self.outcome(Action.TALLY) is Outcome.SKIPPED and not self.dinner_on:
+            return f"{SKIPPED} {TALLY}: übersprungen ({NO_DINNER})"
+        return self._step(Action.TALLY, TALLY, "Zählung gesendet", self.config.schedule.tally)
 
-        return [flat_ask, nudge, decision, *decisions, tally]
+    def _dropped_by_skip(self, label: str) -> str:
+        return f"{OFF} {label}: " + DROPPED_STEP.format(reason=BY_SKIP)
 
     def _step(self, action: Action, label: str, sent: str, point: WeeklyTime) -> str:
         match self.outcome(action):
@@ -265,7 +290,7 @@ def _upcoming(config: Config, now: datetime, pending: PendingDinner | None) -> l
     return [u for u in upcoming if u.at < pending.switch] + engine.upcoming_actions(new, first_ask)
 
 
-def _next_action(  # noqa: C901 — to be split up in #138
+def _next_action(
     config: Config, current: _WeekStatus, now: datetime, pending: PendingDinner | None
 ) -> str | None:
     """The first scheduled action that will (or may) still happen, in German."""
@@ -281,44 +306,59 @@ def _next_action(  # noqa: C901 — to be split up in #138
     dinner = config.when(config.schedule.dinner, current.week)
     candidates = [*_upcoming(config, now, pending), *_upcoming(config, dinner, pending)]
     for upcoming in candidates:
-        note = ""
-        label = STEP_LABELS[upcoming.step]
         if _skipping(current.store, upcoming.week):
             # No flat ask, nudge or tally; the cancellation goes out at the decision time.
-            if upcoming.step is not StepName.DECISION or (
-                upcoming.week == current.week and current.decided
-            ):
-                continue
-            label = CANCELLATION_STEP
-        elif engine.dinner_week(config, upcoming.at) == current.week:
-            match upcoming.step:
-                case StepName.FLAT_ASK:
-                    if current.outcome(Action.FLAT_ASK) is not None:
-                        continue
-                case StepName.NUDGE:
-                    if current.outcome(Action.NUDGE) is not None or (
-                        current.asked and current.confirmations() > 0
-                    ):
-                        continue
-                    note = ONLY_IF_UNCONFIRMED.format(emoji=config.emoji)
-                case StepName.DECISION:
-                    if current.decided:
-                        continue
-                case StepName.TALLY:
-                    if current.outcome(Action.TALLY) is not None or (
-                        current.decided and not current.dinner_on
-                    ):
-                        continue
-            # Without a flat ask nobody can confirm: the rest of the week is skipped. That is also
-            # so for a flat ask past its window, e.g. of a week dropped by a weekday change.
-            if current.outcome(Action.FLAT_ASK) is Outcome.SKIPPED or flat_ask_missed:
-                continue
-        elif upcoming.step is StepName.NUDGE:
-            note = ONLY_IF_UNCONFIRMED.format(emoji=config.emoji)
-        at = upcoming.at.astimezone(config.timezone)
-        text = f"{label}, {ui.WEEKDAYS_SHORT[at.weekday()]} {at:%H:%M}"
-        return f"{text} ({note})" if note else text
+            if _skip_cancellation_ahead(current, upcoming):
+                return _action_line(config, upcoming, CANCELLATION_STEP)
+        elif engine.dinner_week(config, upcoming.at) != current.week or (
+            _step_ahead(current, upcoming.step, flat_ask_missed)
+        ):
+            return _action_line(config, upcoming)
     return None
+
+
+def _skip_cancellation_ahead(current: _WeekStatus, upcoming: Upcoming) -> bool:
+    """Whether `upcoming`, in a week with a skip date, is a cancellation still to be sent: its
+    decision step, unless that is this week's and already decided."""
+    return upcoming.step is StepName.DECISION and not (
+        upcoming.week == current.week and current.decided
+    )
+
+
+def _step_ahead(current: _WeekStatus, step: StepName, flat_ask_missed: bool) -> bool:
+    """Whether `step` of the current week will (or may) still happen."""
+    # Without a flat ask nobody can confirm: the rest of the week is skipped. That is also so for
+    # a flat ask past its window, e.g. of a week dropped by a weekday change.
+    no_flat_ask = current.outcome(Action.FLAT_ASK) is Outcome.SKIPPED or flat_ask_missed
+    return not (_step_settled(current, step) or no_flat_ask)
+
+
+def _step_settled(current: _WeekStatus, step: StepName) -> bool:
+    """Whether `step` of the current week has happened or no longer will, by its own state."""
+    match step:
+        case StepName.FLAT_ASK:
+            return current.outcome(Action.FLAT_ASK) is not None
+        case StepName.NUDGE:
+            return current.outcome(Action.NUDGE) is not None or (
+                current.asked and current.confirmations() > 0
+            )
+        case StepName.DECISION:
+            return current.decided
+        case StepName.TALLY:
+            return current.outcome(Action.TALLY) is not None or (
+                current.decided and not current.dinner_on
+            )
+
+
+def _action_line(config: Config, upcoming: Upcoming, label: str | None = None) -> str:
+    """``Erinnerung, Mi 12:00 (nur falls noch kein 👍)``: the step (or `label`) and its time."""
+    if label is None:
+        label = STEP_LABELS[upcoming.step]
+    at = upcoming.at.astimezone(config.timezone)
+    text = f"{label}, {ui.WEEKDAYS_SHORT[at.weekday()]} {at:%H:%M}"
+    if upcoming.step is StepName.NUDGE:
+        return f"{text} ({ONLY_IF_UNCONFIRMED.format(emoji=config.emoji)})"
+    return text
 
 
 def _skipping(store: Store, week: date) -> bool:

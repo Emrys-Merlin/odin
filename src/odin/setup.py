@@ -23,7 +23,7 @@ from typing import Protocol
 
 import httpx
 
-from odin.app import DINNER_GROUP_KEY, FLAT_GROUP_KEY, Source, resolve_account
+from odin.app import DINNER_GROUP_KEY, FLAT_GROUP_KEY, GroupSetting, Source, resolve_account
 from odin.clock import Clock
 from odin.config import Config, Env, Template, is_e164
 from odin.signal import (
@@ -706,7 +706,7 @@ class _Wizard:
 # --- --status ------------------------------------------------------------------------------------
 
 
-async def setup_status(  # noqa: C901 — to be split up in #138
+async def setup_status(
     admin: SetupSignal,
     store: Store | None,
     config: Config,
@@ -718,77 +718,111 @@ async def setup_status(  # noqa: C901 — to be split up in #138
 
     Without a store (no database yet) nothing beyond the Signal API counts as done.
     """
-
-    def setting(key: str) -> str | None:
-        return store.get_setting(key) if store is not None else None
-
-    def local(stored: str) -> str:
-        return f"{datetime.fromisoformat(stored).astimezone(config.timezone):%Y-%m-%d %H:%M}"
-
-    rows: list[tuple[bool, str]] = []
-    number = env.signal_number
-    registered = False
-    api_up = False
-    try:
-        info = await admin.about()
-        if info.mode != "json-rpc":
-            rows.append((False, f"Signal API: mode {info.mode!r}, needs json-rpc"))
-        else:
-            api_up = True
-            rows.append((True, f"Signal API: {env.signal_api_url} (json-rpc, {info.version})"))
-            registered = number in await admin.list_accounts()
-    except (httpx.HTTPError, SignalApiError) as e:
-        rows.append((False, f"Signal API: not reachable at {env.signal_api_url} ({e})"))
-
-    if registered:
-        rows.append((True, f"Registered: {number}"))
-    else:
-        requested = setting(CODE_REQUESTED_KEY)
-        pending = f"; a code was requested at {local(requested)}" if requested else ""
-        state = "unknown" if not api_up else "not registered"
-        rows.append((False, f"Registered: {number} {state}{pending}"))
-
-    for key, label in ((PIN_SET_KEY, "PIN set"), (PROFILE_KEY, "Profile applied")):
-        at = setting(key)
-        rows.append((at is not None, f"{label}: {local(at) if at else 'no'}"))
-    replied = setting(HELLO_KEY)
-    operator = setting(OPERATOR_KEY)
-    rows.append(
-        (
-            replied is not None,
-            f"Hello: reply from {operator} at {local(replied)}"
-            if replied
-            else "Hello: no reply from the operator yet",
-        )
-    )
-
-    groups: dict[str, Group] = {}
-    if registered:
-        with contextlib.suppress(httpx.HTTPError, SignalApiError):
-            groups = {g.id: g for g in await admin.list_groups()}
-    resolution = resolve_account(env, store)
-    for role, chosen in (("Flat group", resolution.flat), ("Dinner group", resolution.dinner)):
-        if chosen.source is Source.UNSET or chosen.id is None:
-            rows.append((False, f"{role}: not chosen"))
-            continue
-        line = f"{role}: {chosen.id} (from {chosen.source})"
-        group = groups.get(chosen.id)
-        if not registered:
-            rows.append((True, line))
-        elif group is None:
-            rows.append((False, f"{line} — ODIN is not in this group"))
-        elif not group.member:
-            rows.append((False, f"{line} — {group.name}, ODIN is only invited"))
-        else:
-            rows.append((True, f"{line} — {group.name}"))
+    status = _Status(admin, store, config, env)
+    rows, api_up, registered = await status.signal_api()
+    rows.append(status.registration(api_up, registered))
+    rows.extend(status.settings())
+    rows.extend(await status.groups(registered))
 
     for ok, line in rows:
         terminal.print(f"{'✓' if ok else '✗'} {line}")
-    test = setting(TEST_KEY)
-    terminal.print(f"  Test message step: {'answered at ' + local(test) if test else 'not yet'}")
+    test = status.setting(TEST_KEY)
+    terminal.print(
+        f"  Test message step: {'answered at ' + status.local(test) if test else 'not yet'}"
+    )
     if store is not None and store.setup_lock_held(clock.now()):
         terminal.print("  `odin setup` is running right now.")
     complete = all(ok for ok, _ in rows)
     terminal.print()
     terminal.print("ODIN is set up." if complete else "Not set up yet — run: odin setup")
     return 0 if complete else 1
+
+
+# Whether a step of `odin setup --status` is done, and its line.
+_Row = tuple[bool, str]
+
+
+@dataclass(frozen=True)
+class _Status:
+    """The checks of `odin setup --status`, one method per step; they only read."""
+
+    admin: SetupSignal
+    store: Store | None
+    config: Config
+    env: Env
+
+    def setting(self, key: str) -> str | None:
+        return self.store.get_setting(key) if self.store is not None else None
+
+    def local(self, stored: str) -> str:
+        return f"{datetime.fromisoformat(stored).astimezone(self.config.timezone):%Y-%m-%d %H:%M}"
+
+    async def signal_api(self) -> tuple[list[_Row], bool, bool]:
+        """The Signal API's rows; whether it is up in json-rpc mode, and whether the number is
+        registered on it."""
+        rows: list[_Row] = []
+        api_up = False
+        try:
+            info = await self.admin.about()
+            if info.mode != "json-rpc":
+                rows.append((False, f"Signal API: mode {info.mode!r}, needs json-rpc"))
+                return rows, api_up, False
+            api_up = True
+            url = self.env.signal_api_url
+            rows.append((True, f"Signal API: {url} (json-rpc, {info.version})"))
+            return rows, api_up, self.env.signal_number in await self.admin.list_accounts()
+        except (httpx.HTTPError, SignalApiError) as e:
+            rows.append((False, f"Signal API: not reachable at {self.env.signal_api_url} ({e})"))
+            return rows, api_up, False
+
+    def registration(self, api_up: bool, registered: bool) -> _Row:
+        """Whether the number is registered; if not, when a code was requested."""
+        number = self.env.signal_number
+        if registered:
+            return True, f"Registered: {number}"
+        requested = self.setting(CODE_REQUESTED_KEY)
+        pending = f"; a code was requested at {self.local(requested)}" if requested else ""
+        state = "unknown" if not api_up else "not registered"
+        return False, f"Registered: {number} {state}{pending}"
+
+    def settings(self) -> list[_Row]:
+        """The PIN, profile and hello steps, as recorded in the store."""
+        rows: list[_Row] = []
+        for key, label in ((PIN_SET_KEY, "PIN set"), (PROFILE_KEY, "Profile applied")):
+            at = self.setting(key)
+            rows.append((at is not None, f"{label}: {self.local(at) if at else 'no'}"))
+        replied = self.setting(HELLO_KEY)
+        operator = self.setting(OPERATOR_KEY)
+        hello = (
+            f"Hello: reply from {operator} at {self.local(replied)}"
+            if replied
+            else "Hello: no reply from the operator yet"
+        )
+        rows.append((replied is not None, hello))
+        return rows
+
+    async def groups(self, registered: bool) -> list[_Row]:
+        """The chosen flat and dinner group; once registered, whether ODIN is a member."""
+        groups: dict[str, Group] = {}
+        if registered:
+            with contextlib.suppress(httpx.HTTPError, SignalApiError):
+                groups = {g.id: g for g in await self.admin.list_groups()}
+        resolution = resolve_account(self.env, self.store)
+        chosen = (("Flat group", resolution.flat), ("Dinner group", resolution.dinner))
+        return [self.group(role, group, groups, registered) for role, group in chosen]
+
+    def group(
+        self, role: str, chosen: GroupSetting, groups: dict[str, Group], registered: bool
+    ) -> _Row:
+        """One chosen group, checked against the groups ODIN is in (`groups`, once registered)."""
+        if chosen.source is Source.UNSET or chosen.id is None:
+            return False, f"{role}: not chosen"
+        line = f"{role}: {chosen.id} (from {chosen.source})"
+        group = groups.get(chosen.id)
+        if not registered:
+            return True, line
+        if group is None:
+            return False, f"{line} — ODIN is not in this group"
+        if not group.member:
+            return False, f"{line} — {group.name}, ODIN is only invited"
+        return True, f"{line} — {group.name}"
