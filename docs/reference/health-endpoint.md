@@ -50,8 +50,7 @@ names, dates, durations and error class names.
 
 Durations are whole minutes, rounded down. `<step>` is one of `flat_ask`, `nudge`,
 `announcement`, `cancellation`, `tally`, `flat_ask_retry`, `announcement_notice`,
-`hiatus_notice`; `<week>` is the
-dinner date of the week (`2026-10-25`).
+`hiatus_notice`, `introduction`; `<week>` is the dinner date of the week (`2026-10-25`).
 
 | Reason | Down when |
 |---|---|
@@ -67,7 +66,13 @@ While `not ready` is the reason, it is the only one.
 
 During a hiatus (`/hiatus`, see [The weekly cycle](../explanation/weekly-cycle.md#taking-a-break))
 the weekly steps are recorded as skipped and nothing is sent, so none of them can be unsent:
-ODIN stays `up`. For `hiatus_notice`, `<week>` is the dinner week in which the hiatus started.
+ODIN stays `up`.
+
+For the two steps that are not weekly, `<week>` is the dinner week of the chat command that
+triggered them: for `hiatus_notice` the week in which the hiatus started, for `introduction` the
+week in which `/introduce` was sent (see
+[The weekly cycle](../explanation/weekly-cycle.md#introducing-odin)). A failed introduction is
+retried every tick until it is posted.
 
 ## Warnings
 
