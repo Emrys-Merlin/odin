@@ -4,6 +4,7 @@
 TOML (placeholders, braces) before it is stored as an override; the reply shows how it renders.
 """
 
+from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError
 from odin.commands.preview import render_preview
 from odin.config import (
@@ -14,6 +15,7 @@ from odin.config import (
     TemplateError,
     TemplateProblem,
 )
+from odin.cycle import TemplateName
 from odin.engine import dinner_week
 from odin.overrides import (
     EDITABLE_TEMPLATES,
@@ -49,24 +51,24 @@ NEXT_WEEK = "Für diese Woche ist das schon gelaufen – der Text gilt ab nächs
 
 # The weekly actions that send each template; once one of them is recorded for the current
 # week, a new text only shows next week.
-_ACTIONS: dict[str, tuple[Action, ...]] = {
-    "flat_ask": (Action.FLAT_ASK,),
-    "nudge": (Action.NUDGE,),
-    "announcement": (Action.ANNOUNCEMENT, Action.CANCELLATION),
-    "cancellation": (Action.ANNOUNCEMENT, Action.CANCELLATION),
-    "weekday_change_cancellation": (Action.ANNOUNCEMENT, Action.CANCELLATION),
-    "tally": (Action.TALLY,),
+_ACTIONS: dict[TemplateName, tuple[Action, ...]] = {
+    TemplateName.FLAT_ASK: (Action.FLAT_ASK,),
+    TemplateName.NUDGE: (Action.NUDGE,),
+    TemplateName.ANNOUNCEMENT: (Action.ANNOUNCEMENT, Action.CANCELLATION),
+    TemplateName.CANCELLATION: (Action.ANNOUNCEMENT, Action.CANCELLATION),
+    TemplateName.WEEKDAY_CHANGE_CANCELLATION: (Action.ANNOUNCEMENT, Action.CANCELLATION),
+    TemplateName.TALLY: (Action.TALLY,),
 }
 
 
-def _template_name(word: str) -> str:
-    name = word.lower()
-    if name not in EDITABLE_TEMPLATES:
+def _template_name(word: str) -> TemplateName:
+    name = ui.editable_template(word)
+    if name is None:
         raise CommandError(UNKNOWN_NAME.format(name=word))
     return name
 
 
-def _problem(name: str, text: str) -> str:
+def _problem(name: TemplateName, text: str) -> str:
     """What is wrong with `text` as template `name`, in German."""
     try:
         Template.parse(text, TEMPLATE_PLACEHOLDERS[name], name)
@@ -81,17 +83,17 @@ def _problem(name: str, text: str) -> str:
     return INVALID
 
 
-def _done_this_week(config: Config, ctx: CommandContext, name: str) -> bool:
+def _done_this_week(config: Config, ctx: CommandContext, name: TemplateName) -> bool:
     week = dinner_week(config, ctx.now)
     return any(ctx.store.has_action(week, action) for action in _ACTIONS[name])
 
 
-def _replies(header: str, config: Config, ctx: CommandContext, name: str) -> list[str]:
+def _replies(header: str, config: Config, ctx: CommandContext, name: TemplateName) -> list[str]:
     """`header` plus notes, then the rendered template as a message of its own."""
     preview, is_sample = render_preview(config, ctx.store, name, ctx.now)
     lines = [header]
     if is_sample:
-        lines.append(SAMPLE_NOTE if name == "tally" else SAMPLE_DATES_NOTE)
+        lines.append(SAMPLE_NOTE if name is TemplateName.TALLY else SAMPLE_DATES_NOTE)
     if _done_this_week(config, ctx, name):
         lines.append(NEXT_WEEK)
     return ["\n".join(lines), preview]

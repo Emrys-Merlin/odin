@@ -1,4 +1,4 @@
-"""The names of the weekly cycle: the points of its schedule and its steps.
+"""The names of the weekly cycle: the points of its schedule, its steps and its message templates.
 
 Both are `StrEnum`s, so a member is its plain string wherever it leaves the code (config keys,
 override keys, chat arguments, log lines). No imports from `odin`, so every module can use them.
@@ -40,6 +40,28 @@ class StepName(StrEnum):
     def label(self) -> str:
         """The step in `odin check-config`'s list of upcoming actions."""
         return _STEP_LABELS[self]
+
+
+class TemplateName(StrEnum):
+    """A message template: the weekly ones in schedule order, then the two of `odin setup`.
+
+    The value is the template's name everywhere outside the code: the key in the TOML
+    (``[templates]``), in overrides (``templates.<name>``) and in chat commands.
+    """
+
+    FLAT_ASK = "flat_ask"
+    NUDGE = "nudge"
+    ANNOUNCEMENT = "announcement"
+    CANCELLATION = "cancellation"
+    WEEKDAY_CHANGE_CANCELLATION = "weekday_change_cancellation"
+    TALLY = "tally"
+    HELLO = "hello"
+    FLAT_TEST = "flat_test"
+
+    @property
+    def editable(self) -> bool:
+        """Whether the template can be changed via chat (the weekly ones, not those of setup)."""
+        return self not in (TemplateName.HELLO, TemplateName.FLAT_TEST)
 
 
 _STEP_LABELS = {

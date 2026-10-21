@@ -5,7 +5,7 @@ import pytest
 from odin.commands import CommandContext, handle
 from odin.commands.vars import DESCRIPTIONS
 from odin.config import COMMON_PLACEHOLDERS, TEMPLATE_PLACEHOLDERS, parse_config
-from odin.cycle import SchedulePoint
+from odin.cycle import SchedulePoint, TemplateName
 from odin.overrides import EDITABLE_TEMPLATES, apply_overrides, schedule_key
 from odin.store import Store
 
@@ -43,8 +43,8 @@ def test_every_placeholder_has_a_description() -> None:
     shown = set().union(*(TEMPLATE_PLACEHOLDERS[name] for name in EDITABLE_TEMPLATES))
     assert shown <= DESCRIPTIONS.keys()
     # hello / flat_test are not shown, so they must not need placeholders of their own.
-    assert TEMPLATE_PLACEHOLDERS["hello"] <= COMMON_PLACEHOLDERS
-    assert TEMPLATE_PLACEHOLDERS["flat_test"] <= COMMON_PLACEHOLDERS
+    assert TEMPLATE_PLACEHOLDERS[TemplateName.HELLO] <= COMMON_PLACEHOLDERS
+    assert TEMPLATE_PLACEHOLDERS[TemplateName.FLAT_TEST] <= COMMON_PLACEHOLDERS
     # No stale descriptions for placeholders that no longer exist.
     assert DESCRIPTIONS.keys() <= set().union(*TEMPLATE_PLACEHOLDERS.values())
 
