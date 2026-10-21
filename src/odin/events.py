@@ -13,9 +13,11 @@ ignoring its own number as well makes sure a reply such as `/text`'s ready-to-co
 can never be taken for a command.
 
 Command replies are not recorded or retried: they are not part of the exactly-once weekly cycle.
-A reply whose reactions matter (`TrackedReply`, the confirmation request of `/cancel`) is tracked
-once sent, like the engine's flat poll, so that reactions to it are stored. If Signal's answer
-cannot be read, it has no timestamp and stays untracked; the command can simply be sent again.
+A reply whose reactions matter (`TrackedReply`, the confirmation requests of `/cancel` and
+`/introduce`) is tracked once sent, like the engine's flat poll, so that reactions to it are
+stored. If Signal's answer cannot be read, it has no timestamp and stays untracked; the command
+can simply be sent again. Only the latest `/introduce` request counts: tracking it untracks the
+earlier ones.
 """
 
 import logging
@@ -28,7 +30,7 @@ from odin.engine import Account
 from odin.overrides import effective_config
 from odin.reactions import handle_reaction
 from odin.signal import GroupMessage, ReactionEvent, SendResponseUnreadable, SignalClient
-from odin.store import Store
+from odin.store import MessageKind, Store
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +92,14 @@ async def _answer(
 
 
 def _track(reply: TrackedReply, timestamp: int, store: Store, account: Account) -> None:
+    if reply.kind is MessageKind.INTRODUCTION_REQUEST:
+        # Replaces an earlier request, so a 👍 on an older preview posts nothing.
+        with store.transaction():
+            store.untrack_messages(reply.kind)
+            store.track_message(
+                reply.week, reply.kind, account.flat_group_id, account.number, timestamp
+            )
+        return
     # Checked after the send, with no await in between: two replies of the same kind sent at
     # once both pass the command's own check, and only the first one is kept.
     if store.tracked_message(reply.week, reply.kind) is not None:

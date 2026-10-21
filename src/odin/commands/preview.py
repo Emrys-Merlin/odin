@@ -14,7 +14,7 @@ SAMPLE_COUNT = 3
 def render_preview(
     config: Config, store: Store, name: TemplateName, now: datetime
 ) -> tuple[str, bool]:
-    """Template `name` (one of `EDITABLE_TEMPLATES`) rendered with this week's values.
+    """Template `name` (one of `EDITABLE_TEMPLATES`, and set) rendered with this week's values.
 
     For ``tally``, ``{count}`` is the current confirmation count on the dinner announcement of
     the dinner week of `now`, or `SAMPLE_COUNT` if there is none. For

@@ -126,6 +126,20 @@ is refused once the cancellation went out (or was skipped as too late), for a we
 Steps: [Cancel a dinner](../how-to/chat/cancel-dinner.md). Exact syntax:
 [Chat commands](../reference/chat-commands.md).
 
+## Introducing ODIN
+
+Guests only ever see ODIN's announcements and cancellations; nobody tells them what ODIN is or
+how to answer it. `/introduce` in the flat group posts a short self-introduction, the
+`introduction` template, to the dinner group: when ODIN joins it, or when new people did. Like
+`/cancel` it needs a confirmation: ODIN replies with the text and asks for the configured emoji,
+and posts on its next tick once someone reacts.
+
+It is not part of the week. It can be sent any number of times, changes nothing in the weekly
+cycle and does not show in `/status`. Each confirmed request is recorded once posted, so it goes
+out once however often people react, and a later `/introduce` posts it again.
+
+Steps: [Introduce ODIN to the dinner group](../how-to/chat/introduce-odin.md).
+
 ## Skipping a date in advance
 
 Some Sundays are known to be off long before: holidays, everyone away. `/skip` with the date

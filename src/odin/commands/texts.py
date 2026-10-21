@@ -18,6 +18,7 @@ DESCRIPTIONS: dict[TemplateName, tuple[str, str]] = {
     TemplateName.CANCELLATION: (DINNER, "Absage"),
     TemplateName.WEEKDAY_CHANGE_CANCELLATION: (DINNER, "Absage beim Wechsel des Wochentags"),
     TemplateName.TALLY: (FLAT, "Anzahl der Zusagen zum Bestellen"),
+    TemplateName.INTRODUCTION: (DINNER, "Vorstellung von Odin, per /introduce"),
 }
 
 TEXTS_INTRO = "Texte:"
@@ -31,6 +32,7 @@ PREVIEW_SAMPLE = f"Vorschau (diese Woche, noch keine Ankündigung – Beispielza
 PREVIEW_SAMPLE_DATES = "Vorschau (Beispiel: als fiele das nächste Essen aus):"
 # An optional template without a text of its own, in /texts and /text.
 FALLBACK = "nicht gesetzt, es gilt {fallback}"
+UNSET = "nicht gesetzt"
 
 
 def _marker(ctx: CommandContext, name: TemplateName) -> str | None:
@@ -46,9 +48,11 @@ def _with_marker(text: str, marker: str | None) -> str:
 
 
 def _fallback(ctx: CommandContext, name: TemplateName) -> str | None:
-    """The note on an optional template that uses its fallback's text, else None."""
+    """The note on an optional template without a text of its own, else None."""
     if ctx.config.templates.is_set(name):
         return None
+    if name not in TEMPLATE_FALLBACKS:
+        return UNSET
     return FALLBACK.format(fallback=TEMPLATE_FALLBACKS[name])
 
 
@@ -71,7 +75,10 @@ def run_text(ctx: CommandContext, args: str) -> list[str]:
     name = ui.editable_template(args)
     if name is None:
         raise CommandError(UNKNOWN_NAME.format(name=args))
-    raw = ctx.config.templates.get(name).text
+    template = ctx.config.templates.find(name)
+    if template is None:
+        return [ui.NOT_SET.format(name=name)]
+    raw = template.text
     preview, is_sample = render_preview(ctx.config, ctx.store, name, ctx.now)
     header = PREVIEW
     if name is TemplateName.TALLY:

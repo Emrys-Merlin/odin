@@ -31,7 +31,8 @@ class TrackedReply(str):
     """A reply whose reactions matter: once sent, it is tracked as message `kind` of `week`.
 
     Otherwise it is a plain string, so commands keep returning ``list[str]``. A week has at most
-    one tracked message per kind; a later one is sent but not tracked (see `odin.events`).
+    one tracked message per kind; a later one is sent but not tracked, except that a later
+    `/introduce` request replaces the earlier ones (see `odin.events`).
     """
 
     week: date

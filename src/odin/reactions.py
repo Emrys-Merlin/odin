@@ -10,11 +10,12 @@ judged by its Signal timestamp — when the reactor sent it — not by when ODIN
 reaction sent in time but delivered late (ODIN was down over the deadline) still counts for the
 catch-up decision. The dinner announcement and the `/cancel` request have no deadline (the engine
 ignores a request once its week's dinner has started). A flat poll of a week under an earlier
-dinner weekday is long decided, so all reactions on it are ignored.
+dinner weekday is long decided, so all reactions on it are ignored. An `/introduce` request
+lapses `INTRODUCTION_LAPSE` after it was sent: reactions from then on are ignored.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from odin.config import Config
 from odin.signal import ReactionEvent
@@ -22,9 +23,14 @@ from odin.store import MessageKind, Store, TrackedMessage
 
 logger = logging.getLogger(__name__)
 
+# How long an `/introduce` request can be confirmed, from when ODIN sent it.
+INTRODUCTION_LAPSE = timedelta(hours=24)
+
 
 def reaction_deadline(config: Config, message: TrackedMessage) -> datetime | None:
     """From when on reactions on ``message`` are ignored; None if they never are."""
+    if message.kind is MessageKind.INTRODUCTION_REQUEST:
+        return datetime.fromtimestamp(message.timestamp / 1000, UTC) + INTRODUCTION_LAPSE
     if message.kind is not MessageKind.FLAT_POLL:
         return None
     if message.week.weekday() != config.schedule.dinner.weekday:

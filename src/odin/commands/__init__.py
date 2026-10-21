@@ -8,6 +8,7 @@ from odin.commands import ui
 from odin.commands.cancel import CANCEL
 from odin.commands.core import Command, CommandContext, CommandError, TrackedReply, parse
 from odin.commands.help import HELP
+from odin.commands.introduce import INTRODUCE
 from odin.commands.schedule import SCHEDULE
 from odin.commands.settext import RESETTEXT, SETTEXT
 from odin.commands.settime import NUDGE, RESETTIME, SETTIME
@@ -42,6 +43,7 @@ COMMANDS: list[Command] = [
     CANCEL,
     SKIP,
     UNSKIP,
+    INTRODUCE,
     VERSION,
 ]
 

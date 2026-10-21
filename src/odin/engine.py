@@ -64,6 +64,13 @@ dinner. It runs like a week whose flat ask was missed — the flat ask, nudge an
 as skipped, each at its time, so `/unskip` works until the flat ask is due — except that the
 dinner group still gets the cancellation at the usual decision time. A skip date only counts while
 the week's flat ask has not gone out; after that, skipping the week is `/cancel`.
+
+**The introduction** (`/introduce`, see `odin.commands.introduce`) is not part of the weekly
+cycle. ODIN's reply to `/introduce` is tracked as an introduction request; once anyone reacts to
+it with the configured emoji (within `odin.reactions.INTRODUCTION_LAPSE`), the next tick posts the
+`introduction` template to the dinner group and records it in the store's introductions, not as
+an action of a week: it does not change the week, and a later request posts it again. A failed
+send is retried next tick, but never holds up the weekly steps, nor they it.
 """
 
 import logging
@@ -306,7 +313,42 @@ async def reconcile(
             await cycle.run()
         except _SendFailed:
             break
+    await _introduce(config, store, client, account, now, steps, failures)
     return steps
+
+
+async def _introduce(
+    config: Config,
+    store: Store,
+    client: SignalClient,
+    account: Account,
+    now: datetime,
+    steps: list[Step],
+    failures: list[SendFailure],
+) -> None:
+    """Post the introduction for each confirmed `/introduce` request it was not posted for yet."""
+    for request in store.tracked_messages(MessageKind.INTRODUCTION_REQUEST):
+        if store.introduction_time(request) is not None:
+            continue
+        if count_confirmations(store, request, config.emoji) == 0:
+            continue
+        template = config.templates.find(TemplateName.INTRODUCTION)
+        if template is None:  # its text was taken back (/resettext) after the request
+            logger.warning("not sending the confirmed introduction: its template is not set")
+            store.untrack_messages(MessageKind.INTRODUCTION_REQUEST)
+            return
+        text = template.render(**config.placeholder_values())
+        try:
+            await client.send_group_message(account.dinner_group_id, text)
+        except SendResponseUnreadable as e:
+            logger.warning("sent the introduction, but %s", e)
+        except Exception as e:
+            logger.exception("sending the introduction failed; retrying next tick")
+            failures.append(SendFailure(request.week, Action.INTRODUCTION, type(e).__name__))
+            return
+        store.record_introduction(request, now)
+        logger.info("sent the introduction")
+        steps.append(Step(request.week, Action.INTRODUCTION, Outcome.SENT))
 
 
 class _SendFailed(Exception):

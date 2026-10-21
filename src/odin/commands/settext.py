@@ -44,13 +44,14 @@ SEE_VARS = "Welche Platzhalter es gibt, zeigt /vars {name}."
 
 SAVED = "Gespeichert ✅ So sieht {name} jetzt aus:"
 RESET = "Zurückgesetzt auf den Standardtext ✅ So sieht {name} jetzt aus:"
+RESET_UNSET = "Zurückgesetzt ✅ {name} ist jetzt nicht gesetzt."
 NOT_CHANGED = "{name} war nicht geändert."
 SAMPLE_NOTE = "(Mit der Beispielzahl 3 für {count}.)"
 SAMPLE_DATES_NOTE = "(Mit Beispieldaten: als fiele das nächste Essen aus.)"
 NEXT_WEEK = "Für diese Woche ist das schon gelaufen – der Text gilt ab nächster Woche."
 
 # The weekly actions that send each template; once one of them is recorded for the current
-# week, a new text only shows next week.
+# week, a new text only shows next week. The introduction is sent by none of them.
 _ACTIONS: dict[TemplateName, tuple[Action, ...]] = {
     TemplateName.FLAT_ASK: (Action.FLAT_ASK,),
     TemplateName.NUDGE: (Action.NUDGE,),
@@ -85,7 +86,7 @@ def _problem(name: TemplateName, text: str) -> str:
 
 def _done_this_week(config: Config, ctx: CommandContext, name: TemplateName) -> bool:
     week = dinner_week(config, ctx.now)
-    return any(ctx.store.has_action(week, action) for action in _ACTIONS[name])
+    return any(ctx.store.has_action(week, action) for action in _ACTIONS.get(name, ()))
 
 
 def _replies(header: str, config: Config, ctx: CommandContext, name: TemplateName) -> list[str]:
@@ -133,6 +134,8 @@ def resettext(ctx: CommandContext, args: str) -> list[str]:
     if not ctx.store.delete_override(template_key(name)):
         return [NOT_CHANGED.format(name=name)]
     config = effective_config(ctx.base, ctx.store, ctx.now)
+    if config.templates.find(name) is None:
+        return [RESET_UNSET.format(name=name)]
     return _replies(RESET.format(name=name), config, ctx, name)
 
 
