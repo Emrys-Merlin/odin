@@ -5,7 +5,8 @@ dinner weekday change (`odin.overrides.pending_dinner`), which takes over at thi
 A week cancelled via /cancel shows the cancellation (after the announcement, if that was sent),
 and an open cancel request shows whether it is confirmed yet. A skip date (`/skip`) shows as a
 week without flat ask whose cancellation goes out at the decision time; later skip dates are
-listed.
+listed. During a hiatus (`/hiatus`) the hiatus is shown — since when, by whom, its notice and how
+to end it — instead of the next action, and a week that is part of a hiatus shows no steps.
 """
 
 import dataclasses
@@ -22,7 +23,7 @@ from odin.commands.core import Command, CommandContext
 from odin.commands.schedule import DROPPED, FROM_CONFIG
 from odin.config import WEEKDAYS_DE, Config, WeeklyTime
 from odin.cycle import StepName
-from odin.store import Action, MessageKind, Outcome, Store
+from odin.store import Action, Hiatus, MessageKind, Outcome, Store
 
 if TYPE_CHECKING:
     from odin.engine import Upcoming
@@ -58,6 +59,12 @@ DROPPED_STEP = "entfällt ({reason})"
 CANCELLATION_STEP = "Absage an die Essensgruppe"
 LATER_SKIPS = "Kein Essen per /skip: {days}"
 PENDING_DINNER = "Ab {weekday} {first:%d.%m.} ist das Essen {weekdays} um {time:%H:%M}"
+BY_HIATUS = "per /hiatus"
+HIATUS_WEEK = "😴 Kein Essen – Pause per /hiatus"
+HIATUS_SINCE = "😴 Pause seit {at} (von {by}): keine Frage an die WG, nichts an die Essensgruppe."
+HIATUS_REQUESTED = "😴 Pause per /hiatus angefragt ({at}) – {state}"
+HIATUS_CONFIRMED = "bestätigt, beginnt gleich"
+NOTICE = "Hinweis an die Essensgruppe"
 
 
 def run(ctx: CommandContext, args: str) -> list[str]:
@@ -74,16 +81,59 @@ def status(
 
     week = engine.dinner_week(config, now)
     week_status = _WeekStatus(config, store, week)
-    lines = [f"{WEEKDAYS_DE[week.weekday()]}, {week:%d.%m.}", *week_status.lines()]
+    lines = [f"{WEEKDAYS_DE[week.weekday()]}, {week:%d.%m.}"]
+    if store.hiatus_covering(week) is not None:
+        lines.append(HIATUS_WEEK)
+    else:
+        lines += week_status.lines()
+    request = _hiatus_request_line(config, store, week)
+    if request is not None:
+        lines.append(request)
+    active = store.active_hiatus()
+    if active is not None:
+        lines += _hiatus_lines(config, active)
     later = store.skip_dates(since=week + timedelta(days=1))
     if later:
         lines.append(LATER_SKIPS.format(days=", ".join(ui.short_date(s.day) for s in later)))
     if pending is not None:
         lines.append(_pending_line(pending))
+    if active is not None:
+        lines.append(ui.RESUME_HINT)
+        return "\n".join(lines)
     following = _next_action(config, week_status, now, pending)
     if following:
         lines.append(f"Nächste Aktion: {following}")
     return "\n".join(lines)
+
+
+def _hiatus_lines(config: Config, hiatus: Hiatus) -> list[str]:
+    """Since when and by whom ODIN sleeps, and its notice to the dinner group."""
+    assert hiatus.started_at is not None
+    since = HIATUS_SINCE.format(at=_local_date(config, hiatus.started_at), by=hiatus.requested_by)
+    match hiatus.notice:
+        case Outcome.SENT:
+            assert hiatus.notice_at is not None
+            notice = f"{SENT} {NOTICE} gesendet ({_local_date(config, hiatus.notice_at)})"
+        case Outcome.SKIPPED:
+            notice = f"{SKIPPED} {NOTICE}: übersprungen"
+        case None:
+            notice = f"{PENDING} {NOTICE}: gleich"
+    return [since, notice]
+
+
+def _hiatus_request_line(config: Config, store: Store, week: date) -> str | None:
+    """An open /hiatus request of `week`, and whether it is confirmed yet."""
+    request = store.tracked_message(week, MessageKind.HIATUS_REQUEST)
+    if request is None:
+        return None
+    at = datetime.fromtimestamp(request.timestamp / 1000, UTC)
+    confirmed = reactions.count_confirmations(store, request, config.emoji) > 0
+    state = HIATUS_CONFIRMED if confirmed else AWAITING.format(emoji=config.emoji)
+    return HIATUS_REQUESTED.format(at=_local_date(config, at), state=state)
+
+
+def _local_date(config: Config, at: datetime) -> str:
+    return ui.moment(at, config.timezone)
 
 
 class _WeekStatus:
@@ -190,9 +240,13 @@ class _WeekStatus:
 
     def _cancellation_line(self) -> str:
         """The sent cancellation, and whether /cancel or /skip caused it."""
+        from odin import engine
+
         line = f"{CANCELLED} Absage gesendet ({self._sent_at(Action.CANCELLATION)})"
         if self.cancel_confirmed:
             return f"{line} – {BY_CANCEL}"
+        if engine.cancelled_by_hiatus(self.store, self.week):
+            return f"{line} – {BY_HIATUS}"
         if self.skipping:
             return f"{line} – {BY_SKIP}"
         return line
@@ -306,6 +360,8 @@ def _next_action(
     dinner = config.when(config.schedule.dinner, current.week)
     candidates = [*_upcoming(config, now, pending), *_upcoming(config, dinner, pending)]
     for upcoming in candidates:
+        if current.store.hiatus_covering(upcoming.week) is not None:
+            continue  # nothing is sent in a week that is part of a hiatus
         if _skipping(current.store, upcoming.week):
             # No flat ask, nudge or tally; the cancellation goes out at the decision time.
             if _skip_cancellation_ahead(current, upcoming):

@@ -14,6 +14,9 @@ UNKNOWN_COMMAND = "Unbekannter Befehl {command} – " + HELP_HINT
 GENERIC_ERROR = "Da ist etwas schiefgegangen – bitte später nochmal versuchen."
 # Reactions on a message that was sent but is not tracked (its timestamp could not be read).
 UNTRACKED = "{emoji} nicht zählbar"
+# A request confirmed by reaction (/cancel, /hiatus) that nobody confirmed.
+LAPSES = "Ohne {emoji} passiert nichts; die Anfrage verfällt, wenn das Essen beginnt ({dinner})."
+RESUME_HINT = "/resume beendet die Pause."
 
 WEEKDAYS_SHORT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 

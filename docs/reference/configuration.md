@@ -78,8 +78,8 @@ ODIN's Signal profile. Applied by `odin setup`, not by `odin run`.
 ### `[templates]`
 
 The message texts. Every template is **required** and has no default, except
-`weekday_change_cancellation`, which falls back to `cancellation` when it is left out, and
-`introduction`, without which `/introduce` sends nothing; a missing required one, or an empty
+`weekday_change_cancellation` and `hiatus`, which fall back to `cancellation` when they are left
+out, and `introduction`, without which `/introduce` sends nothing; a missing required one, or an empty
 one, is an error. Leading and trailing whitespace is stripped.
 
 | Key | Sent to | Language | When |
@@ -91,6 +91,7 @@ one, is an error. Leading and trailing whitespace is stripped.
 | `announcement` | dinner group | German, blank line, English | at `flat_deadline` with a confirmation |
 | `tally` | flat group | German | at `tally`, if dinner is on |
 | `introduction` | dinner group | German, blank line, English | optional: after a confirmed `/introduce`; left out, `/introduce` asks for a text |
+| `hiatus` | dinner group | German, blank line, English | optional: once, when a confirmed `/hiatus` takes effect; left out, `cancellation` is sent (not a second time in a week that has it) |
 | `hello` | the operator, direct message | German | during `odin setup` |
 | `flat_test` | flat group | German | optionally, at the end of `odin setup` |
 
@@ -128,7 +129,7 @@ variables come from the env file `~/odin/odin.env`.
 
 | Setting | Wins | Falls back to |
 |---|---|---|
-| Chat-editable templates (`flat_ask`, `nudge`, `announcement`, `cancellation`, `weekday_change_cancellation`, `tally`, `introduction`) | change via chat (`/settext`) | config file; for `weekday_change_cancellation` then `cancellation`; for `introduction` then not set |
+| Chat-editable templates (`flat_ask`, `nudge`, `announcement`, `cancellation`, `weekday_change_cancellation`, `tally`, `introduction`, `hiatus`) | change via chat (`/settext`) | config file; for `weekday_change_cancellation` and `hiatus` then `cancellation`; for `introduction` then not set |
 | Schedule points and `nudge.enabled` | change via chat (`/settime`, `/nudge`) | config file |
 | Group IDs | `FLAT_GROUP_ID` / `DINNER_GROUP_ID` env vars | IDs stored in the database by `odin setup` |
 

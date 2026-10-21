@@ -8,6 +8,7 @@ from odin.commands import ui
 from odin.commands.cancel import CANCEL
 from odin.commands.core import Command, CommandContext, CommandError, TrackedReply, parse
 from odin.commands.help import HELP
+from odin.commands.hiatus import HIATUS, RESUME
 from odin.commands.introduce import INTRODUCE
 from odin.commands.schedule import SCHEDULE
 from odin.commands.settext import RESETTEXT, SETTEXT
@@ -44,6 +45,8 @@ COMMANDS: list[Command] = [
     SKIP,
     UNSKIP,
     INTRODUCE,
+    HIATUS,
+    RESUME,
     VERSION,
 ]
 

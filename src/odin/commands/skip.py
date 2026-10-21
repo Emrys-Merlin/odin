@@ -11,7 +11,8 @@ exactly as `/cancel` does. A skip date takes effect when its week's flat ask is 
 `/unskip` is refused.
 
 The day must be a dinner day of the schedule that runs then, a pending dinner weekday change
-included.
+included. Skip dates can be entered during a hiatus (`/hiatus`); one that falls into the hiatus
+gets no cancellation, one after a later `/resume` works as usual.
 """
 
 import dataclasses
@@ -37,6 +38,9 @@ SKIPPED = (
     "der Essensgruppe am {at} diese Absage:"
 )
 UNDO = "/unskip {iso} nimmt das zurück."
+HIATUS = (
+    "Ich mache gerade Pause: Fällt der Tag noch in die Pause, schicke ich auch diese Absage nicht."
+)
 LIST_HEADER = "Kein Essen an diesen Tagen:"
 LIST_EMPTY = "Es sind keine Tage ohne Essen eingetragen."
 NO_DINNER_DAY = "(kein Essenstag mehr)"
@@ -72,7 +76,10 @@ def run_skip(ctx: CommandContext, args: str) -> list[str]:
     at = f"{ui.WEEKDAYS_SHORT[decision.weekday()]} {decision:%d.%m. %H:%M}"
     cancellation = config.templates.cancellation.render(**config.placeholder_values())
     reply = SKIPPED.format(day=_day(day), at=at)
-    return [f"{reply}\n\n{cancellation}\n\n{UNDO.format(iso=day.isoformat())}"]
+    undo = UNDO.format(iso=day.isoformat())
+    if store.active_hiatus() is not None:
+        undo = f"{HIATUS}\n{undo}"
+    return [f"{reply}\n\n{cancellation}\n\n{undo}"]
 
 
 def run_unskip(ctx: CommandContext, args: str) -> list[str]:

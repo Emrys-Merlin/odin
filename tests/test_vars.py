@@ -109,7 +109,7 @@ def test_unknown_template(store: Store, name: str) -> None:
     assert reply == (
         f"Unbekannte Vorlage „{name}“. Es gibt: "
         "flat_ask, nudge, announcement, cancellation, weekday_change_cancellation, tally, "
-        "introduction."
+        "introduction, hiatus."
     )
 
 

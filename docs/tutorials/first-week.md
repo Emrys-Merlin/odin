@@ -119,6 +119,9 @@ Das kann ich:<br>
 /cancel – Sagt das Essen dieser Woche ab – nach Bestätigung per Reaktion.<br>
 /skip [JJJJ-MM-TT] – Trägt einen Tag ohne Essen im Voraus ein; ohne Datum: zeigt die Liste.<br>
 /unskip &lt;JJJJ-MM-TT&gt; – Nimmt einen mit /skip eingetragenen Tag zurück.<br>
+/introduce – Stellt Odin der Essensgruppe vor – nach Bestätigung per Reaktion.<br>
+/hiatus – Schickt Odin in Pause, bis jemand /resume schreibt – nach Bestätigung per Reaktion.<br>
+/resume – Beendet die Pause; ab der nächsten Frage an die WG läuft alles wie gewohnt.<br>
 /version – Zeigt, welche Version von Odin läuft.
 
 Statt / geht auch !, also z. B. !help.

@@ -17,6 +17,8 @@ Everything is keyed by the dinner week, identified by the date of its Sunday. Th
 - the **introductions**: which confirmed `/introduce` requests were posted to the dinner group,
   and when (see `odin.commands.introduce`). They belong to no dinner week, so they are not
   actions.
+- the **hiatuses**: breaks set via `/hiatus` and ended via `/resume`, during which the weekly
+  cycle sends nothing (see `odin.commands.hiatus` and `odin.engine`).
 
 A Signal message is identified by its author and its (millisecond) Signal timestamp, which is also
 how incoming reactions refer to their target message.
@@ -53,6 +55,9 @@ class Action(StrEnum):
     # may be sent any number of times; each send is recorded in `introductions` instead. Named
     # here so that a failed send is reported like any other (see `odin.health`).
     INTRODUCTION = "introduction"
+    # The dinner group is told once that a /hiatus took effect. Recorded in its `Hiatus` (a week
+    # can see more than one), not among the week's actions; the name is for logs and /health.
+    HIATUS_NOTICE = "hiatus_notice"
 
 
 class Outcome(StrEnum):
@@ -71,6 +76,8 @@ class MessageKind(StrEnum):
     # ODIN's reply to /introduce; a reaction confirms it. Tracked under the dinner week it was
     # made in, but only the latest one counts (see `odin.events`).
     INTRODUCTION_REQUEST = "introduction_request"
+    # ODIN's reply to /hiatus; a reaction confirms it. Forgotten once the hiatus takes effect.
+    HIATUS_REQUEST = "hiatus_request"
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +128,40 @@ class SkipDate:
     day: date
     added_by: str  # the sender's name if known, else their number
     added_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class Hiatus:
+    """A break of the weekly cycle via `/hiatus`, from request to `/resume`.
+
+    The dinner weeks whose dinner date lies in ``[from_day, until_day]`` have no weekly cycle;
+    `until_day` is None while the hiatus lasts. Both are set from the state of the running week
+    (see `odin.engine.start_hiatus` and `odin.commands.hiatus`), so they need not be dinner days:
+    a bound between two dinner days just means "every week after" (or "before") it.
+    """
+
+    id: int
+    week: date  # the dinner week of the request; the hiatus starts in it
+    requested_by: str  # the sender's name if known, else their number
+    requested_at: datetime
+    started_at: datetime | None = None  # None: requested, not confirmed yet
+    from_day: date | None = None
+    notice: Outcome | None = None  # the hiatus notice; None: not recorded yet
+    notice_at: datetime | None = None
+    resumed_by: str | None = None
+    resumed_at: datetime | None = None
+    until_day: date | None = None
+
+    @property
+    def active(self) -> bool:
+        """Started and not resumed."""
+        return self.started_at is not None and self.resumed_at is None
+
+    def covers(self, week: date) -> bool:
+        """Whether dinner week `week` is part of the hiatus (it has started)."""
+        if self.from_day is None or week < self.from_day:
+            return False
+        return self.until_day is None or week <= self.until_day
 
 
 # Migration i brings the schema from user_version i to i + 1. Only ever append.
@@ -200,6 +241,21 @@ _MIGRATIONS: tuple[str, ...] = (
         request_timestamp INTEGER NOT NULL,
         sent_at           TEXT NOT NULL,
         PRIMARY KEY (request_author, request_timestamp)
+    );
+    """,
+    """
+    CREATE TABLE hiatuses (
+        id           INTEGER PRIMARY KEY,
+        week         TEXT NOT NULL,
+        requested_by TEXT NOT NULL,
+        requested_at TEXT NOT NULL,
+        started_at   TEXT,
+        from_day     TEXT,
+        notice       TEXT,
+        notice_at    TEXT,
+        resumed_by   TEXT,
+        resumed_at   TEXT,
+        until_day    TEXT
     );
     """,
 )
@@ -567,6 +623,75 @@ class Store:
         (sent_at,) = self._conn.execute("SELECT max(sent_at) FROM introductions").fetchone()
         return None if sent_at is None else datetime.fromisoformat(sent_at)
 
+    # Hiatuses
+
+    def request_hiatus(self, week: date, requested_by: str, now: datetime) -> Hiatus:
+        """Record a /hiatus request made in dinner week `week`; it replaces an earlier request
+        that never took effect."""
+        self._conn.execute("DELETE FROM hiatuses WHERE started_at IS NULL")
+        cursor = self._conn.execute(
+            "INSERT INTO hiatuses (week, requested_by, requested_at) VALUES (?, ?, ?)",
+            (week.isoformat(), requested_by, _utc(now)),
+        )
+        assert cursor.lastrowid is not None
+        return Hiatus(cursor.lastrowid, week, requested_by, datetime.fromisoformat(_utc(now)))
+
+    def hiatus_request(self, week: date) -> Hiatus | None:
+        """The /hiatus request of dinner week `week` that has not taken effect; None if none."""
+        return self._hiatus("WHERE week = ? AND started_at IS NULL", (week.isoformat(),))
+
+    def start_hiatus(self, hiatus_id: int, now: datetime, from_day: date) -> None:
+        """The requested hiatus takes effect at `now`, from dinner week `from_day` on."""
+        self._conn.execute(
+            "UPDATE hiatuses SET started_at = ?, from_day = ? WHERE id = ?",
+            (_utc(now), from_day.isoformat(), hiatus_id),
+        )
+
+    def active_hiatus(self) -> Hiatus | None:
+        """The hiatus that has started and not been resumed; None if ODIN is awake."""
+        return self._hiatus("WHERE started_at IS NOT NULL AND resumed_at IS NULL", ())
+
+    def resume_hiatus(
+        self, hiatus_id: int, resumed_by: str, now: datetime, until_day: date
+    ) -> None:
+        """End the hiatus at `now`; dinner week `until_day` is the last one it covers."""
+        self._conn.execute(
+            "UPDATE hiatuses SET resumed_by = ?, resumed_at = ?, until_day = ? WHERE id = ?",
+            (resumed_by, _utc(now), until_day.isoformat(), hiatus_id),
+        )
+
+    def record_hiatus_notice(self, hiatus_id: int, now: datetime, outcome: Outcome) -> None:
+        """Record that the notice of the hiatus was sent (or deliberately skipped)."""
+        self._conn.execute(
+            "UPDATE hiatuses SET notice = ?, notice_at = ? WHERE id = ? AND notice IS NULL",
+            (outcome.value, _utc(now), hiatus_id),
+        )
+
+    def hiatuses(self) -> list[Hiatus]:
+        """Every hiatus that has started, oldest first."""
+        rows = self._conn.execute(
+            f"SELECT {_HIATUS_COLUMNS} FROM hiatuses WHERE started_at IS NOT NULL"
+            " ORDER BY started_at, id"
+        ).fetchall()
+        return [_hiatus(row) for row in rows]
+
+    def hiatus_covering(self, week: date) -> Hiatus | None:
+        """The hiatus that dinner week `week` is part of; None if it has its weekly cycle."""
+        return next((h for h in self.hiatuses() if h.covers(week)), None)
+
+    def _hiatus(self, where: str, params: tuple[str, ...]) -> Hiatus | None:
+        row = self._conn.execute(
+            f"SELECT {_HIATUS_COLUMNS} FROM hiatuses {where} ORDER BY id DESC LIMIT 1", params
+        ).fetchone()
+        return None if row is None else _hiatus(row)
+
+    def delete_tracked_message(self, week: date, kind: MessageKind) -> bool:
+        """Stop tracking the week's message of `kind`, and forget its reactions."""
+        cursor = self._conn.execute(
+            "DELETE FROM messages WHERE week = ? AND kind = ?", (week.isoformat(), kind.value)
+        )
+        return cursor.rowcount == 1
+
     # Setup lock: held by `odin setup` while it runs, so `odin run` stays out of its way. It is
     # a settings row "<token> <heartbeat>"; the holder refreshes the heartbeat, and a lock whose
     # heartbeat is older than SETUP_LOCK_TTL is stale, so a killed holder cannot block forever.
@@ -622,3 +747,33 @@ def _message(row: tuple[str, str, str, str, int]) -> TrackedMessage:
 def _skip_date(row: tuple[str, str, str]) -> SkipDate:
     day, added_by, added_at = row
     return SkipDate(date.fromisoformat(day), added_by, datetime.fromisoformat(added_at))
+
+
+_HIATUS_COLUMNS = (
+    "id, week, requested_by, requested_at, started_at, from_day, notice, notice_at,"
+    " resumed_by, resumed_at, until_day"
+)
+
+
+def _hiatus(row: tuple) -> Hiatus:
+    (id_, week, by, at, started, from_day, notice, notice_at, resumed_by, resumed_at, until) = row
+
+    def moment(value: str | None) -> datetime | None:
+        return None if value is None else datetime.fromisoformat(value)
+
+    def day(value: str | None) -> date | None:
+        return None if value is None else date.fromisoformat(value)
+
+    return Hiatus(
+        id=id_,
+        week=date.fromisoformat(week),
+        requested_by=by,
+        requested_at=datetime.fromisoformat(at),
+        started_at=moment(started),
+        from_day=day(from_day),
+        notice=None if notice is None else Outcome(notice),
+        notice_at=moment(notice_at),
+        resumed_by=resumed_by,
+        resumed_at=moment(resumed_at),
+        until_day=day(until),
+    )

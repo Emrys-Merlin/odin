@@ -49,7 +49,8 @@ names, dates, durations and error class names.
 ## Reasons
 
 Durations are whole minutes, rounded down. `<step>` is one of `flat_ask`, `nudge`,
-`announcement`, `cancellation`, `tally`, `flat_ask_retry`, `announcement_notice`; `<week>` is the
+`announcement`, `cancellation`, `tally`, `flat_ask_retry`, `announcement_notice`,
+`hiatus_notice`; `<week>` is the
 dinner date of the week (`2026-10-25`).
 
 | Reason | Down when |
@@ -63,6 +64,10 @@ dinner date of the week (`2026-10-25`).
 | `Signal event connection down for <n> min` | The WebSocket has been down for more than 2 minutes; reactions are missed meanwhile. |
 
 While `not ready` is the reason, it is the only one.
+
+During a hiatus (`/hiatus`, see [The weekly cycle](../explanation/weekly-cycle.md#taking-a-break))
+the weekly steps are recorded as skipped and nothing is sent, so none of them can be unsent:
+ODIN stays `up`. For `hiatus_notice`, `<week>` is the dinner week in which the hiatus started.
 
 ## Warnings
 

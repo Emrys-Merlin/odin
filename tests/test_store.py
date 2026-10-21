@@ -296,3 +296,56 @@ def test_upgrade_from_version_3_adds_overrides(tmp_path: Path) -> None:
         assert store.get_setting("flat_group_id") == "group.a="
         store.set_override("schedule.tally", "sat 10:00", "Tim", TUE)
         assert list(store.overrides()) == ["schedule.tally"]
+
+
+def test_upgrade_from_version_9_adds_hiatuses(tmp_path: Path) -> None:
+    from odin.store import _MIGRATIONS
+
+    path = tmp_path / "odin.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(f"{'; '.join(_MIGRATIONS[:9])}; PRAGMA user_version = 9;")
+    conn.execute("INSERT INTO skip_dates VALUES ('2026-12-27', 'Tim', '2026-10-06T16:00:00+00:00')")
+    conn.commit()
+    conn.close()
+    with Store(path) as store:
+        assert [skip.day for skip in store.skip_dates()] == [date(2026, 12, 27)]
+        assert store.active_hiatus() is None
+        assert store.hiatuses() == []
+
+
+def test_hiatus_lifecycle(store: Store) -> None:
+    store.request_hiatus(WEEK, "Anna", TUE)
+    request = store.request_hiatus(WEEK, "Ben", TUE + timedelta(minutes=5))
+    # A new request replaces one that never took effect.
+    assert store.hiatus_request(WEEK) == request
+    assert request.requested_by == "Ben"
+    assert store.hiatuses() == []
+    assert store.hiatus_covering(WEEK) is None
+
+    store.start_hiatus(request.id, TUE + timedelta(hours=1), WEEK + timedelta(days=1))
+    active = store.active_hiatus()
+    assert active is not None
+    assert active.active
+    assert store.hiatus_request(WEEK) is None
+    assert store.hiatus_covering(WEEK) is None  # started after its flat ask
+    later = WEEK + timedelta(weeks=5)
+    assert store.hiatus_covering(later) == active
+
+    store.record_hiatus_notice(request.id, TUE + timedelta(hours=1), Outcome.SENT)
+    store.record_hiatus_notice(request.id, TUE + timedelta(hours=2), Outcome.SKIPPED)
+    [hiatus] = store.hiatuses()
+    assert hiatus.notice is Outcome.SENT  # recorded once
+
+    store.resume_hiatus(request.id, "Anna", TUE + timedelta(weeks=2), WEEK + timedelta(weeks=2))
+    assert store.active_hiatus() is None
+    assert store.hiatus_covering(WEEK + timedelta(weeks=2)) is not None
+    assert store.hiatus_covering(WEEK + timedelta(weeks=3)) is None
+
+
+def test_delete_tracked_message_forgets_its_reactions(store: Store) -> None:
+    message = store.track_message(WEEK, MessageKind.HIATUS_REQUEST, "group.flat=", BOT, 1)
+    store.set_reaction(message, "+49151", "👍", TUE)
+    assert store.delete_tracked_message(WEEK, MessageKind.HIATUS_REQUEST)
+    assert store.find_message(BOT, 1) is None
+    assert store.reactions_for(message) == []
+    assert not store.delete_tracked_message(WEEK, MessageKind.HIATUS_REQUEST)

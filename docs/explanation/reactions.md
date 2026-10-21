@@ -16,6 +16,8 @@ counted without parsing text. The emoji is 👍 by default and configurable (`em
 - The tally counts the configured emoji on the dinner announcement at tally time.
 - A `/cancel` request is confirmed by the configured emoji on ODIN's reply, from anyone in the
   flat group, until the week's dinner starts; removing it before ODIN's next tick withdraws it.
+- A `/hiatus` request is confirmed the same way as a `/cancel` request, until the week's dinner
+  starts.
 - An `/introduce` request is confirmed the same way, within 24 hours of ODIN's reply. Only the
   latest request counts: a new `/introduce` replaces an open one.
 - A reaction counts only in the group its message went to, even after the groups are changed.
@@ -51,6 +53,11 @@ which shows the exact text that would go out — guards against typos and second
 the flat poll, anyone in the flat group may confirm, the requester included. Removing the
 reaction before ODIN's next tick withdraws it; once ODIN has acted, the cancellation is out. See
 [The weekly cycle](weekly-cycle.md#cancelling-from-the-chat) for how it fits into the week.
+
+**Confirming `/hiatus`.** A hiatus silences ODIN for every guest and may cancel the running
+week, so it gets the same guard as `/cancel`: the reply shows what the dinner group will get, and
+nothing happens without a reaction. `/resume` posts nothing, so it needs no confirmation. See
+[The weekly cycle](weekly-cycle.md#taking-a-break).
 
 **Confirming `/introduce`.** The introduction is harmless, but it goes to every guest, so it gets
 the same guard: the reply shows the exact text, and nothing is posted without a reaction. Unlike

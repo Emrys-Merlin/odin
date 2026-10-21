@@ -121,7 +121,8 @@ How the cancellation fits into the week depends on when it comes:
 
 A request that nobody confirms does nothing; it lapses when the week's dinner starts. `/cancel`
 is refused once the cancellation went out (or was skipped as too late), for a week dropped by a
-[dinner weekday change](weekday-change.md), and while a request of this week is open.
+[dinner weekday change](weekday-change.md), while a request of this week is open, and during a
+[hiatus](#taking-a-break).
 
 Steps: [Cancel a dinner](../how-to/chat/cancel-dinner.md). Exact syntax:
 [Chat commands](../reference/chat-commands.md).
@@ -170,4 +171,61 @@ pending [dinner weekday change](weekday-change.md). A date entered before dinner
 another weekday no longer matches any week; `/skip` marks it in the list.
 
 Steps: [Skip a date in advance](../how-to/chat/skip-a-date.md). Exact syntax:
+[Chat commands](../reference/chat-commands.md).
+
+## Taking a break
+
+Sometimes the flat wants no dinner for a while, with no end date: summer, a renovation, or just a
+break. `/skip` needs a date for each Sunday and still posts a cancellation every week; `/cancel`
+only covers the running week. `/hiatus` instead puts ODIN to sleep until someone writes
+`/resume`: no flat ask, no nudge, no decision, no tally, and no weekly cancellations in the
+dinner group.
+
+| | `/cancel` | `/skip <date>` | `/hiatus` … `/resume` |
+|---|---|---|---|
+| Covers | the running week | one dinner day, set in advance | every week until `/resume` |
+| Confirmed by a reaction | yes | no | yes |
+| Flat group asked | no longer | no | no |
+| Dinner group gets | the cancellation, at once | the cancellation, at the usual decision time | one hiatus notice, at once |
+
+Like `/cancel`, `/hiatus` asks for a confirmation first, since it posts to every guest: ODIN
+replies with what the dinner group will get and asks for the configured emoji. Once someone
+reacts, the hiatus takes effect on ODIN's next tick, and the dinner group gets the hiatus notice
+(the `hiatus` template), once. Without it, guests would only notice that the Wednesday message
+stopped coming. The hiatus is stored in the state DB with who asked and when; there is no config
+key for it.
+
+How the running week fits in depends on when the hiatus starts:
+
+- **Before the week's flat ask** the week is simply part of the hiatus; nobody was asked.
+- **Once the flat ask went out**, the flat is deciding that week already, and guests may be
+  expecting a dinner (after an announcement, they certainly are). So the hiatus first cancels the
+  week exactly as `/cancel` does — one cancellation, sent once, also after an announcement — and
+  the hiatus notice follows it. A week whose cancellation went out already gets no second one.
+
+While ODIN sleeps, each step of a week is recorded as skipped at its usual time, so `/status`
+and the catch-up see the week as finished, and nothing is sent: not the cancellation of a skip
+date either, nor that of a week [dropped by a weekday change](weekday-change.md#dropped-weeks).
+`/cancel` is refused (there is nothing to cancel); `/skip` and `/unskip` keep working, so dates
+after a later `/resume` still apply. `/status` shows the hiatus — since when, by whom, the notice
+and how to end it — instead of the week's steps.
+
+`/resume` takes effect at once and needs no confirmation: it posts nothing. The first week whose
+flat ask is still ahead runs normally. If the running week's flat ask was already due, that week
+stays off — asking now would be late, and the guests were told there is no dinner — so a resume
+on Wednesday morning posts no flat ask, even after ODIN was down over Tuesday. Nothing is caught
+up for the weeks of the hiatus: they are finished.
+
+There is no resume notice. The first announcement (or cancellation) after `/resume` reaches the
+dinner group on the usual day, at most about a week later, and is the news that dinner is back; a
+separate "we're back" message would announce a dinner before any flatmate confirmed it, and would
+be one more text to maintain. The default hiatus notice says that guests will hear from ODIN here
+as usual once it starts again.
+
+The `hiatus` template is optional, so a config written before it existed keeps working: while it
+is not set, the hiatus notice is the normal cancellation, and it is left out when the dinner
+group already has the running week's cancellation. Sleeping is not a failure: the
+[health endpoint](../reference/health-endpoint.md) stays up during a hiatus.
+
+Steps: [Take a break](../how-to/chat/take-a-break.md). Exact syntax:
 [Chat commands](../reference/chat-commands.md).

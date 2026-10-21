@@ -9,17 +9,18 @@ week's dinner starts.
 
 Refused when the dinner group has already been told the week is off (or ODIN deliberately did
 not tell it), for a week dropped by a dinner weekday change or set as a skip date via `/skip`
-(their cancellation goes out anyway), and while a request of this week is open.
+(their cancellation goes out anyway), while a request of this week is open, and during a hiatus
+(`/hiatus`) or for a week that is part of one: nothing is sent then.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError, TrackedReply
-from odin.config import WEEKDAYS_DE
+from odin.config import WEEKDAYS_DE, Config
 from odin.engine import dinner_week
 from odin.reactions import count_confirmations
-from odin.store import Action, MessageKind, Outcome
+from odin.store import Action, MessageKind, Outcome, Store
 
 USAGE = "So geht's: einfach /cancel, ohne Zusatz."
 CONFIRM = (
@@ -27,7 +28,8 @@ CONFIRM = (
     "ich schicke der Essensgruppe dann diese Absage:"
 )
 ALREADY_ANNOUNCED = "Die Einladung ist schon raus ({reactions}); die Absage kommt dann hinterher."
-LAPSES = "Ohne {emoji} passiert nichts; die Anfrage verfällt, wenn das Essen beginnt ({dinner})."
+HIATUS = "Ich mache gerade Pause – es gibt nichts abzusagen. " + ui.RESUME_HINT
+HIATUS_WEEK = "Das Essen am {day} fällt wegen der Pause (/hiatus) aus – es gibt nichts abzusagen."
 ALREADY_CANCELLED = "Das Essen am {day} ist schon abgesagt (Absage gesendet {at})."
 CANCELLATION_SKIPPED = (
     "Für das Essen am {day} habe ich die Absage übersprungen (ich war zu spät dran) und schicke "
@@ -55,29 +57,11 @@ def run(ctx: CommandContext, args: str) -> list[str]:
     day = f"{WEEKDAYS_DE[week.weekday()]}, {week:%d.%m.}"
 
     def local(moment: datetime) -> str:
-        at = moment.astimezone(config.timezone)
-        return f"{ui.WEEKDAYS_SHORT[at.weekday()]} {at:%d.%m. %H:%M}"
+        return ui.moment(moment, config.timezone)
 
-    match store.action_outcome(week, Action.CANCELLATION):
-        case Outcome.SENT:
-            sent_at = store.action_time(week, Action.CANCELLATION)
-            assert sent_at is not None
-            raise CommandError(ALREADY_CANCELLED.format(day=day, at=local(sent_at)))
-        case Outcome.SKIPPED:
-            raise CommandError(CANCELLATION_SKIPPED.format(day=day))
-    if store.dropped_at(week) is not None:
-        raise CommandError(DROPPED_WEEK.format(day=day))
-    if store.skip_date(week) is not None and store.action_outcome(week, Action.FLAT_ASK) is not (
-        Outcome.SENT
-    ):
-        decision = config.when(config.schedule.flat_deadline, week)
-        raise CommandError(SKIP_DATE.format(day=day, at=local(decision)))
-    request = store.tracked_message(week, MessageKind.CANCEL_REQUEST)
-    if request is not None:
-        requested_at = datetime.fromtimestamp(request.timestamp / 1000, UTC)
-        raise CommandError(
-            ALREADY_REQUESTED.format(day=day, at=local(requested_at), emoji=config.emoji)
-        )
+    refusal = _refusal(config, store, week, day)
+    if refusal is not None:
+        raise CommandError(refusal)
 
     lines = [CONFIRM.format(day=day, emoji=config.emoji)]
     announcement = store.tracked_message(week, MessageKind.DINNER_ANNOUNCEMENT)
@@ -89,10 +73,41 @@ def run(ctx: CommandContext, args: str) -> list[str]:
             reactions = f"{count}× {config.emoji}"
         lines.append(ALREADY_ANNOUNCED.format(reactions=reactions))
     dinner = config.when(config.schedule.dinner, week)
-    lines.append(LAPSES.format(emoji=config.emoji, dinner=local(dinner)))
+    lines.append(ui.LAPSES.format(emoji=config.emoji, dinner=local(dinner)))
     cancellation = config.templates.cancellation.render(**config.placeholder_values())
     text = "\n".join(lines) + "\n\n" + cancellation
     return [TrackedReply(text, week, MessageKind.CANCEL_REQUEST)]
+
+
+def _refusal(config: Config, store: Store, week: date, day: str) -> str | None:
+    """Why the dinner of `week` cannot be cancelled via /cancel; None if it can."""
+
+    def local(moment: datetime) -> str:
+        return ui.moment(moment, config.timezone)
+
+    if store.active_hiatus() is not None:
+        return HIATUS
+    if store.hiatus_covering(week) is not None:
+        return HIATUS_WEEK.format(day=day)
+    match store.action_outcome(week, Action.CANCELLATION):
+        case Outcome.SENT:
+            sent_at = store.action_time(week, Action.CANCELLATION)
+            assert sent_at is not None
+            return ALREADY_CANCELLED.format(day=day, at=local(sent_at))
+        case Outcome.SKIPPED:
+            return CANCELLATION_SKIPPED.format(day=day)
+    if store.dropped_at(week) is not None:
+        return DROPPED_WEEK.format(day=day)
+    if store.skip_date(week) is not None and store.action_outcome(week, Action.FLAT_ASK) is not (
+        Outcome.SENT
+    ):
+        decision = config.when(config.schedule.flat_deadline, week)
+        return SKIP_DATE.format(day=day, at=local(decision))
+    request = store.tracked_message(week, MessageKind.CANCEL_REQUEST)
+    if request is not None:
+        requested_at = datetime.fromtimestamp(request.timestamp / 1000, UTC)
+        return ALREADY_REQUESTED.format(day=day, at=local(requested_at), emoji=config.emoji)
+    return None
 
 
 CANCEL = Command(
