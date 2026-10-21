@@ -102,6 +102,7 @@ nav:
           - Move dinner to another day: how-to/chat/move-dinner-day.md
           - Pause the nudge: how-to/chat/pause-nudge.md
           - Skip a date in advance: how-to/chat/skip-a-date.md
+          - Take a break: how-to/chat/take-a-break.md
       - Develop:
           - Run locally: how-to/develop/run-locally.md
           - Add a chat command: how-to/develop/add-a-chat-command.md

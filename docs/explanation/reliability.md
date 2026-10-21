@@ -56,7 +56,9 @@ An action that is late (bot was down) is still performed while within a grace wi
 default until dinner starts — and skipped after that. A flat ask on Thursday is still useful; an
 announcement after dinner has started is not. The window is `catch_up_grace` in the
 [configuration](../reference/configuration.md). Skipped actions are recorded as skipped, so
-`/status` can show them and they are not tried again.
+`/status` can show them and they are not tried again. During a
+[hiatus](weekly-cycle.md#taking-a-break) every step is recorded as skipped at its time, so after
+`/resume` there is nothing to catch up.
 
 ## Health
 
@@ -67,9 +69,10 @@ do its job at `GET /health` (see [Health endpoint](../reference/health-endpoint.
 
 **Healthy** means: the reconcile loop keeps finishing its ticks, no step has failed to send for
 more than 15 minutes, the event connection to the Signal API is up (a reconnect within 2 minutes
-does not count), and ODIN is not waiting for setup or for the API. A message whose reactions
-cannot be counted is only a warning: the flat group is told already, there is nothing for the
-operator to do.
+does not count), and ODIN is not waiting for setup or for the API. Sleeping during a
+[hiatus](weekly-cycle.md#taking-a-break) is healthy: the loop keeps ticking, it just has nothing
+to send. A message whose reactions cannot be counted is only a warning: the flat group is told
+already, there is nothing for the operator to do.
 
 The endpoint is **pull-based**: ODIN pushes no alerts. Whoever wants to know asks — Podman's
 health check, or any uptime monitor that can reach the port. That needs no secret and no outbound configuration in

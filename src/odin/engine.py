@@ -65,6 +65,22 @@ as skipped, each at its time, so `/unskip` works until the flat ask is due — e
 dinner group still gets the cancellation at the usual decision time. A skip date only counts while
 the week's flat ask has not gone out; after that, skipping the week is `/cancel`.
 
+**A hiatus** (`/hiatus`, see `odin.commands.hiatus`) puts the weekly cycle to sleep until
+`/resume`. ODIN's reply to `/hiatus` is tracked as the week's hiatus request; once anyone reacts
+to it, the next tick lets the hiatus take effect (`start_hiatus`), before anything else. If the
+running week's flat ask has not gone out, that week is the first one of the hiatus; if it has, the
+flat is deciding that week already, so the hiatus cancels it exactly as a confirmed `/cancel`
+does, and starts with the next week. A week that is part of a hiatus runs like a skip date
+without its cancellation: every step is recorded as skipped at its time, nothing is sent — not
+even the cancellation of a skip date or of a week dropped by a dinner weekday change, nor one
+confirmed via `/cancel`. After all weeks, the dinner group gets the **hiatus notice** once
+(`hiatus` template; recorded in the hiatus itself, since one week can see more than one hiatus).
+It is skipped if the hiatus was resumed before it went out, or if the template is not set and the
+running week's cancellation went out already: its fallback is the cancellation, which the dinner
+group would then get twice. `/resume` ends the hiatus (`hiatus_end`): the running week stays part
+of it once its flat ask is due or anything of it is recorded, so a resume never posts a late flat
+ask, and since every week of the hiatus is finished like any other, nothing is caught up.
+
 **The introduction** (`/introduce`, see `odin.commands.introduce`) is not part of the weekly
 cycle. ODIN's reply to `/introduce` is tracked as an introduction request; once anyone reacts to
 it with the configured emoji (within `odin.reactions.INTRODUCTION_LAPSE`), the next tick posts the
@@ -73,7 +89,9 @@ an action of a week: it does not change the week, and a later request posts it a
 send is retried next tick, but never holds up the weekly steps, nor they it.
 """
 
+import functools
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
@@ -83,7 +101,7 @@ from odin.config import Config, WeeklyTime, dropped_placeholder_values
 from odin.cycle import StepName, TemplateName
 from odin.reactions import count_confirmations
 from odin.signal import SendResponseUnreadable, SignalClient
-from odin.store import Action, MessageKind, Outcome, Store
+from odin.store import Action, Hiatus, MessageKind, Outcome, Store
 
 logger = logging.getLogger(__name__)
 
@@ -299,6 +317,7 @@ async def reconcile(
     """
     now = to_utc(now)
     current = dinner_week(config, now)
+    start_hiatus(config, store, current, now)
     earlier = set(store.unfinished_weeks_before(current))
     previous = current - timedelta(weeks=1)
     latest = store.latest_week_before(current)
@@ -313,8 +332,115 @@ async def reconcile(
             await cycle.run()
         except _SendFailed:
             break
+    else:  # the notice follows the cancellation of the running week, so it waits for it
+        await _hiatus_notices(config, store, client, account, current, now, steps, failures)
     await _introduce(config, store, client, account, now, steps, failures)
     return steps
+
+
+def start_hiatus(config: Config, store: Store, current: date, now: datetime) -> Hiatus | None:
+    """Let the /hiatus request of dinner week `current` take effect at `now`, once anyone has
+    confirmed it. Returns the hiatus that started, if one did.
+
+    The running week is the first week of the hiatus unless its flat ask went out: then the
+    hiatus starts with the next week (any dinner date after `current`), and `reconcile` cancels
+    the running week. The request is forgotten, so a later reaction on it does nothing and a new
+    one can be tracked after a `/resume`.
+    """
+    request = store.hiatus_request(current)
+    tracked = store.tracked_message(current, MessageKind.HIATUS_REQUEST)
+    if request is None or tracked is None or store.active_hiatus() is not None:
+        return None
+    if count_confirmations(store, tracked, config.emoji) == 0:
+        return None
+    asked = store.action_outcome(current, Action.FLAT_ASK) is Outcome.SENT
+    from_day = current + timedelta(days=1) if asked else current
+    with store.transaction():
+        store.start_hiatus(request.id, now, from_day)
+        store.delete_tracked_message(current, MessageKind.HIATUS_REQUEST)
+    logger.info("hiatus starts with dinner week %s%s", current, " + 1" if asked else "")
+    return store.active_hiatus()
+
+
+def hiatus_cancels(store: Store, week: date) -> bool:
+    """Whether a hiatus that started in dinner week `week` after its flat ask cancels it."""
+    return any(
+        h.week == week and h.from_day is not None and h.from_day > week for h in store.hiatuses()
+    )
+
+
+def cancelled_by_hiatus(store: Store, week: date) -> bool:
+    """Whether the cancellation of dinner week `week` went out because a hiatus cancelled it,
+    rather than before the hiatus started (e.g. at the decision, without a confirmation)."""
+    sent_at = store.action_time(week, Action.CANCELLATION)
+    if sent_at is None or store.action_outcome(week, Action.CANCELLATION) is not Outcome.SENT:
+        return False
+    return any(
+        h.week == week
+        and h.from_day is not None
+        and h.from_day > week
+        and h.started_at is not None
+        and sent_at >= h.started_at
+        for h in store.hiatuses()
+    )
+
+
+def hiatus_end(config: Config, store: Store, now: datetime) -> date:
+    """The last dinner week a hiatus ended at `now` covers.
+
+    The running week stays part of it once its flat ask is due or anything of it is recorded:
+    asking now would be late, and the dinner group was told there is no dinner. Otherwise the
+    running week is the first one back, and the hiatus ends the day before it.
+    """
+    week = dinner_week(config, now)
+    flat_ask = config.when(config.schedule.flat_ask, week)
+    if store.has_any_action(week) or flat_ask <= now:
+        return week
+    return week - timedelta(days=1)
+
+
+def hiatus_notice_redundant(config: Config, store: Store, hiatus: Hiatus) -> bool:
+    """Whether the hiatus notice would only repeat the running week's cancellation: the template
+    is not set, so its text is the cancellation, and that went out already."""
+    return not config.templates.is_set(TemplateName.HIATUS) and (
+        store.action_outcome(hiatus.week, Action.CANCELLATION) is Outcome.SENT
+    )
+
+
+async def _hiatus_notices(
+    config: Config,
+    store: Store,
+    client: SignalClient,
+    account: Account,
+    current: date,
+    now: datetime,
+    steps: list[Step],
+    failures: list[SendFailure],
+) -> None:
+    """Post the notice of a hiatus that has started, once; after the weeks, so that it follows
+    the cancellation of the running week."""
+    for hiatus in store.hiatuses():
+        if hiatus.notice is not None:
+            continue
+        if not hiatus.active or hiatus_notice_redundant(config, store, hiatus):
+            store.record_hiatus_notice(hiatus.id, now, Outcome.SKIPPED)
+            logger.info("skipped %s for week %s", Action.HIATUS_NOTICE, hiatus.week)
+            steps.append(Step(hiatus.week, Action.HIATUS_NOTICE, Outcome.SKIPPED))
+            continue
+        text = config.templates.get(TemplateName.HIATUS).render(**config.placeholder_values())
+        # A _Week only to post and record like the weekly steps; the notice is recorded in the
+        # hiatus, not among the week's actions.
+        poster = _Week(config, store, client, account, current, False, now, steps, failures)
+        sent = await poster._post(
+            Action.HIATUS_NOTICE,
+            account.dinner_group_id,
+            text,
+            None,
+            record=functools.partial(store.record_hiatus_notice, hiatus.id, now, Outcome.SENT),
+            week=hiatus.week,
+        )
+        if not sent:
+            return
 
 
 async def _introduce(
@@ -372,6 +498,7 @@ class _Week:
     _windows: dict[StepName, StepWindow] = field(init=False, default_factory=dict)
     _cancelled: bool = field(init=False, default=False)  # the cancellation went out
     _skip_date: bool = field(init=False, default=False)
+    _quiet: bool = field(init=False, default=False)  # part of a hiatus: nothing is sent
     _asked: bool = field(init=False, default=False)  # the flat ask went out
     _on: bool = field(init=False, default=False)  # dinner is on: announced and not cancelled
 
@@ -392,8 +519,15 @@ class _Week:
         return False if self.over else self._windows[name].due(self.now)
 
     async def _cancel(self) -> None:
-        """0. Cancellation via /cancel, once confirmed: it overtakes every other step."""
-        if not self.over and not self._recorded(Action.CANCELLATION) and self._cancel_confirmed():
+        """0. Cancellation via /cancel, once confirmed, or by a hiatus that started after the
+        week's flat ask: it overtakes every other step. Not in a week that is part of a hiatus."""
+        self._quiet = not self.over and self.store.hiatus_covering(self.week) is not None
+        if (
+            not self.over
+            and not self._quiet
+            and not self._recorded(Action.CANCELLATION)
+            and (self._cancel_confirmed() or hiatus_cancels(self.store, self.week))
+        ):
             await self._send(Action.CANCELLATION)
         self._cancelled = self.store.action_outcome(self.week, Action.CANCELLATION) is Outcome.SENT
         self._skip_date = not self.over and self.store.skip_date(self.week) is not None
@@ -405,7 +539,7 @@ class _Week:
             due_now = False if self._cancelled else self._due(StepName.FLAT_ASK)
             if due_now is None:
                 return False
-            if due_now and not self._skip_date:
+            if due_now and not (self._skip_date or self._quiet):
                 await self._send(Action.FLAT_ASK, track=MessageKind.FLAT_POLL)
             else:
                 self._skip(Action.FLAT_ASK)
@@ -435,10 +569,11 @@ class _Week:
     async def _decide(self) -> bool:
         """3. Decision: announcement or cancellation. A dropped week was never asked; it gets the
         cancellation, due from the switch that dropped it. A skip date was not asked either; it
-        gets the cancellation at the usual time."""
+        gets the cancellation at the usual time. A week that is part of a hiatus gets nothing."""
         if not (self._recorded(Action.ANNOUNCEMENT) or self._recorded(Action.CANCELLATION)):
-            dropped = None if self._asked or self.over else self.store.dropped_at(self.week)
-            skipped = self._skip_date and not self._asked
+            quiet_or_asked = self._asked or self.over or self._quiet
+            dropped = None if quiet_or_asked else self.store.dropped_at(self.week)
+            skipped = self._skip_date and not self._asked and not self._quiet
             if dropped is not None:
                 due_now = dropped_cancellation_window(self.config, self.week, dropped).due(self.now)
             else:
@@ -553,34 +688,48 @@ class _Week:
         group = self.account.flat_group_id
         await self._post(notice, group, notices.render(text, self.config), track)
 
-    async def _post(self, action: Action, group: str, text: str, track: MessageKind | None) -> bool:
-        """Send `text` and record `action` as sent. Returns False if the send failed; nothing
+    async def _post(
+        self,
+        action: Action,
+        group: str,
+        text: str,
+        track: MessageKind | None,
+        *,
+        record: Callable[[], None] | None = None,
+        week: date | None = None,
+    ) -> bool:
+        """Send `text` and record `action` as sent: in the week's actions, or with `record`
+        instead, for `week` instead of the week's own. Returns False if the send failed; nothing
         is recorded then."""
+        week = self.week if week is None else week
         timestamp: int | None
         try:
             timestamp = await self.client.send_group_message(group, text)
         except SendResponseUnreadable as e:
             timestamp = None
             if track is None:
-                logger.warning("sent %s for week %s, but %s", action, self.week, e)
+                logger.warning("sent %s for week %s, but %s", action, week, e)
             else:
                 # Expected and explained by the message; the traceback would only show rest.py.
                 logger.error(  # noqa: TRY400
                     "sent %s for week %s, but %s; its reactions cannot be counted",
                     action,
-                    self.week,
+                    week,
                     e,
                 )
         except Exception as e:
-            logger.exception("sending %s for week %s failed; retrying next tick", action, self.week)
-            self.failures.append(SendFailure(self.week, action, type(e).__name__))
+            logger.exception("sending %s for week %s failed; retrying next tick", action, week)
+            self.failures.append(SendFailure(week, action, type(e).__name__))
             return False
         with self.store.transaction():
-            self.store.record_action(self.week, action, self.now)
+            if record is not None:
+                record()
+            else:
+                self.store.record_action(week, action, self.now)
             if track is not None and timestamp is not None:
-                self.store.track_message(self.week, track, group, self.account.number, timestamp)
-        logger.info("sent %s for week %s", action, self.week)
-        self.steps.append(Step(self.week, action, Outcome.SENT))
+                self.store.track_message(week, track, group, self.account.number, timestamp)
+        logger.info("sent %s for week %s", action, week)
+        self.steps.append(Step(week, action, Outcome.SENT))
         return True
 
     def _skip(self, action: Action) -> None:

@@ -306,6 +306,8 @@ TEMPLATE_PLACEHOLDERS: dict[TemplateName, frozenset[str]] = {
     TemplateName.ANNOUNCEMENT: COMMON_PLACEHOLDERS,  # dinner group, bilingual
     TemplateName.TALLY: COMMON_PLACEHOLDERS | {"count"},  # flat group, German
     TemplateName.INTRODUCTION: COMMON_PLACEHOLDERS,  # dinner group, bilingual; via /introduce
+    # dinner group, bilingual; once when a /hiatus takes effect
+    TemplateName.HIATUS: COMMON_PLACEHOLDERS,
     TemplateName.HELLO: COMMON_PLACEHOLDERS,  # direct message to the operator during `odin setup`
     # flat group, optional test at the end of `odin setup`
     TemplateName.FLAT_TEST: COMMON_PLACEHOLDERS,
@@ -325,11 +327,16 @@ def dropped_placeholder_values(week: dt.date) -> dict[str, str]:
 # working. One in `TEMPLATE_FALLBACKS` uses its fallback's text meanwhile; one without a fallback
 # is not sent at all (`/introduce` asks for a text first).
 OPTIONAL_TEMPLATES = frozenset(
-    {TemplateName.WEEKDAY_CHANGE_CANCELLATION, TemplateName.INTRODUCTION}
+    {TemplateName.WEEKDAY_CHANGE_CANCELLATION, TemplateName.INTRODUCTION, TemplateName.HIATUS}
 )
 # Optional template -> the template used while it is not set. The fallback's placeholders must be
-# a subset of the template's.
-TEMPLATE_FALLBACKS = {TemplateName.WEEKDAY_CHANGE_CANCELLATION: TemplateName.CANCELLATION}
+# a subset of the template's. The hiatus notice falls back to the cancellation: that is at least
+# true for the running week, and the engine leaves it out when the dinner group has had that
+# week's cancellation already.
+TEMPLATE_FALLBACKS = {
+    TemplateName.WEEKDAY_CHANGE_CANCELLATION: TemplateName.CANCELLATION,
+    TemplateName.HIATUS: TemplateName.CANCELLATION,
+}
 
 
 class TemplateProblem(StrEnum):
@@ -404,6 +411,7 @@ class Templates:
     flat_test: Template
     # Optional (see `OPTIONAL_TEMPLATES`): None while not set.
     weekday_change_cancellation: Template | None = None
+    hiatus: Template | None = None
     introduction: Template | None = None
 
     def find(self, name: TemplateName) -> Template | None:

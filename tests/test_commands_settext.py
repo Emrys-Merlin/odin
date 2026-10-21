@@ -158,7 +158,7 @@ def test_unknown_name(store: Store, name: str) -> None:
     assert reply == (
         f"Einen Text „{name}“ gibt es nicht. Ändern lassen sich: "
         "flat_ask, nudge, announcement, cancellation, weekday_change_cancellation, tally, "
-        "introduction."
+        "introduction, hiatus."
     )
     assert stored(store) == {}
 

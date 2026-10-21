@@ -138,6 +138,17 @@ Dinner is at {dinner_time}. If you like, come at {cook_time} and help cook – t
 optional. The people from the flat are happy to answer any questions.
 """
 
+# Optional: posted once when the flat puts ODIN to sleep with /hiatus. Until /resume, the dinner
+# group gets nothing else; the next announcement (or cancellation) after it says it is back.
+# Left out, the cancellation above is sent instead (not twice in a week that got it already).
+hiatus = """
+Das offene Abendessen macht eine Pause. 💤 Bis auf Weiteres findet kein Abendessen statt – \
+sobald es wieder losgeht, melden wir uns hier wie gewohnt. Bis bald!
+
+The open dinner is taking a break. 💤 Until further notice, there will be no dinner – once it \
+starts again, you will hear from us here as usual. See you soon!
+"""
+
 # Direct message to the operator during `odin setup`. They reply to it, so that ODIN gets their
 # profile key (without it, ODIN ends up only "invited" to groups the operator adds it to).
 hello = """

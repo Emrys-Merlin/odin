@@ -102,6 +102,8 @@ Wednesday's decision and the nudge is skipped, so the dinner group never sees an
   own; see [Move dinner to another day](move-dinner-day.md).
 - **Skipped with `/skip`:** that week is off anyway; its cancellation goes out at the usual
   decision time. See [Skip a date in advance](skip-a-date.md).
+- **During a break:** while ODIN sleeps after `/hiatus` there is nothing to cancel; see
+  [Take a break](take-a-break.md).
 
 Why it needs a reaction and when exactly it is sent: [Reactions](../../explanation/reactions.md)
 and [The weekly cycle](../../explanation/weekly-cycle.md).

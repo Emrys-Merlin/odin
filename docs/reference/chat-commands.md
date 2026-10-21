@@ -50,4 +50,8 @@ What the commands that change something do in detail is explained elsewhere:
 - `/skip`, `/unskip`:
   [The weekly cycle](../explanation/weekly-cycle.md#skipping-a-date-in-advance). Skip dates are
   stored in the state DB; there is no config key for them.
+- `/hiatus`, `/resume`:
+  [The weekly cycle](../explanation/weekly-cycle.md#taking-a-break). The notice is the `hiatus`
+  template; see [Templates](templates.md). The hiatus is stored in the state DB; there is no
+  config key for it.
 - `/settext`, `/resettext`, `/vars`: [Templates](templates.md).

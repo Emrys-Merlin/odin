@@ -51,7 +51,7 @@ def test_keys() -> None:
         template_key(TemplateName.HELLO)
 
 
-def test_editable_templates_are_the_weekly_ones_in_schedule_order_then_the_introduction() -> None:
+def test_editable_templates_are_the_weekly_ones_then_introduction_and_hiatus() -> None:
     # /texts and the "Ändern lassen sich" lists show this order.
     assert [str(name) for name in EDITABLE_TEMPLATES] == [
         "flat_ask",
@@ -61,6 +61,7 @@ def test_editable_templates_are_the_weekly_ones_in_schedule_order_then_the_intro
         "weekday_change_cancellation",
         "tally",
         "introduction",
+        "hiatus",
     ]
     assert not TemplateName.HELLO.editable
     assert not TemplateName.FLAT_TEST.editable

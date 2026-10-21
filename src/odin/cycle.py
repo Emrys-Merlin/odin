@@ -44,7 +44,7 @@ class StepName(StrEnum):
 
 class TemplateName(StrEnum):
     """A message template: the weekly ones in schedule order, the introduction (`/introduce`),
-    then the two of `odin setup`.
+    the hiatus notice (`/hiatus`), then the two of `odin setup`.
 
     The value is the template's name everywhere outside the code: the key in the TOML
     (``[templates]``), in overrides (``templates.<name>``) and in chat commands.
@@ -57,6 +57,7 @@ class TemplateName(StrEnum):
     WEEKDAY_CHANGE_CANCELLATION = "weekday_change_cancellation"
     TALLY = "tally"
     INTRODUCTION = "introduction"
+    HIATUS = "hiatus"  # posted once when a /hiatus takes effect
     HELLO = "hello"
     FLAT_TEST = "flat_test"
 

@@ -57,6 +57,8 @@ def test_texts(store: Store) -> None:
         "(nicht gesetzt, es gilt cancellation)\n"
         "tally (WG-Gruppe) – Anzahl der Zusagen zum Bestellen\n"
         "introduction (Essensgruppe) – Vorstellung von Odin, per /introduce (nicht gesetzt)\n"
+        "hiatus (Essensgruppe) – Hinweis, dass Odin per /hiatus Pause macht "
+        "(nicht gesetzt, es gilt cancellation)\n"
         "\n"
         "Anzeigen: /text <name>"
     ]
@@ -74,7 +76,7 @@ def test_texts_marks_overrides(store: Store) -> None:
 
 def test_texts_lists_only_the_editable_templates(store: Store) -> None:
     [reply] = handle("/texts", context(store))
-    listed = [line.split()[0] for line in reply.splitlines()[1:8]]
+    listed = [line.split()[0] for line in reply.splitlines()[1:9]]
     assert listed == list(EDITABLE_TEMPLATES)
     assert "hello" not in reply
     assert "flat_test" not in reply
@@ -137,7 +139,7 @@ def test_text_unknown_name(store: Store, text: str) -> None:
     assert handle(text, context(store)) == [
         f"Unbekannter Text „{name}“. Möglich: "
         "flat_ask, nudge, announcement, cancellation, weekday_change_cancellation, tally, "
-        "introduction"
+        "introduction, hiatus"
     ]
 
 
@@ -145,7 +147,7 @@ def test_text_without_name(store: Store) -> None:
     assert handle("/text", context(store)) == [
         "Welcher Text? Möglich: "
         "flat_ask, nudge, announcement, cancellation, weekday_change_cancellation, tally, "
-        "introduction\n"
+        "introduction, hiatus\n"
         "Z. B. /text announcement"
     ]
 

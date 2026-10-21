@@ -19,6 +19,7 @@ DESCRIPTIONS: dict[TemplateName, tuple[str, str]] = {
     TemplateName.WEEKDAY_CHANGE_CANCELLATION: (DINNER, "Absage beim Wechsel des Wochentags"),
     TemplateName.TALLY: (FLAT, "Anzahl der Zusagen zum Bestellen"),
     TemplateName.INTRODUCTION: (DINNER, "Vorstellung von Odin, per /introduce"),
+    TemplateName.HIATUS: (DINNER, "Hinweis, dass Odin per /hiatus Pause macht"),
 }
 
 TEXTS_INTRO = "Texte:"
