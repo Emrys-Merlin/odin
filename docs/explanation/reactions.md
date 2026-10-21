@@ -18,12 +18,19 @@ counted without parsing text. The emoji is 👍 by default and configurable (`em
   flat group, until the week's dinner starts; removing it before ODIN's next tick withdraws it.
 - An `/introduce` request is confirmed the same way, within 24 hours of ODIN's reply. Only the
   latest request counts: a new `/introduce` replaces an open one.
+- A reaction counts only in the group its message went to, even after the groups are changed.
 
 ## Why
 
 **Anyone in the flat group counts.** Membership of the flat group already says who lives in the
 flat. A separate member list in ODIN would have to be kept in sync by hand each time someone
 moves in or out — and would get it wrong exactly when it matters.
+
+**Tied to the group of the message.** ODIN remembers, for every message whose reactions it counts,
+the group it sent it to. A reaction that claims to be on that message from any other group is
+ignored, so a guest can never vote in the flat poll. The same record keeps a week running when
+the groups are changed mid-week: the flat ask in the old flat group still collects its 👍, as
+long as ODIN is still in that group (see [Change the groups](../how-to/operate/change-groups.md)).
 
 **Withdrawal before the deadline.** People tap the wrong message or change their plans. Taking
 the 👍 back is the natural way to undo it, so ODIN honours it, as long as the decision has not
