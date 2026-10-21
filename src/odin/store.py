@@ -26,10 +26,12 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import Self
+
+from odin.clock import to_utc
 
 
 class Action(StrEnum):
@@ -191,9 +193,7 @@ SETUP_LOCK_TTL = timedelta(minutes=2)
 
 def _utc(moment: datetime) -> str:
     """Serialise as UTC, so stored timestamps sort chronologically as text."""
-    if moment.tzinfo is None or moment.utcoffset() is None:
-        raise ValueError(f"naive datetime not allowed: {moment!r}")
-    return moment.astimezone(UTC).isoformat()
+    return to_utc(moment).isoformat()
 
 
 class Store:

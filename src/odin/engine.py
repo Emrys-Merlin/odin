@@ -71,6 +71,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
 from odin import notices
+from odin.clock import to_utc
 from odin.config import Config, WeeklyTime, dropped_placeholder_values
 from odin.cycle import StepName
 from odin.reactions import count_confirmations
@@ -112,7 +113,7 @@ def dinner_week(config: Config, now: datetime) -> date:
 
     A week runs until its dinner starts; from then on it is the next week.
     """
-    now = _utc(now)
+    now = to_utc(now)
     local = now.astimezone(config.timezone)
     dinner = config.schedule.dinner
     week = local.date() + timedelta(days=(dinner.weekday - local.weekday()) % 7)
@@ -220,7 +221,7 @@ def dropped_cancellation_window(config: Config, week: date, switch: datetime) ->
     """When the cancellation of dropped week `week` is due: from the `switch` that dropped it
     until the week's dinner starts, cut short by the catch-up grace counted from the switch."""
     dinner = config.when(config.schedule.dinner, week).astimezone(UTC)
-    return _window(config, StepName.DECISION, (Action.CANCELLATION,), _utc(switch), dinner)
+    return _window(config, StepName.DECISION, (Action.CANCELLATION,), to_utc(switch), dinner)
 
 
 @dataclass(frozen=True)
@@ -247,7 +248,7 @@ def transition(new: Config, switch: datetime) -> Transition:
     that order, so the new week's steps before the switch are the *last* ones of that order;
     within the new week they would have to be the *first* ones — so it is all of them or none.
     """
-    switch = _utc(switch)
+    switch = to_utc(switch)
     week = dinner_week(new, switch)
     starts = [window.start for window in step_windows(new, week)]
     if all(start > switch for start in starts):
@@ -289,7 +290,7 @@ async def reconcile(
     even if nothing of it was recorded. Right after a new dinner weekday took over, a week is
     recorded after that one, so it never existed and is left alone.
     """
-    now = _utc(now)
+    now = to_utc(now)
     current = dinner_week(config, now)
     earlier = set(store.unfinished_weeks_before(current))
     previous = current - timedelta(weeks=1)
@@ -544,9 +545,3 @@ class _Week:
         self.store.record_action(self.week, action, self.now, Outcome.SKIPPED)
         logger.info("skipped %s for week %s", action, self.week)
         self.steps.append(Step(self.week, action, Outcome.SKIPPED))
-
-
-def _utc(moment: datetime) -> datetime:
-    if moment.tzinfo is None or moment.utcoffset() is None:
-        raise ValueError(f"naive datetime not allowed: {moment!r}")
-    return moment.astimezone(UTC)
