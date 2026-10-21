@@ -23,7 +23,7 @@ Switching mid-week also works if ODIN stays in the old group(s) until the week i
   week's flat ask in the old flat group still confirms dinner, and the tally still counts the
   announcement in the old dinner group. See [Reactions](../../explanation/reactions.md#the-rules).
 - Everything ODIN sends after the switch goes to the new groups: the nudge, the decision, the
-  tally and command replies.
+  tally, command replies and a confirmed `/introduce`.
 - Chat commands are answered only in the current flat group, so tell the flatmates where to write.
 
 ## Choose other groups
@@ -57,6 +57,9 @@ Switching mid-week also works if ODIN stays in the old group(s) until the week i
     ```bash
     podman exec -it odin odin setup --redo test
     ```
+
+5. Optional, for a new dinner group: let ODIN introduce itself there, see
+   [Introduce ODIN to the dinner group](../chat/introduce-odin.md).
 
 The running bot pauses while the wizard runs and picks up the new groups by itself within 30 s;
 no restart needed. The new IDs are stored in ODIN's database.

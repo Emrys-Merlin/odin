@@ -44,6 +44,9 @@ What the commands that change something do in detail is explained elsewhere:
   dinner to another weekday: [Changing the dinner weekday](../explanation/weekday-change.md).
 - `/cancel`: [Reactions](../explanation/reactions.md) and
   [The weekly cycle](../explanation/weekly-cycle.md).
+- `/introduce`: [Reactions](../explanation/reactions.md) and
+  [The weekly cycle](../explanation/weekly-cycle.md#introducing-odin). The text is the
+  `introduction` template; see [Templates](templates.md).
 - `/skip`, `/unskip`:
   [The weekly cycle](../explanation/weekly-cycle.md#skipping-a-date-in-advance). Skip dates are
   stored in the state DB; there is no config key for them.

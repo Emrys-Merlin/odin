@@ -4,7 +4,7 @@ Everything is keyed by the dinner week, identified by the date of its Sunday. Th
 
 - the **actions** performed per week (so nothing is ever sent twice),
 - the **tracked messages** whose reactions matter (flat poll, dinner announcement, the
-  confirmation request of `/cancel`),
+  confirmation requests of `/cancel` and `/introduce`),
 - the current **reactions** on those messages,
 - **settings** chosen at setup time (e.g. the group IDs) and the **setup lock**,
 - config **overrides** made via chat, applied on top of the TOML config (see `odin.overrides`),
@@ -13,7 +13,10 @@ Everything is keyed by the dinner week, identified by the date of its Sunday. Th
 - the **applied dinner**: the dinner time the weeks are currently run under, and a dinner week a
   new weekday from the config file waits for (see `odin.overrides.effective_config`),
 - the **skip dates**: dinner days set via `/skip` on which there is no dinner (see
-  `odin.commands.skip`).
+  `odin.commands.skip`),
+- the **introductions**: which confirmed `/introduce` requests were posted to the dinner group,
+  and when (see `odin.commands.introduce`). They belong to no dinner week, so they are not
+  actions.
 
 A Signal message is identified by its author and its (millisecond) Signal timestamp, which is also
 how incoming reactions refer to their target message.
@@ -46,6 +49,10 @@ class Action(StrEnum):
     # `odin.notices`). The retry of the flat ask is the week's flat poll from then on.
     FLAT_ASK_RETRY = "flat_ask_retry"
     ANNOUNCEMENT_NOTICE = "announcement_notice"
+    # The introduction after a confirmed /introduce. Never in `actions`: it belongs to no week and
+    # may be sent any number of times; each send is recorded in `introductions` instead. Named
+    # here so that a failed send is reported like any other (see `odin.health`).
+    INTRODUCTION = "introduction"
 
 
 class Outcome(StrEnum):
@@ -61,6 +68,9 @@ class MessageKind(StrEnum):
     FLAT_POLL = "flat_poll"
     DINNER_ANNOUNCEMENT = "dinner_announcement"
     CANCEL_REQUEST = "cancel_request"  # ODIN's reply to /cancel; a reaction confirms it
+    # ODIN's reply to /introduce; a reaction confirms it. Tracked under the dinner week it was
+    # made in, but only the latest one counts (see `odin.events`).
+    INTRODUCTION_REQUEST = "introduction_request"
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,6 +190,16 @@ _MIGRATIONS: tuple[str, ...] = (
         day      TEXT PRIMARY KEY,
         added_by TEXT NOT NULL,
         added_at TEXT NOT NULL
+    );
+    """,
+    # No foreign key to `messages`: a request is untracked once a newer one replaces it, but its
+    # introduction stays recorded.
+    """
+    CREATE TABLE introductions (
+        request_author    TEXT NOT NULL,
+        request_timestamp INTEGER NOT NULL,
+        sent_at           TEXT NOT NULL,
+        PRIMARY KEY (request_author, request_timestamp)
     );
     """,
 )
@@ -319,6 +339,19 @@ class Store:
             (week.isoformat(), kind.value),
         ).fetchone()
         return None if row is None else _message(row)
+
+    def tracked_messages(self, kind: MessageKind) -> list[TrackedMessage]:
+        """Every tracked message of ``kind``, of all weeks, oldest first."""
+        rows = self._conn.execute(
+            "SELECT week, kind, group_id, author, timestamp FROM messages"
+            " WHERE kind = ? ORDER BY timestamp",
+            (kind.value,),
+        ).fetchall()
+        return [_message(row) for row in rows]
+
+    def untrack_messages(self, kind: MessageKind) -> int:
+        """Stop tracking every message of ``kind``, with its reactions. Returns how many."""
+        return self._conn.execute("DELETE FROM messages WHERE kind = ?", (kind.value,)).rowcount
 
     def find_message(self, author: str, timestamp: int) -> TrackedMessage | None:
         """Look up a tracked message the way an incoming reaction refers to it."""
@@ -506,6 +539,33 @@ class Store:
             ("" if since is None else since.isoformat(),),
         ).fetchall()
         return [_skip_date(row) for row in rows]
+
+    # Introductions
+
+    def record_introduction(self, request: TrackedMessage, sent_at: datetime) -> bool:
+        """Record that the introduction confirmed on ``request`` was posted.
+
+        Returns False (and keeps the original record) if it was already recorded.
+        """
+        cursor = self._conn.execute(
+            "INSERT OR IGNORE INTO introductions (request_author, request_timestamp, sent_at)"
+            " VALUES (?, ?, ?)",
+            (request.author, request.timestamp, _utc(sent_at)),
+        )
+        return cursor.rowcount == 1
+
+    def introduction_time(self, request: TrackedMessage) -> datetime | None:
+        """When the introduction confirmed on ``request`` was posted; None if it was not."""
+        row = self._conn.execute(
+            "SELECT sent_at FROM introductions WHERE request_author = ? AND request_timestamp = ?",
+            (request.author, request.timestamp),
+        ).fetchone()
+        return None if row is None else datetime.fromisoformat(row[0])
+
+    def last_introduction(self) -> datetime | None:
+        """When an introduction was last posted; None if never."""
+        (sent_at,) = self._conn.execute("SELECT max(sent_at) FROM introductions").fetchone()
+        return None if sent_at is None else datetime.fromisoformat(sent_at)
 
     # Setup lock: held by `odin setup` while it runs, so `odin run` stays out of its way. It is
     # a settings row "<token> <heartbeat>"; the holder refreshes the heartbeat, and a lock whose

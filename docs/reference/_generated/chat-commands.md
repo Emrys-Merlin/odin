@@ -18,11 +18,12 @@ In the order `/help` lists them. Usage and summary are the German texts `/help` 
 | `/cancel` | `!cancel` | `/cancel` | Sagt das Essen dieser Woche ab – nach Bestätigung per Reaktion. |
 | `/skip` | `!skip` | `/skip [JJJJ-MM-TT]` | Trägt einen Tag ohne Essen im Voraus ein; ohne Datum: zeigt die Liste. |
 | `/unskip` | `!unskip` | `/unskip <JJJJ-MM-TT>` | Nimmt einen mit /skip eingetragenen Tag zurück. |
+| `/introduce` | `!introduce` | `/introduce` | Stellt Odin der Essensgruppe vor – nach Bestätigung per Reaktion. |
 | `/version` | `!version` | `/version` | Zeigt, welche Version von Odin läuft. |
 
 ## Argument values
 
-`<name>` (`/text`, `/settext`, `/resettext`, `/vars`) is one of the chat-editable templates: `flat_ask`, `nudge`, `announcement`, `cancellation`, `weekday_change_cancellation`, `tally`.
+`<name>` (`/text`, `/settext`, `/resettext`, `/vars`) is one of the chat-editable templates: `flat_ask`, `nudge`, `announcement`, `cancellation`, `weekday_change_cancellation`, `tally`, `introduction`.
 
 `<punkt>` (`/settime`, `/resettime`) is one of the schedule points, in schedule order: `flat_ask`, `nudge`, `flat_deadline`, `rsvp_by`, `tally`, `cook`, `dinner`.
 

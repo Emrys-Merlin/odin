@@ -330,6 +330,30 @@ def test_weekday_change_cancellation_when_set() -> None:
     assert template.render(**values) == "Ab jetzt Sonntag; 26.10. fällt aus, los geht's am 02.11."
 
 
+def test_introduction_is_optional_without_fallback() -> None:
+    # Optional (#148): a config written before it existed keeps working; /introduce asks for it.
+    c = parse_config(config())
+    assert not c.templates.is_set(TemplateName.INTRODUCTION)
+    assert c.templates.find(TemplateName.INTRODUCTION) is None
+    with pytest.raises(LookupError, match="introduction is not set"):
+        c.templates.get(TemplateName.INTRODUCTION)
+
+
+def test_introduction_when_set() -> None:
+    text = "Hallo, jeden {dinner_day_de} {emoji}\n\nHi, every {dinner_day_en} {emoji}"
+    c = parse_config({"templates": {**TEMPLATES, "introduction": text}})
+    template = c.templates.get(TemplateName.INTRODUCTION)
+    assert template.render(**c.placeholder_values()) == (
+        "Hallo, jeden Sonntag 👍\n\nHi, every Sunday 👍"
+    )
+
+
+def test_introduction_takes_no_count() -> None:
+    templates = {**TEMPLATES, "introduction": "{count}"}
+    with pytest.raises(ConfigError, match=r"templates\.introduction: unknown placeholder"):
+        parse_config({"templates": templates})
+
+
 def test_dropped_dates_only_in_weekday_change_cancellation() -> None:
     templates = {**TEMPLATES, "cancellation": "{dropped_date} fällt aus"}
     with pytest.raises(ConfigError, match=r"templates\.cancellation: unknown placeholder"):

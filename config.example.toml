@@ -59,7 +59,8 @@ name = "Odin 🍽️"
 # Unknown placeholders are rejected at startup. Write {{ and }} for literal braces.
 # Use the weekday placeholders instead of writing weekday names, so the texts stay right when
 # the schedule changes.
-# Flat-group texts are German; dinner-group texts are German, blank line, English.
+# Flat-group texts are German; dinner-group texts (announcement, cancellation,
+# weekday_change_cancellation, introduction) are German, blank line, English.
 # hello and flat_test are only sent by `odin setup`.
 [templates]
 flat_ask = """
@@ -112,6 +113,29 @@ message.
 tally = """
 Bisher haben {count} Personen mit {emoji} auf die Ankündigung reagiert. Plus-Ones stehen \
 gegebenenfalls in den Antworten darauf.
+"""
+
+# Optional: ODIN's introduction of itself, posted to the dinner group after a confirmed
+# `/introduce` (any number of times, e.g. when new people joined). Left out, `/introduce` asks
+# for a text first.
+introduction = """
+Hallo, ich bin Odin 🍽️, der Bot für das offene Abendessen am {dinner_day_de}!
+Jeden {deadline_day_de} um {deadline} schreibe ich hier, ob am {dinner_day_de} das Essen \
+stattfindet – oder ob es diesmal ausfällt.
+Wenn du kommst, reagiere bitte mit {emoji} auf meine Ankündigung, am besten bis \
+{rsvp_by_day_de} {rsvp_by} – dann bestellen wir das Essen. Bringst du jemanden mit? Dann \
+schreib das bitte als Antwort auf die Ankündigung.
+Essen gibt es um {dinner_time}. Wer mag, kann schon um {cook_time} kommen und beim Kochen \
+helfen – das ist völlig freiwillig. Fragen beantworten die Leute aus der WG gern.
+
+Hi, I'm Odin 🍽️, the bot for the open {dinner_day_en} dinner!
+Every {deadline_day_en} at {deadline} I post here whether dinner takes place on \
+{dinner_day_en} – or whether it is cancelled this time.
+If you are coming, please react with {emoji} to my announcement, ideally by {rsvp_by_day_en} \
+{rsvp_by} – that is when we order the food. Bringing someone? Please say so in a reply to the \
+announcement.
+Dinner is at {dinner_time}. If you like, come at {cook_time} and help cook – that is entirely \
+optional. The people from the flat are happy to answer any questions.
 """
 
 # Direct message to the operator during `odin setup`. They reply to it, so that ODIN gets their

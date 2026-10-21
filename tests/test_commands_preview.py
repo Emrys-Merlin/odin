@@ -14,6 +14,7 @@ TEMPLATES = {
     "cancellation": "Abgesagt.\n\nCancelled.",
     "announcement": "Kochen {cook_time}, Essen {dinner_time}, {emoji} bis {rsvp_by}",
     "tally": "{count} mal {emoji}",
+    "introduction": "Hallo, {dinner_day_de} {emoji}\n\nHi, {dinner_day_en} {emoji}",
     "hello": "Hallo",
     "flat_test": "Test",
 }
