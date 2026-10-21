@@ -506,3 +506,45 @@ def test_when_rejects_a_day_without_dinner() -> None:
     c = parse_config(config())
     with pytest.raises(ValueError, match="not a dinner day"):
         c.when(c.schedule.flat_ask, dt.date(2026, 10, 10))
+
+
+# --- commands -----------------------------------------------------------------------------------
+
+UUID = "5c6a3e2b-1f0d-4c8e-9a7b-2d3e4f5a6b7c"
+
+
+def test_commands_defaults() -> None:
+    commands = parse_config(config()).commands
+    assert commands.direct_senders == frozenset()
+    assert commands.direct_notice is True
+    assert not commands.allows("+4915100000002", UUID)
+
+
+def test_direct_senders_match_number_or_uuid() -> None:
+    commands = parse_config(
+        config(
+            commands={"direct_senders": ["+4915100000002", UUID.upper()], "direct_notice": False}
+        )
+    ).commands
+    assert commands.direct_notice is False
+    assert commands.allows("+4915100000002", None)
+    assert commands.allows("+4915100000003", UUID)
+    assert commands.allows(UUID.upper())
+    assert not commands.allows("+4915100000003", None)
+
+
+@pytest.mark.parametrize(
+    "commands",
+    [
+        {"direct_senders": "+4915100000002"},
+        {"direct_senders": ["004915100000002"]},
+        {"direct_senders": ["Tim"]},
+        {"direct_senders": [UUID[:-1]]},
+        {"direct_senders": [4915100000002]},
+        {"direct_notice": "yes"},
+        {"direct_sender": []},
+    ],
+)
+def test_invalid_commands(commands: dict[str, Any]) -> None:
+    with pytest.raises(ConfigError, match="commands"):
+        parse_config(config(commands=commands))

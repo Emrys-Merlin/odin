@@ -41,8 +41,11 @@ From that follow a few principles:
 - Chat-command replies are German UI strings in code, not config templates: they explain ODIN
   itself and must stay correct whatever the templates say.
 - Command names and their arguments are English only (`/nudge on`, weekdays as `thu`), never
-  mixed with German; replies are in German. Commands are answered in the flat group only, so
-  guests never see the bot's controls. See [Chat commands](../reference/chat-commands.md).
+  mixed with German; replies are in German. Commands are answered in the flat group, so
+  guests never see the bot's controls. People on an allowlist may also send them in a direct
+  message, to spare the flat group the round trip; a change made that way is told to the flat
+  group in one line, unless the flat turns that off. Anyone else writing to ODIN directly gets
+  no answer. See [Chat commands](../reference/chat-commands.md).
 
 ## Non-goals for the MVP
 

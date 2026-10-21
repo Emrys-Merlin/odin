@@ -153,10 +153,12 @@ SKIP = Command(
     usage="/skip [JJJJ-MM-TT]",
     summary="Trägt einen Tag ohne Essen im Voraus ein; ohne Datum: zeigt die Liste.",
     run=run_skip,
+    changes=True,
 )
 UNSKIP = Command(
     name="unskip",
     usage="/unskip <JJJJ-MM-TT>",
     summary="Nimmt einen mit /skip eingetragenen Tag zurück.",
     run=run_unskip,
+    changes=True,
 )

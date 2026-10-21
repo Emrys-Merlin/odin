@@ -311,10 +311,16 @@ def test_events_and_direct_messages_share_the_receive_stream(
         return events, dms
 
     events, dms = asyncio.run(collect())
-    assert [type(event) for event in events] == [ReactionEvent, GroupMessage]
-    assert dms == [
-        DirectMessage(sender="+4915100000002", text="Ja, das bin ich.", timestamp=1760454500000)
-    ]
+    direct = DirectMessage(
+        sender="+4915100000002",
+        text="Ja, das bin ich.",
+        timestamp=1760454500000,
+        sender_uuid="5c6a3e2b-1f0d-4c8e-9a7b-2d3e4f5a6b7c",
+        sender_name="Alex",
+    )
+    assert events == [direct, *events[1:]]
+    assert [type(event) for event in events] == [DirectMessage, ReactionEvent, GroupMessage]
+    assert dms == [direct]
     assert urls == [f"ws://signal-api:8080/v1/receive/{NUMBER}"] * 2
 
 

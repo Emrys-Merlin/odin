@@ -144,10 +144,12 @@ SETTEXT = Command(
     usage="/settext <name>",
     summary="Ändert einen Text; der neue Text kommt in die Zeilen darunter.",
     run=settext,
+    changes=True,
 )
 RESETTEXT = Command(
     name="resettext",
     usage="/resettext <name>",
     summary="Setzt einen Text auf den Standardtext zurück.",
     run=resettext,
+    changes=True,
 )

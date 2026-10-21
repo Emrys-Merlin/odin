@@ -18,6 +18,14 @@ UNTRACKED = "{emoji} nicht zählbar"
 LAPSES = "Ohne {emoji} passiert nichts; die Anfrage verfällt, wenn das Essen beginnt ({dinner})."
 RESUME_HINT = "/resume beendet die Pause."
 
+# Direct messages from a sender on `commands.direct_senders` (see `odin.commands.handle_direct`).
+DIRECT_NOT_A_COMMAND = "Hier verstehe ich nur Befehle – /help zeigt sie."
+DIRECT_GROUP_ONLY = (
+    "{command} geht nur in der WG-Gruppe: Dort bestätigt es jemand mit {emoji}, und alle sehen es."
+)
+# Told to the flat group when a command from a direct message changed something.
+DIRECT_NOTICE = "✏️ {name} hat per Direktnachricht geändert: {command}"
+
 WEEKDAYS_SHORT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 
 # An optional template without a fallback that is not set (`introduction`).

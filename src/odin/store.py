@@ -283,6 +283,11 @@ class Store:
     def close(self) -> None:
         self._conn.close()
 
+    @property
+    def changes(self) -> int:
+        """How many rows this store has written so far; tells whether a call wrote anything."""
+        return self._conn.total_changes
+
     def __enter__(self) -> Self:
         return self
 

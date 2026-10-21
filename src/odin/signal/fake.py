@@ -16,10 +16,18 @@ class SentMessage:
     timestamp: int
 
 
+@dataclass(frozen=True, slots=True)
+class SentDirectMessage:
+    recipient: str
+    text: str
+    timestamp: int
+
+
 class FakeSignalClient:
     """Records sent messages and yields events that tests inject.
 
-    Sent messages get strictly increasing timestamps starting at ``first_timestamp``.
+    Group messages go to ``sent``, direct messages to ``sent_direct``; both get strictly
+    increasing timestamps (shared) starting at ``first_timestamp``.
     ``events()`` yields injected events in order and ends once ``close()`` is called and
     all earlier events are consumed; like the real client, it tells ``on_connection`` that its
     connection is up when it starts and down when it ends. ``fail_sends()`` makes the next group
@@ -37,6 +45,7 @@ class FakeSignalClient:
         self.groups = list(groups or [])
         self.on_connection = on_connection
         self.sent: list[SentMessage] = []
+        self.sent_direct: list[SentDirectMessage] = []
         self._next_timestamp = first_timestamp
         self._queue: asyncio.Queue[Event | None] = asyncio.Queue()
         self._send_failures: deque[tuple[BaseException, bool]] = deque()
@@ -60,6 +69,15 @@ class FakeSignalClient:
             raise failure[0]
         return timestamp
 
+    async def send_direct_message(self, recipient: str, text: str) -> int:
+        return self._send_direct(recipient, text)
+
+    def _send_direct(self, recipient: str, text: str) -> int:
+        timestamp = self._next_timestamp
+        self._next_timestamp += 1
+        self.sent_direct.append(SentDirectMessage(recipient, text, timestamp))
+        return timestamp
+
     async def list_groups(self) -> list[Group]:
         return list(self.groups)
 
@@ -81,13 +99,6 @@ class FakeSignalClient:
 
 
 @dataclass(frozen=True, slots=True)
-class SentDirectMessage:
-    recipient: str
-    text: str
-    timestamp: int
-
-
-@dataclass(frozen=True, slots=True)
 class AdminCall:
     """One call to a :class:`FakeSignalAdmin` method, with its arguments by name."""
 
@@ -103,7 +114,6 @@ class FakeSignalAdmin(FakeSignalClient):
     returned. Without a queued outcome a call succeeds: ``register`` and ``set_pin`` do
     nothing, ``verify`` adds ``number`` to ``accounts``, and the getters return the current
     ``api_info``, ``accounts`` and ``groups`` (which tests may change between calls).
-    Direct messages are sent like group messages (shared timestamps) into ``sent_direct``;
     ``inject_direct()`` feeds ``direct_messages()``, which ends after ``close()``.
     """
 
@@ -119,7 +129,6 @@ class FakeSignalAdmin(FakeSignalClient):
         self.accounts = list(accounts or [])
         self.api_info = api_info or ApiInfo(mode="json-rpc", version="0.0-fake")
         self.calls: list[AdminCall] = []
-        self.sent_direct: list[SentDirectMessage] = []
         self.profile: tuple[str, bytes | None, str | None] | None = None
         self.pin: str | None = None
         self._outcomes: dict[str, deque[object]] = defaultdict(deque)
@@ -165,13 +174,12 @@ class FakeSignalAdmin(FakeSignalClient):
         self._call("update_profile", succeed, name=name, avatar=avatar, about=about)
 
     async def send_direct_message(self, recipient: str, text: str) -> int:
-        def succeed() -> int:
-            timestamp = self._next_timestamp
-            self._next_timestamp += 1
-            self.sent_direct.append(SentDirectMessage(recipient, text, timestamp))
-            return timestamp
-
-        return self._call("send_direct_message", succeed, recipient=recipient, text=text)
+        return self._call(
+            "send_direct_message",
+            lambda: self._send_direct(recipient, text),
+            recipient=recipient,
+            text=text,
+        )
 
     async def list_groups(self) -> list[Group]:
         return self._call("list_groups", lambda: list(self.groups))

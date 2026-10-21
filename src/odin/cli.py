@@ -237,6 +237,10 @@ def _check_config(settings: Settings, clock: Clock) -> None:
     print(f"Database:     {env.db_path}")
     print(f"Timezone:     {config.timezone.key}")
     print(f"Emoji:        {config.emoji}")
+    senders = len(config.commands.direct_senders)
+    notice = "on" if config.commands.direct_notice else "off"
+    direct = f"{senders} allowed sender(s), notice to the flat group {notice}" if senders else "off"
+    print(f"DM commands:  {direct}")
     if resolution.account is None:
         print(f"Not set up yet ({resolution.missing}) — {SETUP_HINT}")
     if dinner_change is not None:

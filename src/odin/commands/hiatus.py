@@ -141,10 +141,12 @@ HIATUS = Command(
     usage="/hiatus",
     summary="Schickt Odin in Pause, bis jemand /resume schreibt – nach Bestätigung per Reaktion.",
     run=run_hiatus,
+    group_only=True,
 )
 RESUME = Command(
     name="resume",
     usage="/resume",
     summary="Beendet die Pause; ab der nächsten Frage an die WG läuft alles wie gewohnt.",
     run=run_resume,
+    changes=True,
 )

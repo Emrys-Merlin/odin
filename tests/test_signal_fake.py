@@ -162,9 +162,8 @@ def test_script_unknown_method_fails() -> None:
         FakeSignalAdmin().script("regsiter", None)
 
 
-def test_direct_messages_share_timestamps_with_group_messages() -> None:
-    fake = FakeSignalAdmin()
-
+@pytest.mark.parametrize("fake", [FakeSignalClient(), FakeSignalAdmin()])
+def test_direct_messages_share_timestamps_with_group_messages(fake: FakeSignalClient) -> None:
     async def send() -> list[int]:
         return [
             await fake.send_group_message("group.flat=", "Hallo WG"),

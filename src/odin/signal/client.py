@@ -18,6 +18,13 @@ class SignalClient(Protocol):
         """
         ...
 
+    async def send_direct_message(self, recipient: str, text: str) -> int:
+        """Send ``text`` to one person (number or UUID) and return its timestamp (ms).
+
+        Raises like `send_group_message`.
+        """
+        ...
+
     async def list_groups(self) -> list[Group]:
         """List the groups the bot account is in or invited to (see ``Group.member``)."""
         ...
@@ -68,10 +75,6 @@ class SignalAdmin(Protocol):
         self, name: str, avatar: bytes | None = None, about: str | None = None
     ) -> None:
         """Set the profile name and, if given, the avatar image and the about text."""
-        ...
-
-    async def send_direct_message(self, recipient: str, text: str) -> int:
-        """Send ``text`` to one number and return the sent message's timestamp (ms)."""
         ...
 
     async def list_groups(self) -> list[Group]:

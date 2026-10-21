@@ -28,10 +28,17 @@ What goes where:
   `ui.HELP_HINT`, `ui.weekly_time()`, `ui.override_marker()`).
 - **`run(ctx, args)`** — `args` is everything after the command word, stripped, newlines kept
   (`/settext` reads its template from the following lines). Return a `list[str]`; each string is
-  sent as one Signal message to the flat group. Return `[]` to send nothing.
+  sent as one Signal message to the flat group (or back to the sender of a direct message). Return `[]` to send nothing.
 - **The `Command`** — `name` is the lower-case word after `/` or `!` (letters only); `usage`
   is how `/help` shows it, with German argument names (`/settime <punkt> <tag> <HH:MM>`);
   `summary` is the German one-liner `/help` prints after it.
+- **`changes=True`** — set it on a command that changes settings or state. Sent in a
+  [direct message](../../reference/chat-commands.md#direct-messages), it then gets the notice to
+  the flat group, if it wrote anything to the store. A command that only shows something leaves
+  it unset.
+- **`group_only=True`** — set it on a command that returns a `TrackedReply`: a confirmation by
+  reaction counts only in the flat group, so the command is refused in a direct message before
+  it runs.
 
 The `CommandContext` (`src/odin/commands/core.py`) holds everything a command may look at:
 
@@ -42,6 +49,7 @@ The `CommandContext` (`src/odin/commands/core.py`) holds everything a command ma
 | `store` | The state DB. Commands that change settings write their overrides here. |
 | `now` | The current time, from the clock — never call `datetime.now()`. |
 | `sender`, `sender_name` | Who sent the command (number or UUID, and the profile name if known). |
+| `direct` | Whether it came in a direct message rather than the flat group. Most commands ignore it. |
 
 Commands never talk to Signal; ODIN sends what `run` returns.
 
@@ -72,7 +80,7 @@ COMMANDS: list[Command] = [
 ```
 
 That is all the wiring: `/help` lists it, and `/name` and `!name` (in any case) run it in the
-flat group.
+flat group and, for allowed senders, in a direct message.
 
 ## 3. Test it
 

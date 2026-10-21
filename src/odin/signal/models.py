@@ -30,12 +30,16 @@ class ApiInfo:
 class DirectMessage:
     """A text message sent to the bot directly (not in a group).
 
-    ``sender`` is the phone number, or the UUID if the sender hides their number.
+    ``sender`` is the phone number, or the UUID if the sender hides their number;
+    ``sender_uuid`` is the UUID (ACI) if Signal gave one, so a sender can be recognised by either.
+    ``sender_name`` is their Signal profile name, if known.
     """
 
     sender: str
     text: str
     timestamp: int
+    sender_uuid: str | None = None
+    sender_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,4 +75,4 @@ class GroupMessage:
     timestamp: int
 
 
-type Event = ReactionEvent | GroupMessage
+type Event = ReactionEvent | GroupMessage | DirectMessage
