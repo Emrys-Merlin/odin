@@ -17,7 +17,7 @@ from typing import Any
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from odin.cycle import SchedulePoint
+from odin.cycle import SchedulePoint, TemplateName
 
 
 class ConfigError(ValueError):
@@ -297,16 +297,17 @@ COMMON_PLACEHOLDERS = frozenset(
 DROPPED_PLACEHOLDERS = frozenset({"dropped_date", "first_date"})
 
 # Template name -> placeholders it may use. Templates have no defaults: texts live in the config.
-TEMPLATE_PLACEHOLDERS: dict[str, frozenset[str]] = {
-    "flat_ask": COMMON_PLACEHOLDERS,  # flat group, German
-    "nudge": COMMON_PLACEHOLDERS,  # flat group, German
-    "cancellation": COMMON_PLACEHOLDERS,  # dinner group, bilingual
+TEMPLATE_PLACEHOLDERS: dict[TemplateName, frozenset[str]] = {
+    TemplateName.FLAT_ASK: COMMON_PLACEHOLDERS,  # flat group, German
+    TemplateName.NUDGE: COMMON_PLACEHOLDERS,  # flat group, German
+    TemplateName.CANCELLATION: COMMON_PLACEHOLDERS,  # dinner group, bilingual
     # dinner group, bilingual; the cancellation of a week dropped by a dinner weekday change
-    "weekday_change_cancellation": COMMON_PLACEHOLDERS | DROPPED_PLACEHOLDERS,
-    "announcement": COMMON_PLACEHOLDERS,  # dinner group, bilingual
-    "tally": COMMON_PLACEHOLDERS | {"count"},  # flat group, German
-    "hello": COMMON_PLACEHOLDERS,  # direct message to the operator during `odin setup`
-    "flat_test": COMMON_PLACEHOLDERS,  # flat group, optional test at the end of `odin setup`
+    TemplateName.WEEKDAY_CHANGE_CANCELLATION: COMMON_PLACEHOLDERS | DROPPED_PLACEHOLDERS,
+    TemplateName.ANNOUNCEMENT: COMMON_PLACEHOLDERS,  # dinner group, bilingual
+    TemplateName.TALLY: COMMON_PLACEHOLDERS | {"count"},  # flat group, German
+    TemplateName.HELLO: COMMON_PLACEHOLDERS,  # direct message to the operator during `odin setup`
+    # flat group, optional test at the end of `odin setup`
+    TemplateName.FLAT_TEST: COMMON_PLACEHOLDERS,
 }
 
 
@@ -321,7 +322,7 @@ def dropped_placeholder_values(week: dt.date) -> dict[str, str]:
 
 # Optional templates -> the template used while one is not set, so that a config written before
 # it existed keeps working. The fallback's placeholders must be a subset of the template's.
-TEMPLATE_FALLBACKS: dict[str, str] = {"weekday_change_cancellation": "cancellation"}
+TEMPLATE_FALLBACKS = {TemplateName.WEEKDAY_CHANGE_CANCELLATION: TemplateName.CANCELLATION}
 
 
 class TemplateProblem(StrEnum):
@@ -397,12 +398,12 @@ class Templates:
     # Optional (see `TEMPLATE_FALLBACKS`): None while not set.
     weekday_change_cancellation: Template | None = None
 
-    def get(self, name: str) -> Template:
+    def get(self, name: TemplateName) -> Template:
         """Template `name`, or its fallback while an optional template is not set."""
         template = getattr(self, name)
         return getattr(self, TEMPLATE_FALLBACKS[name]) if template is None else template
 
-    def is_set(self, name: str) -> bool:
+    def is_set(self, name: TemplateName) -> bool:
         """Whether template `name` has a text of its own (always true for a required one)."""
         return getattr(self, name) is not None
 

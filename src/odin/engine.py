@@ -73,7 +73,7 @@ from datetime import UTC, date, datetime, timedelta
 from odin import notices
 from odin.clock import to_utc
 from odin.config import Config, WeeklyTime, dropped_placeholder_values
-from odin.cycle import StepName
+from odin.cycle import StepName, TemplateName
 from odin.reactions import count_confirmations
 from odin.signal import SendResponseUnreadable, SignalClient
 from odin.store import Action, MessageKind, Outcome, Store
@@ -409,7 +409,7 @@ class _Week:
                 dates = dropped_placeholder_values(self.week)
                 await self._send(
                     decision,
-                    template="weekday_change_cancellation",
+                    template=TemplateName.WEEKDAY_CHANGE_CANCELLATION,
                     dropped_date=dates["dropped_date"],
                     first_date=dates["first_date"],
                 )
@@ -468,13 +468,13 @@ class _Week:
         action: Action,
         *,
         track: MessageKind | None = None,
-        template: str | None = None,
+        template: TemplateName | None = None,
         **values: object,
     ) -> None:
-        """Post `action` with its template, or with the template named `template` instead."""
+        """Post `action` with its template (named like the action), or with `template` instead."""
         to_dinner = action in (Action.ANNOUNCEMENT, Action.CANCELLATION)
         group = self.account.dinner_group_id if to_dinner else self.account.flat_group_id
-        text = self.config.templates.get(template or action.value).render(
+        text = self.config.templates.get(template or TemplateName(action.value)).render(
             **self.config.placeholder_values(), **values
         )
         if not await self._post(action, group, text, track):

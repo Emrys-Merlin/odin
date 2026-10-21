@@ -17,6 +17,7 @@ from odin.config import (
     load_settings,
     parse_config,
 )
+from odin.cycle import TemplateName
 
 EXAMPLE = Path(__file__).parent.parent / "config.example.toml"
 
@@ -79,8 +80,8 @@ def test_example_config_loads_and_matches_defaults() -> None:
 
 def test_example_dinner_texts_are_bilingual() -> None:
     c = load_config(EXAMPLE)
-    moved = c.templates.get("weekday_change_cancellation")
-    assert c.templates.is_set("weekday_change_cancellation")
+    moved = c.templates.get(TemplateName.WEEKDAY_CHANGE_CANCELLATION)
+    assert c.templates.is_set(TemplateName.WEEKDAY_CHANGE_CANCELLATION)
     values = c.placeholder_values() | dropped_placeholder_values(dt.date(2026, 10, 25))
     for template in (c.templates.announcement, c.templates.cancellation, moved):
         german, english = template.render(**values).split("\n\n")
@@ -316,15 +317,15 @@ def test_weekday_change_cancellation_falls_back_to_cancellation() -> None:
     # Optional (#85): a config written before it existed keeps working.
     c = parse_config(config())
     assert c.templates.weekday_change_cancellation is None
-    assert not c.templates.is_set("weekday_change_cancellation")
-    assert c.templates.get("weekday_change_cancellation") == c.templates.cancellation
+    assert not c.templates.is_set(TemplateName.WEEKDAY_CHANGE_CANCELLATION)
+    assert c.templates.get(TemplateName.WEEKDAY_CHANGE_CANCELLATION) == c.templates.cancellation
 
 
 def test_weekday_change_cancellation_when_set() -> None:
     text = "Ab jetzt {dinner_day_de}; {dropped_date} fällt aus, los geht's am {first_date}"
     c = parse_config({"templates": {**TEMPLATES, "weekday_change_cancellation": text}})
-    template = c.templates.get("weekday_change_cancellation")
-    assert c.templates.is_set("weekday_change_cancellation")
+    template = c.templates.get(TemplateName.WEEKDAY_CHANGE_CANCELLATION)
+    assert c.templates.is_set(TemplateName.WEEKDAY_CHANGE_CANCELLATION)
     values = c.placeholder_values() | dropped_placeholder_values(dt.date(2026, 10, 26))
     assert template.render(**values) == "Ab jetzt Sonntag; 26.10. fällt aus, los geht's am 02.11."
 

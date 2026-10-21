@@ -17,7 +17,7 @@ Create `src/odin/commands/<name>.py`. A command is a `Command` (from `odin.comma
 whole of `/version`:
 
 ```python title="src/odin/commands/version.py"
---8<-- "src/odin/commands/version.py"
+--8 < --"src/odin/commands/version.py"
 ```
 
 What goes where:

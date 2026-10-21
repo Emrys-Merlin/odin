@@ -4,6 +4,7 @@ import pytest
 
 from odin.commands.preview import render_preview
 from odin.config import parse_config
+from odin.cycle import TemplateName
 from odin.overrides import EDITABLE_TEMPLATES
 from odin.store import MessageKind, Store
 
@@ -30,36 +31,36 @@ def announce(store: Store, week: date, reactions: dict[str, str]) -> None:
 
 
 def test_renders_with_placeholder_values(store: Store) -> None:
-    assert render_preview(CONFIG, store, "flat_ask", NOW) == (
+    assert render_preview(CONFIG, store, TemplateName.FLAT_ASK, NOW) == (
         "Essen am Sonntag? 👍 bis Mittwoch 18:00",
         False,
     )
-    assert render_preview(CONFIG, store, "announcement", NOW) == (
+    assert render_preview(CONFIG, store, TemplateName.ANNOUNCEMENT, NOW) == (
         "Kochen 17:00, Essen 18:00, 👍 bis 14:00",
         False,
     )
 
 
 @pytest.mark.parametrize("name", EDITABLE_TEMPLATES)
-def test_every_editable_template_renders(store: Store, name: str) -> None:
+def test_every_editable_template_renders(store: Store, name: TemplateName) -> None:
     text, _ = render_preview(CONFIG, store, name, NOW)
     assert "{" not in text
 
 
 def test_tally_without_announcement_uses_sample_count(store: Store) -> None:
-    assert render_preview(CONFIG, store, "tally", NOW) == ("3 mal 👍", True)
+    assert render_preview(CONFIG, store, TemplateName.TALLY, NOW) == ("3 mal 👍", True)
 
 
 def test_tally_counts_confirmations_on_this_weeks_announcement(store: Store) -> None:
     announce(store, WEEK, {"+491": "👍", "+492": "👍🏽", "+493": "❤️"})
-    assert render_preview(CONFIG, store, "tally", NOW) == ("2 mal 👍", False)
+    assert render_preview(CONFIG, store, TemplateName.TALLY, NOW) == ("2 mal 👍", False)
 
 
 def test_tally_with_announcement_but_no_reactions_is_zero(store: Store) -> None:
     announce(store, WEEK, {})
-    assert render_preview(CONFIG, store, "tally", NOW) == ("0 mal 👍", False)
+    assert render_preview(CONFIG, store, TemplateName.TALLY, NOW) == ("0 mal 👍", False)
 
 
 def test_tally_ignores_last_weeks_announcement(store: Store) -> None:
     announce(store, date(2026, 10, 4), {"+491": "👍"})
-    assert render_preview(CONFIG, store, "tally", NOW) == ("3 mal 👍", True)
+    assert render_preview(CONFIG, store, TemplateName.TALLY, NOW) == ("3 mal 👍", True)

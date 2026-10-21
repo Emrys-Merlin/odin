@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from odin.config import Config, ConfigError, WeeklyTime, parse_config
-from odin.cycle import SchedulePoint
+from odin.cycle import SchedulePoint, TemplateName
 from odin.overrides import (
     EDITABLE_TEMPLATES,
     KEYS,
@@ -43,12 +43,26 @@ BASE = make_config()
 
 
 def test_keys() -> None:
-    assert template_key("flat_ask") == "templates.flat_ask"
+    assert template_key(TemplateName.FLAT_ASK) == "templates.flat_ask"
     assert schedule_key(SchedulePoint.FLAT_DEADLINE) == "schedule.flat_deadline"
     assert NUDGE_ENABLED_KEY == "schedule.nudge.enabled"
     assert len(KEYS) == len(EDITABLE_TEMPLATES) + len(SchedulePoint) + 1
     with pytest.raises(ValueError, match="hello"):
-        template_key("hello")
+        template_key(TemplateName.HELLO)
+
+
+def test_editable_templates_are_the_weekly_ones_in_schedule_order() -> None:
+    # /texts and the "Ändern lassen sich" lists show this order.
+    assert [str(name) for name in EDITABLE_TEMPLATES] == [
+        "flat_ask",
+        "nudge",
+        "announcement",
+        "cancellation",
+        "weekday_change_cancellation",
+        "tally",
+    ]
+    assert not TemplateName.HELLO.editable
+    assert not TemplateName.FLAT_TEST.editable
 
 
 def test_formatted_values_round_trip() -> None:

@@ -34,29 +34,22 @@ from odin.config import (
     _parse_time,
     _parse_weekday,
 )
-from odin.cycle import SchedulePoint
+from odin.cycle import SchedulePoint, TemplateName
 from odin.engine import Transition, dinner_week, record_transition, transition
 from odin.store import AppliedDinner, Override, Store
 
 logger = logging.getLogger(__name__)
 
 # The weekly templates that can be edited via chat (not `hello` / `flat_test`).
-EDITABLE_TEMPLATES = (
-    "flat_ask",
-    "nudge",
-    "announcement",
-    "cancellation",
-    "weekday_change_cancellation",
-    "tally",
-)
+EDITABLE_TEMPLATES = tuple(name for name in TemplateName if name.editable)
 
 NUDGE_ENABLED_KEY = "schedule.nudge.enabled"
 _BOOLS = {"true": True, "false": False}
 
 
-def template_key(name: str) -> str:
+def template_key(name: TemplateName) -> str:
     """The override key for template `name`, e.g. ``templates.flat_ask``."""
-    if name not in EDITABLE_TEMPLATES:
+    if not name.editable:
         raise ValueError(f"not an editable template: {name!r}")
     return f"templates.{name}"
 

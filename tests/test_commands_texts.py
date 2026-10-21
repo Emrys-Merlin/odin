@@ -7,6 +7,7 @@ import pytest
 from odin.commands import CommandContext, handle
 from odin.commands.core import parse
 from odin.config import parse_config
+from odin.cycle import TemplateName
 from odin.overrides import EDITABLE_TEMPLATES, effective_config, template_key
 from odin.signal import parse_event
 from odin.store import MessageKind, Store
@@ -37,7 +38,7 @@ def context(store: Store) -> CommandContext:
     )
 
 
-def override(store: Store, name: str, text: str) -> None:
+def override(store: Store, name: TemplateName, text: str) -> None:
     # 22:30 UTC on 11 Oct is 12 Oct in Berlin.
     store.set_override(template_key(name), text, "Tim", datetime(2026, 10, 11, 22, 30, tzinfo=UTC))
 
@@ -61,7 +62,7 @@ def test_texts(store: Store) -> None:
 
 
 def test_texts_marks_overrides(store: Store) -> None:
-    override(store, "nudge", "Bitte {emoji}!")
+    override(store, TemplateName.NUDGE, "Bitte {emoji}!")
     [reply] = handle("!TEXTS", context(store))
     lines = reply.splitlines()
     assert "nudge (WG-Gruppe) – Erinnerung, wenn noch niemand bestätigt hat ✏️ 12.10. von Tim" in (
@@ -93,7 +94,7 @@ def test_text_name_is_case_insensitive(store: Store) -> None:
 
 
 def test_text_shows_the_override(store: Store) -> None:
-    override(store, "flat_ask", "Wer ist {dinner_day_de} da? {emoji}")
+    override(store, TemplateName.FLAT_ASK, "Wer ist {dinner_day_de} da? {emoji}")
     raw, preview = handle("/text flat_ask", context(store))
     assert raw == "/settext flat_ask\nWer ist {dinner_day_de} da? {emoji}"
     assert preview == "Vorschau (diese Woche): ✏️ 12.10. von Tim\nWer ist Sonntag da? 👍"
@@ -161,7 +162,7 @@ def test_text_weekday_change_cancellation_falls_back_to_cancellation(store: Stor
 
 
 def test_text_weekday_change_cancellation_with_sample_dates(store: Store) -> None:
-    override(store, "weekday_change_cancellation", MOVED)
+    override(store, TemplateName.WEEKDAY_CHANGE_CANCELLATION, MOVED)
     [listing] = handle("/texts", context(store))
     assert (
         "weekday_change_cancellation (Essensgruppe) – Absage beim Wechsel des Wochentags "
@@ -176,7 +177,7 @@ def test_text_weekday_change_cancellation_with_sample_dates(store: Store) -> Non
 
 
 def test_text_weekday_change_cancellation_of_a_dropped_week(store: Store) -> None:
-    override(store, "weekday_change_cancellation", MOVED)
+    override(store, TemplateName.WEEKDAY_CHANGE_CANCELLATION, MOVED)
     store.record_dropped_week(WEEK, NOW)
     _, preview = handle("/text weekday_change_cancellation", context(store))
     assert preview == (

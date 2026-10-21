@@ -7,6 +7,7 @@ of the weekly cycle. Strings that a single command uses live in that command's m
 from datetime import date, datetime, tzinfo
 
 from odin.config import WeeklyTime
+from odin.cycle import TemplateName
 
 HELP_HINT = "/help zeigt alle Befehle."
 UNKNOWN_COMMAND = "Unbekannter Befehl {command} – " + HELP_HINT
@@ -15,6 +16,15 @@ GENERIC_ERROR = "Da ist etwas schiefgegangen – bitte später nochmal versuchen
 UNTRACKED = "{emoji} nicht zählbar"
 
 WEEKDAYS_SHORT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+
+
+def editable_template(word: str) -> TemplateName | None:
+    """The template named `word` (in any case) if it can be changed via chat, else None."""
+    try:
+        name = TemplateName(word.lower())
+    except ValueError:
+        return None
+    return name if name.editable else None
 
 
 def weekly_time(point: WeeklyTime) -> str:

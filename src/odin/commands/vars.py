@@ -4,6 +4,7 @@ The list is generated from `TEMPLATE_PLACEHOLDERS`, so a new placeholder shows u
 it has a description in `DESCRIPTIONS` (a test enforces that every one has).
 """
 
+from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError
 from odin.config import TEMPLATE_PLACEHOLDERS
 from odin.overrides import EDITABLE_TEMPLATES
@@ -85,8 +86,8 @@ def run(ctx: CommandContext, args: str) -> list[str]:
         placeholders = frozenset().union(*(TEMPLATE_PLACEHOLDERS[t] for t in EDITABLE_TEMPLATES))
         lines = [HEADER_ALL, *_lines(ctx, placeholders), "", BRACES_HINT, ONE_TEMPLATE_HINT]
         return ["\n".join(lines)]
-    name = args.lower()
-    if name not in EDITABLE_TEMPLATES:
+    name = ui.editable_template(args)
+    if name is None:
         raise CommandError(UNKNOWN_TEMPLATE.format(name=args, names=", ".join(EDITABLE_TEMPLATES)))
     lines = [HEADER_ONE.format(name=name), *_lines(ctx, TEMPLATE_PLACEHOLDERS[name])]
     return ["\n".join([*lines, "", BRACES_HINT])]
