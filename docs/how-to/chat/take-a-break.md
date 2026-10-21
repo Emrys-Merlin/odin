@@ -97,7 +97,8 @@ Sonntag, 25.10.<br>
 If the hiatus cancelled this week, `/status` shows the week's steps with `❌ Absage gesendet
 (Di 19:31) – per /hiatus` above the hiatus lines.
 
-During the break `/skip` still works, for a date after the break; `/cancel` is refused:
+During the break `/skip` still works, for a date after the break; `/cancel` and `/introduce`
+are refused:
 
 <div class="chat" data-group="Flat group" markdown>
 <div class="msg me" markdown>
@@ -106,6 +107,16 @@ During the break `/skip` still works, for a date after the break; `/cancel` is r
 <div class="msg" markdown>
 <span class="sender">Odin 🍽️</span>
 Ich mache gerade Pause – es gibt nichts abzusagen. /resume beendet die Pause.
+</div>
+</div>
+
+<div class="chat" data-group="Flat group" markdown>
+<div class="msg me" markdown>
+`/introduce`
+</div>
+<div class="msg" markdown>
+<span class="sender">Odin 🍽️</span>
+Ich mache gerade Pause – /resume beendet sie, danach kann ich mich vorstellen.
 </div>
 </div>
 

@@ -16,6 +16,19 @@ is none yet. Either whoever runs ODIN adds `introduction` from `config.example.t
 config file (see [Configuration](../../reference/configuration.md#templates)), or you write one
 yourself with `/settext introduction` (see [Edit a text](edit-a-text.md)).
 
+ODIN must not be on a break. During a [hiatus](take-a-break.md) the introduction, which describes
+the weekly messages, would be wrong, so `/introduce` is refused until someone sends `/resume`:
+
+<div class="chat" data-group="Flat group" markdown>
+<div class="msg me" markdown>
+`/introduce`
+</div>
+<div class="msg" markdown>
+<span class="sender">Odin 🍽️</span>
+Ich mache gerade Pause – /resume beendet sie, danach kann ich mich vorstellen.
+</div>
+</div>
+
 ## 1. Send `/introduce` in the flat group
 
 ODIN does not post yet. It replies with the introduction it would post and asks for a 👍:
@@ -72,7 +85,9 @@ The dinner group gets it once per request, even if more people react. To post it
 send a new `/introduce` and confirm that one.
 
 Changed your mind? Remove the 👍 quickly — before ODIN's next round, about a minute. If nobody
-reacts, nothing happens: the request lapses after 24 hours.
+reacts, nothing happens: the request lapses after 24 hours. If a hiatus starts before ODIN
+posted the introduction, it is dropped and not posted after `/resume` either; send a new
+`/introduce` then.
 
 Why it needs a reaction: [Reactions](../../explanation/reactions.md). How it relates to the week:
 [The weekly cycle](../../explanation/weekly-cycle.md#introducing-odin).

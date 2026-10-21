@@ -139,6 +139,9 @@ It is not part of the week. It can be sent any number of times, changes nothing 
 cycle and does not show in `/status`. Each confirmed request is recorded once posted, so it goes
 out once however often people react, and a later `/introduce` posts it again.
 
+It is refused during a [hiatus](#taking-a-break): the introduction describes the Wednesday
+messages, and guests reading it during the break would wait for one that never comes.
+
 Steps: [Introduce ODIN to the dinner group](../how-to/chat/introduce-odin.md).
 
 ## Skipping a date in advance
@@ -206,9 +209,11 @@ How the running week fits in depends on when the hiatus starts:
 While ODIN sleeps, each step of a week is recorded as skipped at its usual time, so `/status`
 and the catch-up see the week as finished, and nothing is sent: not the cancellation of a skip
 date either, nor that of a week [dropped by a weekday change](weekday-change.md#dropped-weeks).
-`/cancel` is refused (there is nothing to cancel); `/skip` and `/unskip` keep working, so dates
-after a later `/resume` still apply. `/status` shows the hiatus — since when, by whom, the notice
-and how to end it — instead of the week's steps.
+`/cancel` is refused (there is nothing to cancel), and so is `/introduce`: its text describes the
+weekly cycle, which is asleep. A request for an introduction that is still open or confirmed but
+not posted when the hiatus starts is dropped, so it is not posted after `/resume` either.
+`/skip` and `/unskip` keep working, so dates after a later `/resume` still apply. `/status`
+shows the hiatus — since when, by whom, the notice and how to end it — instead of the week's steps.
 
 `/resume` takes effect at once and needs no confirmation: it posts nothing. The first week whose
 flat ask is still ahead runs normally. If the running week's flat ask was already due, that week

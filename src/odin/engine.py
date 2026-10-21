@@ -86,7 +86,8 @@ cycle. ODIN's reply to `/introduce` is tracked as an introduction request; once 
 it with the configured emoji (within `odin.reactions.INTRODUCTION_LAPSE`), the next tick posts the
 `introduction` template to the dinner group and records it in the store's introductions, not as
 an action of a week: it does not change the week, and a later request posts it again. A failed
-send is retried next tick, but never holds up the weekly steps, nor they it.
+send is retried next tick, but never holds up the weekly steps, nor they it. During a hiatus it is
+not posted: a request still open when the hiatus starts is dropped.
 """
 
 import functools
@@ -452,7 +453,16 @@ async def _introduce(
     steps: list[Step],
     failures: list[SendFailure],
 ) -> None:
-    """Post the introduction for each confirmed `/introduce` request it was not posted for yet."""
+    """Post the introduction for each confirmed `/introduce` request it was not posted for yet.
+
+    Not during a hiatus: the introduction describes the weekly cycle. Requests still open when
+    the hiatus started are dropped, so they are not posted after `/resume` either."""
+    if store.active_hiatus() is not None:
+        requests = store.tracked_messages(MessageKind.INTRODUCTION_REQUEST)
+        if any(store.introduction_time(request) is None for request in requests):
+            logger.warning("not sending the introduction requested before the hiatus started")
+        store.untrack_messages(MessageKind.INTRODUCTION_REQUEST)
+        return
     for request in store.tracked_messages(MessageKind.INTRODUCTION_REQUEST):
         if store.introduction_time(request) is not None:
             continue
