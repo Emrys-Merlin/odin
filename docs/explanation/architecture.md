@@ -52,7 +52,8 @@ Settings come from three places, each for a different kind of value:
   up, `odin run` waits instead of failing.
 
 Chat changes (a moved time, an edited text) are stored as overrides in the state DB and win over
-the config file; resetting them falls back to the file.
+the config file; resetting them falls back to the file. The tables are listed in
+[State database](../reference/state-database.md).
 
 ## Secrets
 

@@ -127,7 +127,7 @@ templates, which have no defaults.
 | `SIGNAL_NUMBER` | yes | — | ODIN's phone number in E.164 format (`+49…`, no spaces). |
 | `SIGNAL_API_URL` | no | `http://localhost:8080` | Base URL of signal-cli-rest-api, `http` or `https`. A trailing `/` is dropped. |
 | `ODIN_CONFIG` | yes | — | Path to the config file. The container image sets `/config/config.toml`. |
-| `ODIN_DB` | yes | — | Path to the SQLite state database. The file is created if missing; its directory must exist. The container image sets `/data/odin.db`. |
+| `ODIN_DB` | yes | — | Path to the SQLite state database. The file is created if missing; its directory must exist. The container image sets `/data/odin.db`. Its contents: [State database](state-database.md). |
 | `ODIN_LOG_LEVEL` | no | `INFO` | Log level of the output on stdout: `DEBUG`, `INFO`, `WARNING`, `ERROR` (case-insensitive). |
 | `ODIN_HEALTH_PORT` | no | `8081` | Port of the [health endpoint](health-endpoint.md) `GET /health`, on all interfaces inside the container; `0` turns it off. `odin health` asks this port on `localhost`. |
 | `FLAT_GROUP_ID` | no | — | Flat group ID, overriding the one `odin setup` stored. The `group.…` form `odin list-groups` prints. |

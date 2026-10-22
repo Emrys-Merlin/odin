@@ -31,7 +31,7 @@ alone.
 1. Find the last good version on the repo's
    [Releases](https://github.com/Emrys-Merlin/odin/releases) page. Read the release notes of the
    versions you skip back over: an older version may not read a database changed by a newer
-   one.
+   one (see [Schema version](../../reference/state-database.md#schema-version)).
 2. Set it in `~/.config/containers/systemd/odin.container`:
 
     ```ini

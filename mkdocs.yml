@@ -117,6 +117,7 @@ nav:
       - Configuration: reference/configuration.md
       - Deployment units: reference/deployment-units.md
       - Health endpoint: reference/health-endpoint.md
+      - State database: reference/state-database.md
   - Explanation:
       - explanation/index.md
       - The weekly cycle: explanation/weekly-cycle.md
