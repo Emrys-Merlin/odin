@@ -57,6 +57,8 @@ follows Diátaxis. Details: `docs/how-to/develop/write-docs.md`.
   Tim-specific steps belong in the PR description, not in `docs/`.
 - Changed the CLI, a chat command or a template placeholder? Rerun `uv run scripts/gen_reference.py`
   (it writes `docs/reference/_generated/`; a test fails while it is stale).
+- Added a migration or a stored value (action, message kind, settings key)? Update
+  `docs/reference/state-database.md`; `tests/test_state_database_docs.py` fails until you do.
 
 ## Design rules
 
