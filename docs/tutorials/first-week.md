@@ -96,7 +96,7 @@ add them yourself. After Sunday's dinner the next week starts with Tuesday's que
 
 ## Try a command: `/help`
 
-Commands work in the flat group only. Type `/help`:
+Commands work in the flat group. Type `/help`:
 
 <div class="chat" data-group="Flat group" markdown>
 <div class="msg me" markdown>

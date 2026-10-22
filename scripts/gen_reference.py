@@ -20,7 +20,7 @@ import argparse
 from pathlib import Path
 
 from odin.cli import _parser
-from odin.commands import COMMANDS
+from odin.commands import COMMANDS, Command
 from odin.commands.vars import DESCRIPTIONS, _order
 from odin.config import TEMPLATE_PLACEHOLDERS, load_config
 from odin.cycle import SchedulePoint
@@ -122,18 +122,28 @@ def render_cli() -> str:
     return "\n".join(lines) + "\n"
 
 
+def _direct(command: Command) -> str:
+    if command.group_only:
+        return "refused: flat group only"
+    if command.changes:
+        return "works; a change gets the notice"
+    return "works"
+
+
 def render_chat_commands() -> str:
     lines = [
         HEADER.format(source="`COMMANDS` in src/odin/commands/__init__.py"),
-        "In the order `/help` lists them. Usage and summary are the German texts `/help` shows.",
+        "In the order `/help` lists them. Usage and summary are the German texts `/help` shows. "
+        "*Direct message* says what the command does when an allowed sender sends it in a 1:1 "
+        "chat (see [Direct messages](#direct-messages)).",
         "",
-        "| Command | Alias | Usage | Summary (as in `/help`) |",
-        "|---|---|---|---|",
+        "| Command | Alias | Usage | Summary (as in `/help`) | Direct message |",
+        "|---|---|---|---|---|",
     ]
     for command in COMMANDS:
         lines.append(
             f"| `/{command.name}` | `!{command.name}` | {_code(command.usage)} "
-            f"| {_cell(command.summary)} |"
+            f"| {_cell(command.summary)} | {_direct(command)} |"
         )
     lines += [
         "",

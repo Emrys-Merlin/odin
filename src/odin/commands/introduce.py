@@ -64,4 +64,5 @@ INTRODUCE = Command(
     usage="/introduce",
     summary="Stellt Odin der Essensgruppe vor – nach Bestätigung per Reaktion.",
     run=run,
+    group_only=True,
 )

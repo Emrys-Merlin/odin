@@ -84,10 +84,14 @@ def test_group_message_without_sender_name(name: str | None) -> None:
 
 @pytest.mark.parametrize(
     "name",
-    ["receipt.json", "direct_reaction.json", "direct_message.json", "sync_message_jsonrpc.json"],
+    ["receipt.json", "direct_reaction.json", "sync_message_jsonrpc.json"],
 )
-def test_non_group_events_are_ignored(name: str) -> None:
+def test_non_message_events_are_ignored(name: str) -> None:
     assert parse_event(fixture(name)) is None
+
+
+def test_direct_message_is_an_event() -> None:
+    assert parse_event(fixture("direct_message.json")) == DIRECT
 
 
 def test_attachment_only_group_message_is_ignored() -> None:
@@ -180,10 +184,26 @@ def test_parse_groups_without_member_field_counts_as_member() -> None:
     assert all(group.member for group in parse_groups(data))
 
 
+DIRECT = DirectMessage(
+    sender="+4915100000002",
+    text="Ja, das bin ich.",
+    timestamp=1760454500000,
+    sender_uuid="5c6a3e2b-1f0d-4c8e-9a7b-2d3e4f5a6b7c",
+    sender_name="Alex",
+)
+
+
 def test_direct_message() -> None:
-    assert parse_direct_message(fixture("direct_message.json")) == DirectMessage(
-        sender="+4915100000002", text="Ja, das bin ich.", timestamp=1760454500000
-    )
+    assert parse_direct_message(fixture("direct_message.json")) == DIRECT
+
+
+def test_direct_message_without_uuid_and_name() -> None:
+    data = json.loads(fixture("direct_message.json"))
+    del data["envelope"]["sourceUuid"]
+    data["envelope"]["sourceName"] = ""
+    message = parse_direct_message(json.dumps(data))
+    assert message is not None
+    assert (message.sender_uuid, message.sender_name) == (None, None)
 
 
 def test_direct_message_in_jsonrpc_envelope_with_hidden_number() -> None:
@@ -194,6 +214,7 @@ def test_direct_message_in_jsonrpc_envelope_with_hidden_number() -> None:
     message = parse_direct_message(json.dumps(wrapped).encode())
     assert message is not None
     assert message.sender == "5c6a3e2b-1f0d-4c8e-9a7b-2d3e4f5a6b7c"
+    assert message.sender_uuid == message.sender
 
 
 @pytest.mark.parametrize(

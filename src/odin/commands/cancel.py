@@ -115,4 +115,5 @@ CANCEL = Command(
     usage="/cancel",
     summary="Sagt das Essen dieser Woche ab – nach Bestätigung per Reaktion.",
     run=run,
+    group_only=True,
 )

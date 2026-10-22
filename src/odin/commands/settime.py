@@ -515,16 +515,19 @@ SETTIME = Command(
     usage="/settime <punkt> <tag> <HH:MM>",
     summary="Verschiebt einen Zeitpunkt im Wochenplan.",
     run=run_settime,
+    changes=True,
 )
 NUDGE = Command(
     name="nudge",
     usage="/nudge on|off",
     summary="Schaltet die Erinnerung an die WG an oder aus.",
     run=run_nudge,
+    changes=True,
 )
 RESETTIME = Command(
     name="resettime",
     usage="/resettime <punkt>",
     summary="Setzt einen Zeitpunkt auf den Wert aus der Config zurück.",
     run=run_resettime,
+    changes=True,
 )

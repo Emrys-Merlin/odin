@@ -6,7 +6,8 @@ Every key of the config file, and the environment variables.
 
 ODIN has two sources of settings:
 
-- **The config file** — a TOML file with the behaviour: schedule, emoji, message texts, profile.
+- **The config file** — a TOML file with the behaviour: schedule, emoji, message texts, profile,
+  who may send commands in a direct message.
   Its path is `ODIN_CONFIG`.
 - **Environment variables** — the deployment values: phone number, Signal API URL, file paths.
 
@@ -75,6 +76,17 @@ ODIN's Signal profile. Applied by `odin setup`, not by `odin run`.
 | `avatar` | string, file path | *(none)* | Profile picture, PNG or JPEG. A relative path is resolved against the config file's directory. The file must exist. |
 | `about` | string | *(none)* | About text under the name. Not set: Signal's about text is left as it is. `""`: cleared. |
 
+### `[commands]`
+
+Chat commands in a direct message (1:1 chat) with ODIN; see
+[Chat commands](chat-commands.md#direct-messages). Commands in the flat group work for everyone
+in it, whatever this table says.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `direct_senders` | list of strings | `[]` | Who may send commands in a direct message. Each entry is a phone number in E.164 format (`+49…`, no spaces) or a Signal UUID (`5c6a3e2b-1f0d-4c8e-9a7b-2d3e4f5a6b7c`, any case); it matches a sender whose number or UUID it equals. Empty: direct messages are ignored. Any other entry is an error. |
+| `direct_notice` | boolean | `true` | Whether a command from a direct message that changed something is told to the flat group in one line. `false`: a direct message posts nothing to the flat group. |
+
 ### `[templates]`
 
 The message texts. Every template is **required** and has no default, except
@@ -135,5 +147,5 @@ variables come from the env file `~/odin/odin.env`.
 
 A change via chat is stored in the database and lasts until it is reset (`/resettext`,
 `/resettime`); see [Chat commands](chat-commands.md). `timezone`, `emoji`, `catch_up_grace`,
-`[profile]`, `hello` and `flat_test` can only be changed in the config file. A changed config
+`[profile]`, `[commands]`, `hello` and `flat_test` can only be changed in the config file. A changed config
 file takes effect when ODIN restarts.

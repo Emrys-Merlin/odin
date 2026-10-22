@@ -1,4 +1,4 @@
-"""Settings: a TOML config file (schedule, emoji, templates) plus env vars (deployment values).
+"""Settings: a TOML config file (schedule, emoji, templates, …) plus env vars (deployment values).
 
 Everything is validated at load time, so a bad config fails on startup instead of on Tuesday at
 18:00. All settings objects are frozen.
@@ -485,6 +485,45 @@ def _parse_profile(raw: object, base_dir: Path) -> Profile:
     return Profile(name=name.strip(), avatar=path, about=about)
 
 
+# --- Commands -----------------------------------------------------------------------------------
+
+_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+
+
+@dataclass(frozen=True)
+class Commands:
+    """Who may send chat commands to ODIN in a direct message (see `odin.events`)."""
+
+    # Phone numbers (E.164) and ACI UUIDs (lower case). Empty: direct messages are ignored.
+    direct_senders: frozenset[str] = frozenset()
+    # Whether a command that changed something from a direct message is told to the flat group.
+    direct_notice: bool = True
+
+    def allows(self, *ids: str | None) -> bool:
+        """Whether any of a sender's IDs (number, UUID) is on the list."""
+        return any(id is not None and id.lower() in self.direct_senders for id in ids)
+
+
+def _parse_commands(raw: object) -> Commands:
+    table = _table(raw, "commands")
+    _reject_unknown(table, {"direct_senders", "direct_notice"}, "commands")
+    senders = table.get("direct_senders", [])
+    if not isinstance(senders, list):
+        raise ConfigError(f"commands.direct_senders: must be a list, got {senders!r}")
+    for sender in senders:
+        if not (isinstance(sender, str) and (is_e164(sender) or _UUID.fullmatch(sender.lower()))):
+            raise ConfigError(
+                "commands.direct_senders: each entry must be a phone number in E.164 format "
+                f"(+49…) or a Signal UUID, got {sender!r}"
+            )
+    notice = table.get("direct_notice", True)
+    if not isinstance(notice, bool):
+        raise ConfigError(f"commands.direct_notice: must be true or false, got {notice!r}")
+    return Commands(
+        direct_senders=frozenset(sender.lower() for sender in senders), direct_notice=notice
+    )
+
+
 # --- Config -------------------------------------------------------------------------------------
 
 DEFAULT_TIMEZONE = "Europe/Berlin"
@@ -503,6 +542,7 @@ class Config:
     schedule: Schedule
     templates: Templates
     profile: Profile
+    commands: Commands
 
     def when(self, point: WeeklyTime, week: dt.date) -> dt.datetime:
         """When `point` happens in the dinner week whose dinner falls on `week`.
@@ -542,7 +582,7 @@ def parse_config(data: Mapping[str, Any], base_dir: Path | None = None) -> Confi
     (the config file's directory; default: the working directory)."""
     _reject_unknown(
         data,
-        {"timezone", "emoji", "catch_up_grace", "schedule", "templates", "profile"},
+        {"timezone", "emoji", "catch_up_grace", "schedule", "templates", "profile", "commands"},
         "config",
     )
 
@@ -577,6 +617,7 @@ def parse_config(data: Mapping[str, Any], base_dir: Path | None = None) -> Confi
         schedule=_parse_schedule(data.get("schedule")),
         templates=_parse_templates(data.get("templates")),
         profile=_parse_profile(data.get("profile"), base_dir or Path()),
+        commands=_parse_commands(data.get("commands")),
     )
 
 

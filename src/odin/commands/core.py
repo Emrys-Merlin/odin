@@ -25,6 +25,7 @@ class CommandContext:
     now: datetime
     sender: str  # number or UUID
     sender_name: str | None
+    direct: bool = False  # sent in a direct message, not in the flat group
 
 
 class TrackedReply(str):
@@ -55,6 +56,11 @@ class Command:
     usage: str  # "/schedule" or "/settime <punkt> <tag> <HH:MM>"
     summary: str  # German one-liner for /help
     run: Callable[[CommandContext, str], list[str]]  # args → replies (one Signal message each)
+    # Changes settings or state. Sent in a direct message, it is told to the flat group, if it
+    # wrote anything (see `odin.commands.handle_direct`).
+    changes: bool = False
+    # Needs a confirmation by reaction in the flat group, so it is refused in a direct message.
+    group_only: bool = False
 
 
 @dataclass(frozen=True)

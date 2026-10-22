@@ -42,6 +42,15 @@ name = "Odin 🍽️"
 # Optional about text, shown under the name. Leave it out to keep what Signal has; "" clears it.
 # about = "Ich organisiere das Sonntagsessen · I organise the Sunday dinner"
 
+# Chat commands in a direct message (1:1 chat) with ODIN. Commands always work in the flat group.
+[commands]
+# Who may send commands directly: phone numbers in E.164 format and/or Signal UUIDs. Anyone
+# else gets no answer; ODIN logs their number and UUID. Empty: direct messages are ignored.
+# direct_senders = ["+4915100000000", "00000000-0000-4000-8000-000000000000"]
+direct_senders = []
+# Tell the flat group when a command from a direct message changed something.
+direct_notice = true
+
 # Message texts. Placeholders, in every template unless noted:
 #   {emoji}
 #   {deadline} {rsvp_by} {cook_time} {dinner_time}   — times from [schedule], as HH:MM

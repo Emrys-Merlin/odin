@@ -515,6 +515,7 @@ def test_check_config_with_the_example_config(capsys: pytest.CaptureFixture[str]
     assert f"Config OK: {EXAMPLE}" in out
     assert "Flat group:   group.ZmxhdA== (from env var)" in out
     assert "Dinner group: group.ZGlubmVy (from env var)" in out
+    assert "DM commands:  off" in out
     lines = out.split("Next scheduled actions:\n")[1].splitlines()
     assert lines == [
         "  Tue 2026-10-06 18:00  flat ask (flat group)",
@@ -522,6 +523,29 @@ def test_check_config_with_the_example_config(capsys: pytest.CaptureFixture[str]
         "  Wed 2026-10-07 18:00  announcement / cancellation (dinner group)",
         "  Fri 2026-10-09 14:00  tally (flat group, only if dinner is on)",
     ]
+
+
+def check_config_with_senders(tmp_path: Path, senders: str, notice: str = "true") -> int:
+    """`odin check-config` with the example config, `direct_senders` and `direct_notice` set."""
+    text = EXAMPLE.read_text().replace("direct_senders = []", f"direct_senders = {senders}")
+    config = tmp_path / "config.toml"
+    config.write_text(text.replace("direct_notice = true", f"direct_notice = {notice}"))
+    return main(["check-config"], {**ENV, "ODIN_CONFIG": str(config)}, FixedClock(local(3, 12)))
+
+
+def test_check_config_shows_direct_commands(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert check_config_with_senders(tmp_path, '["+4915100000001"]', notice="false") == 0
+    out = capsys.readouterr().out
+    assert "DM commands:  1 allowed sender(s), notice to the flat group off" in out
+
+
+def test_check_config_rejects_an_invalid_direct_sender(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert check_config_with_senders(tmp_path, '["Tim"]') == 2
+    assert "commands.direct_senders" in capsys.readouterr().err
 
 
 def test_check_config_shows_where_group_ids_come_from(

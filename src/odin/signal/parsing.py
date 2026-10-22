@@ -21,15 +21,16 @@ def parse_event(raw: str | bytes) -> Event | None:
     Accepts both the bare ``{"envelope": ..., "account": ...}`` object that the REST API
     forwards in json-rpc mode and the full JSON-RPC ``receive`` notification wrapping it.
     Returns a ``ReactionEvent`` for a group reaction, a ``GroupMessage`` for a group text
-    message and ``None`` for anything else: direct messages, ODIN's own sends seen from another
-    device (``syncMessage``), edits (``editMessage``), stories and messages without text.
+    message, a ``DirectMessage`` for a direct text message (see `parse_direct_message`) and
+    ``None`` for anything else: direct reactions, ODIN's own sends seen from another device
+    (``syncMessage``), edits (``editMessage``), stories and messages without text.
     Raises ``ValueError`` if ``raw`` is not valid JSON.
     """
     envelope = _envelope(raw)
     data_message = _dict(envelope.get("dataMessage"))
     group_info = _dict(data_message.get("groupInfo"))
     if not group_info:
-        return None
+        return _direct_message(envelope)
     reaction = _dict(data_message.get("reaction"))
     if reaction:
         return _reaction_event(envelope, reaction, group_info)
@@ -101,17 +102,28 @@ def parse_direct_message(raw: str | bytes) -> DirectMessage | None:
     ``reaction``. Returns ``None`` for anything else. Raises ``ValueError`` if ``raw`` is not
     valid JSON.
     """
-    envelope = _envelope(raw)
+    return _direct_message(_envelope(raw))
+
+
+def _direct_message(envelope: dict[str, Any]) -> DirectMessage | None:
     data_message = _dict(envelope.get("dataMessage"))
     if not data_message or "groupInfo" in data_message or "reaction" in data_message:
         return None
 
     text = data_message.get("message")
     sender = _author(envelope, "source")
+    sender_uuid = envelope.get("sourceUuid")
+    sender_name = envelope.get("sourceName")
     timestamp = envelope.get("timestamp")
     if not (isinstance(text, str) and text and sender and isinstance(timestamp, int)):
         return None
-    return DirectMessage(sender=sender, text=text, timestamp=timestamp)
+    return DirectMessage(
+        sender=sender,
+        text=text,
+        timestamp=timestamp,
+        sender_uuid=sender_uuid if isinstance(sender_uuid, str) and sender_uuid else None,
+        sender_name=sender_name if isinstance(sender_name, str) and sender_name else None,
+    )
 
 
 def parse_groups(data: Any) -> list[Group]:
