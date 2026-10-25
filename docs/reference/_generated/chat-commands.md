@@ -15,6 +15,7 @@ In the order `/help` lists them. Usage and summary are the German texts `/help` 
 | `/settime` | `!settime` | `/settime <punkt> <tag> <HH:MM>` | Verschiebt einen Zeitpunkt im Wochenplan. | works; a change gets the notice |
 | `/resettime` | `!resettime` | `/resettime <punkt>` | Setzt einen Zeitpunkt auf den Wert aus der Config zurück. | works; a change gets the notice |
 | `/nudge` | `!nudge` | `/nudge on|off` | Schaltet die Erinnerung an die WG an oder aus. | works; a change gets the notice |
+| `/cancellation` | `!cancellation` | `/cancellation on|off|reset` | Schaltet die Absage an die Essensgruppe an oder aus, wenn das Essen ausfällt. | works; a change gets the notice |
 | `/cancel` | `!cancel` | `/cancel` | Sagt das Essen dieser Woche ab – nach Bestätigung per Reaktion. | refused: flat group only |
 | `/skip` | `!skip` | `/skip [JJJJ-MM-TT]` | Trägt einen Tag ohne Essen im Voraus ein; ohne Datum: zeigt die Liste. | works; a change gets the notice |
 | `/unskip` | `!unskip` | `/unskip <JJJJ-MM-TT>` | Nimmt einen mit /skip eingetragenen Tag zurück. | works; a change gets the notice |

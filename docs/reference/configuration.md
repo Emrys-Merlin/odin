@@ -6,8 +6,8 @@ Every key of the config file, and the environment variables.
 
 ODIN has two sources of settings:
 
-- **The config file** — a TOML file with the behaviour: schedule, emoji, message texts, profile,
-  who may send commands in a direct message.
+- **The config file** — a TOML file with the behaviour: schedule, emoji, whether a cancellation
+  is posted, message texts, profile, who may send commands in a direct message.
   Its path is `ODIN_CONFIG`.
 - **Environment variables** — the deployment values: phone number, Signal API URL, file paths.
 
@@ -66,6 +66,14 @@ A schedule that breaks a rule is rejected with the first broken rule. Changing t
 weekday while a dinner week is running takes effect at that week's dinner; see
 [Changing the dinner weekday](../explanation/weekday-change.md).
 
+### `[decision]`
+
+What the dinner group is told at `flat_deadline`.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `cancellation` | boolean | `true` | Whether the dinner group gets the `cancellation` when dinner does not take place by itself: nobody confirmed, a `/skip` date, a week dropped by a new dinner weekday, a hiatus. `false`: it is not posted, the week is off all the same. `weekday_change_cancellation` and `hiatus`, while set, are still posted; a confirmed `/cancel`, and a `/hiatus` that cancels the running week, always post the cancellation. See [The weekly cycle](../explanation/weekly-cycle.md#turning-the-cancellation-off). |
+
 ### `[profile]`
 
 ODIN's Signal profile. Applied by `odin setup`, not by `odin run`.
@@ -98,7 +106,7 @@ one, is an error. Leading and trailing whitespace is stripped.
 |---|---|---|---|
 | `flat_ask` | flat group | German | at `flat_ask` |
 | `nudge` | flat group | German | at `nudge`, if nobody has confirmed |
-| `cancellation` | dinner group | German, blank line, English | at `flat_deadline` without confirmation, or after a confirmed `/cancel` |
+| `cancellation` | dinner group | German, blank line, English | at `flat_deadline` without confirmation (unless `decision.cancellation` is `false`), or after a confirmed `/cancel` |
 | `weekday_change_cancellation` | dinner group | German, blank line, English | optional: when a new dinner weekday takes over and drops a week; left out, `cancellation` is sent |
 | `announcement` | dinner group | German, blank line, English | at `flat_deadline` with a confirmation |
 | `tally` | flat group | German | at `tally`, if dinner is on |
@@ -143,9 +151,10 @@ variables come from the env file `~/odin/odin.env`.
 |---|---|---|
 | Chat-editable templates (`flat_ask`, `nudge`, `announcement`, `cancellation`, `weekday_change_cancellation`, `tally`, `introduction`, `hiatus`) | change via chat (`/settext`) | config file; for `weekday_change_cancellation` and `hiatus` then `cancellation`; for `introduction` then not set |
 | Schedule points and `nudge.enabled` | change via chat (`/settime`, `/nudge`) | config file |
+| `decision.cancellation` | change via chat (`/cancellation`) | config file |
 | Group IDs | `FLAT_GROUP_ID` / `DINNER_GROUP_ID` env vars | IDs stored in the database by `odin setup` |
 
 A change via chat is stored in the database and lasts until it is reset (`/resettext`,
-`/resettime`); see [Chat commands](chat-commands.md). `timezone`, `emoji`, `catch_up_grace`,
+`/resettime`, `/cancellation reset`); see [Chat commands](chat-commands.md). `timezone`, `emoji`, `catch_up_grace`,
 `[profile]`, `[commands]`, `hello` and `flat_test` can only be changed in the config file. A changed config
 file takes effect when ODIN restarts.

@@ -17,9 +17,16 @@ from datetime import date, datetime, time, timedelta
 
 from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError
+from odin.commands.ui import FROM_NEXT_WEEK, RESET, SAVED, THIS_WEEK
 from odin.config import WEEKDAYS_DE, WEEKDAYS_EN, Config, ConfigError, WeeklyTime
-from odin.cycle import SchedulePoint, StepName
-from odin.engine import dinner_week, record_transition, step_windows, transition
+from odin.cycle import SchedulePoint, StepName, TemplateName
+from odin.engine import (
+    cancellation_silenced,
+    dinner_week,
+    record_transition,
+    step_windows,
+    transition,
+)
 from odin.overrides import (
     DINNER_KEY,
     EDITABLE_TEMPLATES,
@@ -86,15 +93,11 @@ DINNER_DAY_UNSAFE = (
 )
 STEP_DUE = "Dann wäre {step} sofort fällig – das geht nicht über den Chat."
 
-SAVED = "Gespeichert ✅"
-RESET = "Zurückgesetzt ✅ (wieder wie in der Config)"
 NOT_OVERRIDDEN = "{label} ({point}) war nicht geändert – steht auf {when}."
 NUDGE_NOT_OVERRIDDEN = "Die Erinnerung war nicht geändert – sie ist {state}, {when}."
 POINT_LINE = "{label} ({point}): {when}, nächstes Mal {next}"
 NUDGE_OFF_LINE = "Erinnerung an die WG (nudge): aus"
 NUDGE_OFF_NOTE = "Die Erinnerung ist ausgeschaltet; die Zeit gilt, wenn sie wieder an ist."
-THIS_WEEK = "Das gilt schon für diese Woche."
-FROM_NEXT_WEEK = "Das gilt ab nächster Woche."
 ASK_ALREADY_SENT = (
     "Achtung: Die Frage an die WG ist diese Woche schon raus und nennt noch die alte Frist "
     "({old}). Sag am besten in der Gruppe Bescheid, dass jetzt {new} gilt."
@@ -114,6 +117,9 @@ DROPPED_CANCELLATION_LATER = (
     "Die Absage für den {day} schicke ich der Essensgruppe beim Wechsel ({switch})."
 )
 DROPPED_CANCELLATION_NOW = "Die Absage für den {day} schicke ich der Essensgruppe gleich."
+DROPPED_CANCELLATION_OFF = (
+    "Die Absage an die Essensgruppe ist aus (/cancellation) – für den {day} schicke ich ihr nichts."
+)
 PENDING_DISCARDED = "Der geplante Wechsel auf {new} (ab {first}) ist damit verworfen."
 PENDING_CANCELLED = "Verworfen ✅ Der geplante Wechsel auf {new} (ab {first}) fällt weg."
 PENDING_FROM_CONFIG = (
@@ -423,7 +429,9 @@ def set_dinner_day(ctx: CommandContext, value: str | None, headline: str) -> lis
     if weeks.dropped_week is not None:
         day = _day(weeks.dropped_week)
         lines.append(DINNER_WEEK_DROPPED.format(day=day))
-        if started:
+        if cancellation_silenced(new, TemplateName.WEEKDAY_CHANGE_CANCELLATION):
+            lines.append(DROPPED_CANCELLATION_OFF.format(day=day))
+        elif started:
             lines.append(DROPPED_CANCELLATION_LATER.format(day=day, switch=this))
         else:
             lines.append(DROPPED_CANCELLATION_NOW.format(day=day))

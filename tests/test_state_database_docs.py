@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from odin.app import DINNER_GROUP_KEY, FLAT_GROUP_KEY
-from odin.overrides import NUDGE_ENABLED_KEY, PENDING_DINNER_KEY
+from odin.overrides import CANCELLATION_ENABLED_KEY, NUDGE_ENABLED_KEY, PENDING_DINNER_KEY
 from odin.setup import SETUP_KEYS
 from odin.store import _SETUP_LOCK, SCHEMA_VERSION, Action, MessageKind, Outcome, Store
 
@@ -68,6 +68,7 @@ def test_schema_version() -> None:
         DINNER_GROUP_KEY,
         _SETUP_LOCK,
         NUDGE_ENABLED_KEY,
+        CANCELLATION_ENABLED_KEY,
         PENDING_DINNER_KEY,
     ],
 )

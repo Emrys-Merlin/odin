@@ -61,7 +61,7 @@ Key: (`week`, `action`).
 | `week` | `TEXT` | no | Dinner week. |
 | `action` | `TEXT` | no | The step, see below. |
 | `performed_at` | `TEXT` | no | Moment it was sent or skipped. |
-| `outcome` | `TEXT` | no | `sent`, or `skipped` (deliberately not sent: too late, or not needed, e.g. no nudge). Default `sent`. |
+| `outcome` | `TEXT` | no | `sent`; `skipped` (deliberately not sent: too late, or not needed, e.g. no nudge); or `silenced` (only `cancellation`: not sent because the cancellation is switched off, see `decision.cancellation`). Default `sent`. |
 
 `action` values:
 
@@ -161,6 +161,7 @@ Config values changed from the chat; they win over the config file until reset. 
 | `templates.<name>` | The template text, for each chat-editable template (see [Templates](templates.md)). |
 | `schedule.<point>` | `<weekday> <HH:MM>`, e.g. `wed 18:00`, for each schedule point (see [Configuration](configuration.md)). |
 | `schedule.nudge.enabled` | `true` or `false`. |
+| `decision.cancellation.enabled` | `true` or `false`; `decision.cancellation` (see [Configuration](configuration.md#decision)). |
 | `schedule.dinner.next` | A dinner time on another weekday, as for `schedule.dinner`, waiting for the dinner of `after_week`; then it becomes the `schedule.dinner` override. See [Changing the dinner weekday](../explanation/weekday-change.md). |
 
 ### `dropped_weeks`
@@ -217,7 +218,7 @@ unconfirmed request is replaced by the next one. Key: `id`.
 | `requested_at` | `TEXT` | no | Moment of the request. |
 | `started_at` | `TEXT` | yes | Moment it took effect; empty while only requested. |
 | `from_day` | `TEXT` | yes | First day covered: dinner weeks with a dinner on or after it have no weekly cycle. |
-| `notice` | `TEXT` | yes | The notice to the dinner group: `sent` or `skipped`; empty until recorded. |
+| `notice` | `TEXT` | yes | The notice to the dinner group: `sent`, `skipped`, or `silenced` (the `hiatus` template is not set and the cancellation is switched off); empty until recorded. |
 | `notice_at` | `TEXT` | yes | Moment of the notice. |
 | `resumed_by` | `TEXT` | yes | Who sent `/resume`. |
 | `resumed_at` | `TEXT` | yes | Moment of `/resume`; empty while the hiatus lasts. |

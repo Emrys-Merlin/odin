@@ -33,6 +33,8 @@ Unfortunately, there is no open dinner this Sunday. See you next time!
 No reaction is needed. In that week the flat group gets no question and no nudge; the dinner
 group gets the cancellation at the usual decision time, so guests hear on Wednesday as in any
 other week. The text is the cancellation template; to change it, see [Edit a text](edit-a-text.md).
+While the cancellation is turned off, nothing is posted and the reply says so; see
+[Turn the cancellation off](turn-off-cancellation.md).
 
 ## 2. Check the list
 

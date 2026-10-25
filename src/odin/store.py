@@ -65,6 +65,9 @@ class Outcome(StrEnum):
 
     SENT = "sent"
     SKIPPED = "skipped"  # deliberately not sent: too late, or not needed (e.g. no nudge)
+    # Not sent because the cancellation is switched off (`odin.config.Decision`); the week is off
+    # all the same. Only for the cancellation and the hiatus notice.
+    SILENCED = "silenced"
 
 
 class MessageKind(StrEnum):

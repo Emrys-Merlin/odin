@@ -1,5 +1,6 @@
 """/schedule: the weekly schedule, one line per point, with overridden values marked.
 
+The decision (`flat_deadline`) is marked while the cancellation to the dinner group is switched off.
 A pending new dinner weekday is shown on the dinner line, with its first dinner and a dropped week,
 also one that comes from the config file.
 """
@@ -8,6 +9,7 @@ from odin.commands import ui
 from odin.commands.core import Command, CommandContext
 from odin.cycle import SchedulePoint
 from odin.overrides import (
+    CANCELLATION_ENABLED_KEY,
     NUDGE_ENABLED_KEY,
     PENDING_DINNER_KEY,
     pending_dinner,
@@ -26,6 +28,7 @@ POINT_DESCRIPTIONS: dict[SchedulePoint, str] = {
 }
 
 NUDGE_OFF = "(aus)"
+CANCELLATION_OFF = "(ohne Absage an die Essensgruppe)"
 PENDING = "→ ab {first:%d.%m.}: {when}"
 DROPPED = "({weekday} {day:%d.%m.} entfällt)"
 FROM_CONFIG = "(laut Config-Datei)"
@@ -45,6 +48,10 @@ def run(ctx: CommandContext, args: str) -> list[str]:
             if not schedule.nudge_enabled:
                 line += f" {NUDGE_OFF}"
             keys.append(NUDGE_ENABLED_KEY)
+        if point is SchedulePoint.FLAT_DEADLINE:
+            if not ctx.config.decision.cancellation:
+                line += f" {CANCELLATION_OFF}"
+            keys.append(CANCELLATION_ENABLED_KEY)
         if point is SchedulePoint.DINNER and pending is not None:
             first = pending.transition.first_week
             line += " " + PENDING.format(first=first, when=ui.weekly_time(pending.point))
@@ -55,8 +62,8 @@ def run(ctx: CommandContext, args: str) -> list[str]:
             if pending.from_config:
                 line += " " + FROM_CONFIG
             keys.append(PENDING_DINNER_KEY)
-        # The nudge has two overridable values (time, on/off), dinner a current and a pending one;
-        # the latest change is shown.
+        # The nudge has two overridable values (time, on/off), the decision its time and whether
+        # it cancels, dinner a current and a pending one; the latest change is shown.
         changes = [overrides[key] for key in keys if key in overrides]
         if changes:
             latest = max(changes, key=lambda o: o.changed_at)

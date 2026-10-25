@@ -88,6 +88,14 @@ it with the configured emoji (within `odin.reactions.INTRODUCTION_LAPSE`), the n
 an action of a week: it does not change the week, and a later request posts it again. A failed
 send is retried next tick, but never holds up the weekly steps, nor they it. During a hiatus it is
 not posted: a request still open when the hiatus starts is dropped.
+
+**The cancellation switched off** (`decision.cancellation`, `/cancellation off`, see
+`cancellation_silenced`): wherever the plain cancellation would go out by itself — the decision
+without a confirmation, a skip date, a dropped week or the hiatus notice while their own template
+is not set — it is recorded as silenced instead of sent, at the time it would have been sent. The
+week is off all the same (the tally is skipped). A cancellation via `/cancel`, or by a hiatus
+that cancels the running week, is always posted: someone asked for it. The switch is read when
+the step is due, so a change applies to the running week until its decision is recorded.
 """
 
 import functools
@@ -363,6 +371,16 @@ def start_hiatus(config: Config, store: Store, current: date, now: datetime) -> 
     return store.active_hiatus()
 
 
+def cancellation_silenced(
+    config: Config, template: TemplateName = TemplateName.CANCELLATION
+) -> bool:
+    """Whether a message with `template` is not posted because the cancellation is switched off:
+    it is the cancellation, or a template that falls back to it and is not set."""
+    if config.decision.cancellation:
+        return False
+    return template is TemplateName.CANCELLATION or not config.templates.is_set(template)
+
+
 def hiatus_cancels(store: Store, week: date) -> bool:
     """Whether a hiatus that started in dinner week `week` after its flat ask cancels it."""
     return any(
@@ -423,10 +441,15 @@ async def _hiatus_notices(
     for hiatus in store.hiatuses():
         if hiatus.notice is not None:
             continue
+        outcome = None
         if not hiatus.active or hiatus_notice_redundant(config, store, hiatus):
-            store.record_hiatus_notice(hiatus.id, now, Outcome.SKIPPED)
-            logger.info("skipped %s for week %s", Action.HIATUS_NOTICE, hiatus.week)
-            steps.append(Step(hiatus.week, Action.HIATUS_NOTICE, Outcome.SKIPPED))
+            outcome = Outcome.SKIPPED
+        elif cancellation_silenced(config, TemplateName.HIATUS):
+            outcome = Outcome.SILENCED
+        if outcome is not None:
+            store.record_hiatus_notice(hiatus.id, now, outcome)
+            logger.info("%s %s for week %s", outcome, Action.HIATUS_NOTICE, hiatus.week)
+            steps.append(Step(hiatus.week, Action.HIATUS_NOTICE, outcome))
             continue
         text = config.templates.get(TemplateName.HIATUS).render(**config.placeholder_values())
         # A _Week only to post and record like the weekly steps; the notice is recorded in the
@@ -579,7 +602,8 @@ class _Week:
     async def _decide(self) -> bool:
         """3. Decision: announcement or cancellation. A dropped week was never asked; it gets the
         cancellation, due from the switch that dropped it. A skip date was not asked either; it
-        gets the cancellation at the usual time. A week that is part of a hiatus gets nothing."""
+        gets the cancellation at the usual time. A week that is part of a hiatus gets nothing.
+        While the cancellation is switched off, it is silenced instead of sent."""
         if not (self._recorded(Action.ANNOUNCEMENT) or self._recorded(Action.CANCELLATION)):
             quiet_or_asked = self._asked or self.over or self._quiet
             dropped = None if quiet_or_asked else self.store.dropped_at(self.week)
@@ -592,11 +616,23 @@ class _Week:
                 return False
             on = self._asked and self._confirmations() > 0
             decision = Action.ANNOUNCEMENT if on else Action.CANCELLATION
-            if due_now and dropped is not None:
+            template = (
+                TemplateName.WEEKDAY_CHANGE_CANCELLATION
+                if dropped is not None
+                else TemplateName.CANCELLATION
+            )
+            if (
+                due_now
+                and not on
+                and (self._asked or skipped or dropped is not None)
+                and cancellation_silenced(self.config, template)
+            ):
+                self._skip(decision, Outcome.SILENCED)
+            elif due_now and dropped is not None:
                 dates = dropped_placeholder_values(self.week)
                 await self._send(
                     decision,
-                    template=TemplateName.WEEKDAY_CHANGE_CANCELLATION,
+                    template=template,
                     dropped_date=dates["dropped_date"],
                     first_date=dates["first_date"],
                 )
@@ -742,7 +778,8 @@ class _Week:
         self.steps.append(Step(week, action, Outcome.SENT))
         return True
 
-    def _skip(self, action: Action) -> None:
-        self.store.record_action(self.week, action, self.now, Outcome.SKIPPED)
-        logger.info("skipped %s for week %s", action, self.week)
-        self.steps.append(Step(self.week, action, Outcome.SKIPPED))
+    def _skip(self, action: Action, outcome: Outcome = Outcome.SKIPPED) -> None:
+        """Record `action` as not sent: skipped, or `outcome` instead."""
+        self.store.record_action(self.week, action, self.now, outcome)
+        logger.info("%s %s for week %s", outcome, action, self.week)
+        self.steps.append(Step(self.week, action, outcome))

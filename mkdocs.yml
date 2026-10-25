@@ -104,6 +104,7 @@ nav:
           - Pause the nudge: how-to/chat/pause-nudge.md
           - Skip a date in advance: how-to/chat/skip-a-date.md
           - Take a break: how-to/chat/take-a-break.md
+          - Turn the cancellation off: how-to/chat/turn-off-cancellation.md
       - Develop:
           - Run locally: how-to/develop/run-locally.md
           - Add a chat command: how-to/develop/add-a-chat-command.md

@@ -7,6 +7,8 @@ effective config is always a valid one. Keys and values are strings:
 - ``templates.<name>`` — the template text, for the weekly templates in `EDITABLE_TEMPLATES`.
 - ``schedule.<point>`` — ``"<weekday> <HH:MM>"`` (e.g. ``"wed 18:00"``), for each `SchedulePoint`.
 - ``schedule.nudge.enabled`` — ``"true"`` or ``"false"``.
+- ``decision.cancellation.enabled`` — ``"true"`` or ``"false"``: whether the dinner group gets the
+  cancellation when dinner does not take place (see `odin.config.Decision`).
 - ``schedule.dinner.next`` (`PENDING_DINNER_KEY`) — a new dinner time on another weekday, as for
   ``schedule.dinner``, that waits for the running dinner week to end. Its `Override.after_week`
   is that week; once its dinner starts, the value becomes the ``schedule.dinner`` override, and a
@@ -44,6 +46,7 @@ logger = logging.getLogger(__name__)
 EDITABLE_TEMPLATES = tuple(name for name in TemplateName if name.editable)
 
 NUDGE_ENABLED_KEY = "schedule.nudge.enabled"
+CANCELLATION_ENABLED_KEY = "decision.cancellation.enabled"
 _BOOLS = {"true": True, "false": False}
 
 
@@ -65,14 +68,14 @@ def format_weekly_time(point: WeeklyTime) -> str:
 
 
 def format_bool(value: bool) -> str:
-    """A `NUDGE_ENABLED_KEY` value."""
+    """A `NUDGE_ENABLED_KEY` or `CANCELLATION_ENABLED_KEY` value."""
     return "true" if value else "false"
 
 
 TEMPLATE_KEYS = {template_key(name): name for name in EDITABLE_TEMPLATES}
 SCHEDULE_KEYS = {schedule_key(point): point for point in SchedulePoint}
 # Every valid override key that `apply_overrides` takes.
-KEYS = frozenset({*TEMPLATE_KEYS, *SCHEDULE_KEYS, NUDGE_ENABLED_KEY})
+KEYS = frozenset({*TEMPLATE_KEYS, *SCHEDULE_KEYS, NUDGE_ENABLED_KEY, CANCELLATION_ENABLED_KEY})
 DINNER_KEY = schedule_key(SchedulePoint.DINNER)
 PENDING_DINNER_KEY = "schedule.dinner.next"
 
@@ -93,6 +96,7 @@ def apply_overrides(base: Config, overrides: Mapping[str, str]) -> Config:
     """
     templates: dict[str, Template] = {}
     schedule: dict[str, object] = {}
+    decision: dict[str, object] = {}
     for key, value in overrides.items():
         if key in TEMPLATE_KEYS:
             name = TEMPLATE_KEYS[key]
@@ -102,12 +106,12 @@ def apply_overrides(base: Config, overrides: Mapping[str, str]) -> Config:
         elif key in SCHEDULE_KEYS:
             schedule[SCHEDULE_KEYS[key].attr] = _parse_weekly_time(value, key)
         elif key == NUDGE_ENABLED_KEY:
-            if value not in _BOOLS:
-                raise ConfigError(f'{key}: must be "true" or "false", got {value!r}')
-            schedule["nudge_enabled"] = _BOOLS[value]
+            schedule["nudge_enabled"] = _parse_bool(key, value)
+        elif key == CANCELLATION_ENABLED_KEY:
+            decision["cancellation"] = _parse_bool(key, value)
         else:
             raise ConfigError(f"unknown override {key!r}")
-    if not (templates or schedule):
+    if not (templates or schedule or decision):
         return base
     new_schedule = dataclasses.replace(base.schedule, **schedule)
     _check_order(new_schedule)
@@ -115,7 +119,14 @@ def apply_overrides(base: Config, overrides: Mapping[str, str]) -> Config:
         base,
         schedule=new_schedule,
         templates=dataclasses.replace(base.templates, **templates),
+        decision=dataclasses.replace(base.decision, **decision),
     )
+
+
+def _parse_bool(key: str, value: str) -> bool:
+    if value not in _BOOLS:
+        raise ConfigError(f'{key}: must be "true" or "false", got {value!r}')
+    return _BOOLS[value]
 
 
 @dataclass(frozen=True)

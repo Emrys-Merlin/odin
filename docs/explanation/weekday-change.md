@@ -28,6 +28,8 @@ has a template of its own, `weekday_change_cancellation`, which can say that din
 date is dropped and when the first dinner on the new day is. That template is optional: while it
 is not set, the normal `cancellation` goes out instead (with the new weekday's name), so a config
 written before it existed keeps working. Either way it is recorded as the week's cancellation.
+While [the cancellation is off](weekly-cycle.md#turning-the-cancellation-off), only
+`weekday_change_cancellation` goes out; without it, the dinner group gets nothing.
 Like any
 [late action](reliability.md#catch-up) it is skipped after the dropped week's dinner start, or
 once the catch-up grace counted from the switch has passed. The dropped week is stored in the

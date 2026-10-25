@@ -8,6 +8,7 @@ import pytest
 from odin.config import Config, ConfigError, WeeklyTime, parse_config
 from odin.cycle import SchedulePoint, TemplateName
 from odin.overrides import (
+    CANCELLATION_ENABLED_KEY,
     EDITABLE_TEMPLATES,
     KEYS,
     NUDGE_ENABLED_KEY,
@@ -46,7 +47,8 @@ def test_keys() -> None:
     assert template_key(TemplateName.FLAT_ASK) == "templates.flat_ask"
     assert schedule_key(SchedulePoint.FLAT_DEADLINE) == "schedule.flat_deadline"
     assert NUDGE_ENABLED_KEY == "schedule.nudge.enabled"
-    assert len(KEYS) == len(EDITABLE_TEMPLATES) + len(SchedulePoint) + 1
+    assert CANCELLATION_ENABLED_KEY == "decision.cancellation.enabled"
+    assert len(KEYS) == len(EDITABLE_TEMPLATES) + len(SchedulePoint) + 2
     with pytest.raises(ValueError, match="hello"):
         template_key(TemplateName.HELLO)
 
@@ -75,6 +77,14 @@ def test_formatted_values_round_trip() -> None:
     assert format_bool(False) == "false"
     config = apply_overrides(BASE, {NUDGE_ENABLED_KEY: format_bool(False)})
     assert config.schedule.nudge is None
+    config = apply_overrides(BASE, {CANCELLATION_ENABLED_KEY: format_bool(False)})
+    assert not config.decision.cancellation
+    assert BASE.decision.cancellation
+
+
+def test_cancellation_override_must_be_a_bool() -> None:
+    with pytest.raises(ConfigError, match=r"decision\.cancellation\.enabled"):
+        apply_overrides(BASE, {CANCELLATION_ENABLED_KEY: "no"})
 
 
 # --- apply_overrides ----------------------------------------------------------------------------

@@ -79,6 +79,10 @@ What the commands that change something do in detail is explained elsewhere:
 
 - `/settime`, `/resettime`, `/nudge`: [The weekly cycle](../explanation/weekly-cycle.md); moving
   dinner to another weekday: [Changing the dinner weekday](../explanation/weekday-change.md).
+- `/cancellation`:
+  [The weekly cycle](../explanation/weekly-cycle.md#turning-the-cancellation-off). `on` and `off`
+  override `decision.cancellation` from the [configuration](configuration.md#decision); `reset`
+  goes back to it.
 - `/cancel`: [Reactions](../explanation/reactions.md) and
   [The weekly cycle](../explanation/weekly-cycle.md).
 - `/introduce`: [Reactions](../explanation/reactions.md) and

@@ -3,7 +3,7 @@
 `/skip <JJJJ-MM-TT>` stores a dinner day as a skip date in the state DB (`Store.add_skip_date`),
 `/skip` alone lists the upcoming ones, and `/unskip <JJJJ-MM-TT>` takes one back. In the dinner
 week of a skip date ODIN does not ask the flat group and posts the cancellation to the dinner
-group at the usual decision time (see `odin.engine`).
+group at the usual decision time (see `odin.engine`), unless the cancellation is switched off.
 
 Skipping the current week once it has started — its flat ask is recorded, it was dropped by a
 dinner weekday change, or a /cancel request is open — is `/cancel`: `/skip` with that day replies
@@ -22,7 +22,7 @@ from datetime import date
 from odin.commands import cancel, ui
 from odin.commands.core import Command, CommandContext, CommandError
 from odin.config import WEEKDAYS_DE, Config
-from odin.engine import dinner_week
+from odin.engine import cancellation_silenced, dinner_week
 from odin.overrides import pending_dinner
 from odin.store import MessageKind
 
@@ -36,6 +36,11 @@ ALREADY_SKIPPED = "Für {day} ist schon eingetragen, dass kein Essen ist ({marke
 SKIPPED = (
     "Eingetragen: Am {day} gibt es kein Essen. Ich frage die WG in der Woche nicht und schicke "
     "der Essensgruppe am {at} diese Absage:"
+)
+SKIPPED_SILENTLY = (
+    "Eingetragen: Am {day} gibt es kein Essen. Ich frage die WG in der Woche nicht. Die Absage an "
+    "die Essensgruppe ist aus (/cancellation) – ist sie am {at} noch aus, bekommt die "
+    "Essensgruppe nichts."
 )
 UNDO = "/unskip {iso} nimmt das zurück."
 HIATUS = (
@@ -74,9 +79,11 @@ def run_skip(ctx: CommandContext, args: str) -> list[str]:
     store.add_skip_date(day, ctx.sender_name or ctx.sender, ctx.now)
     decision = config.when(config.schedule.flat_deadline, day)
     at = f"{ui.WEEKDAYS_SHORT[decision.weekday()]} {decision:%d.%m. %H:%M}"
+    undo = UNDO.format(iso=day.isoformat())
+    if cancellation_silenced(config):
+        return [f"{SKIPPED_SILENTLY.format(day=_day(day), at=at)}\n\n{undo}"]
     cancellation = config.templates.cancellation.render(**config.placeholder_values())
     reply = SKIPPED.format(day=_day(day), at=at)
-    undo = UNDO.format(iso=day.isoformat())
     if store.active_hiatus() is not None:
         undo = f"{HIATUS}\n{undo}"
     return [f"{reply}\n\n{cancellation}\n\n{undo}"]
