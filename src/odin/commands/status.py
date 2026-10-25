@@ -5,8 +5,10 @@ dinner weekday change (`odin.overrides.pending_dinner`), which takes over at thi
 A week cancelled via /cancel shows the cancellation (after the announcement, if that was sent),
 and an open cancel request shows whether it is confirmed yet. A skip date (`/skip`) shows as a
 week without flat ask whose cancellation goes out at the decision time; later skip dates are
-listed. During a hiatus (`/hiatus`) the hiatus is shown — since when, by whom, its notice and how
-to end it — instead of the next action, and a week that is part of a hiatus shows no steps.
+listed. While the cancellation is switched off (`/cancellation off`), the pending decision says
+so, and a cancellation that was not posted because of it shows as such. During a hiatus
+(`/hiatus`) the hiatus is shown — since when, by whom, its notice and how to end it — instead of
+the next action, and a week that is part of a hiatus shows no steps.
 """
 
 import dataclasses
@@ -65,6 +67,9 @@ HIATUS_SINCE = "😴 Pause seit {at} (von {by}): keine Frage an die WG, nichts a
 HIATUS_REQUESTED = "😴 Pause per /hiatus angefragt ({at}) – {state}"
 HIATUS_CONFIRMED = "bestätigt, beginnt gleich"
 NOTICE = "Hinweis an die Essensgruppe"
+CANCELLATION_OFF = "Absage an die Essensgruppe: aus"
+SILENCED = "nicht gesendet (aus)"
+NOTICE_SILENCED = "nicht gesendet (Absage ist aus)"
 
 
 def run(ctx: CommandContext, args: str) -> list[str]:
@@ -116,6 +121,8 @@ def _hiatus_lines(config: Config, hiatus: Hiatus) -> list[str]:
             notice = f"{SENT} {NOTICE} gesendet ({_local_date(config, hiatus.notice_at)})"
         case Outcome.SKIPPED:
             notice = f"{SKIPPED} {NOTICE}: übersprungen"
+        case Outcome.SILENCED:
+            notice = f"{OFF} {NOTICE}: {NOTICE_SILENCED}"
         case None:
             notice = f"{PENDING} {NOTICE}: gleich"
     return [since, notice]
@@ -231,11 +238,18 @@ class _WeekStatus:
             return line + " – " + self._reactions(MessageKind.DINNER_ANNOUNCEMENT)
         if self.cancelled:
             return self._cancellation_line()
+        if self.outcome(Action.CANCELLATION) is Outcome.SILENCED:
+            line = f"{OFF} {CANCELLATION_STEP}: {SILENCED}"
+            return f"{line} – {BY_SKIP}" if self.skipping else line
         if self.decided:
             return f"{SKIPPED} {DECISION}: übersprungen"
         when = ui.weekly_time(self.config.schedule.flat_deadline)
         if self.skipping:
+            if not self.config.decision.cancellation:
+                return f"{OFF} {CANCELLATION_OFF} – {BY_SKIP}"
             return f"{PENDING} {CANCELLATION_STEP}: {when} – {BY_SKIP}"
+        if not self.config.decision.cancellation:
+            return f"{PENDING} {DECISION}: {when} ({CANCELLATION_OFF})"
         return f"{PENDING} {DECISION}: {when}"
 
     def _cancellation_line(self) -> str:
@@ -279,7 +293,7 @@ class _WeekStatus:
         match self.outcome(action):
             case Outcome.SENT:
                 return f"{SENT} {sent} ({self._sent_at(action)})"
-            case Outcome.SKIPPED:
+            case Outcome.SKIPPED | Outcome.SILENCED:
                 return f"{SKIPPED} {label}: übersprungen"
             case None:
                 return f"{PENDING} {label}: {ui.weekly_time(point)}"
@@ -375,9 +389,11 @@ def _next_action(
 
 def _skip_cancellation_ahead(current: _WeekStatus, upcoming: Upcoming) -> bool:
     """Whether `upcoming`, in a week with a skip date, is a cancellation still to be sent: its
-    decision step, unless that is this week's and already decided."""
-    return upcoming.step is StepName.DECISION and not (
-        upcoming.week == current.week and current.decided
+    decision step, unless that is this week's and already decided, or the cancellation is off."""
+    return (
+        upcoming.step is StepName.DECISION
+        and current.config.decision.cancellation
+        and not (upcoming.week == current.week and current.decided)
     )
 
 

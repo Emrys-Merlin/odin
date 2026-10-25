@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from odin.commands import ui
 from odin.commands.cancel import CANCEL
+from odin.commands.cancellation import CANCELLATION
 from odin.commands.core import Command, CommandContext, CommandError, TrackedReply, parse
 from odin.commands.help import HELP
 from odin.commands.hiatus import HIATUS, RESUME
@@ -47,6 +48,7 @@ COMMANDS: list[Command] = [
     SETTIME,
     RESETTIME,
     NUDGE,
+    CANCELLATION,
     CANCEL,
     SKIP,
     UNSKIP,

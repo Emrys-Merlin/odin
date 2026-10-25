@@ -9,8 +9,9 @@ week's dinner starts.
 
 Refused when the dinner group has already been told the week is off (or ODIN deliberately did
 not tell it), for a week dropped by a dinner weekday change or set as a skip date via `/skip`
-(their cancellation goes out anyway), while a request of this week is open, and during a hiatus
-(`/hiatus`) or for a week that is part of one: nothing is sent then.
+(their cancellation goes out anyway — unless it is switched off, see `/cancellation`), while a
+request of this week is open, and during a hiatus (`/hiatus`) or for a week that is part of one:
+nothing is sent then.
 """
 
 from datetime import UTC, date, datetime
@@ -18,7 +19,8 @@ from datetime import UTC, date, datetime
 from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError, TrackedReply
 from odin.config import WEEKDAYS_DE, Config
-from odin.engine import dinner_week
+from odin.cycle import TemplateName
+from odin.engine import cancellation_silenced, dinner_week
 from odin.reactions import count_confirmations
 from odin.store import Action, MessageKind, Outcome, Store
 
@@ -34,6 +36,10 @@ ALREADY_CANCELLED = "Das Essen am {day} ist schon abgesagt (Absage gesendet {at}
 CANCELLATION_SKIPPED = (
     "Für das Essen am {day} habe ich die Absage übersprungen (ich war zu spät dran) und schicke "
     "jetzt auch keine mehr. Sagt der Essensgruppe bitte selbst Bescheid."
+)
+CANCELLATION_SILENCED = (
+    "Das Essen am {day} fällt schon aus; die Absage an die Essensgruppe ist aus (/cancellation) "
+    "und ging deshalb nicht raus. Sagt der Essensgruppe bitte selbst Bescheid, wenn ihr wollt."
 )
 DROPPED_WEEK = (
     "Das Essen am {day} fällt schon wegen des Wechsels des Essenstags aus; "
@@ -96,10 +102,17 @@ def _refusal(config: Config, store: Store, week: date, day: str) -> str | None:
             return ALREADY_CANCELLED.format(day=day, at=local(sent_at))
         case Outcome.SKIPPED:
             return CANCELLATION_SKIPPED.format(day=day)
-    if store.dropped_at(week) is not None:
+        case Outcome.SILENCED:
+            return CANCELLATION_SILENCED.format(day=day)
+    # A dropped week or a skip date gets its cancellation anyway, unless it is switched off.
+    if store.dropped_at(week) is not None and not cancellation_silenced(
+        config, TemplateName.WEEKDAY_CHANGE_CANCELLATION
+    ):
         return DROPPED_WEEK.format(day=day)
-    if store.skip_date(week) is not None and store.action_outcome(week, Action.FLAT_ASK) is not (
-        Outcome.SENT
+    if (
+        store.skip_date(week) is not None
+        and store.action_outcome(week, Action.FLAT_ASK) is not Outcome.SENT
+        and not cancellation_silenced(config)
     ):
         decision = config.when(config.schedule.flat_deadline, week)
         return SKIP_DATE.format(day=day, at=local(decision))

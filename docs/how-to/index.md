@@ -6,5 +6,6 @@ Steps for one task you already know you want to do. They assume ODIN is running;
 - **Operate** — upgrade, roll back, back up, change groups or config, allow commands in a
   direct message, monitor, troubleshoot.
 - **In the chat** — for flatmates: cancel a dinner, edit a text, introduce ODIN to the dinner
-  group, move dinner, pause the nudge, skip a date in advance, take a break.
+  group, move dinner, pause the nudge, skip a date in advance, take a break, turn the
+  cancellation off.
 - **Develop** — run ODIN locally, add a chat command, release, write docs.

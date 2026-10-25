@@ -33,6 +33,13 @@ tally = { weekday = "fri", time = "14:00" }
 cook = { weekday = "sun", time = "17:00" }
 dinner = { weekday = "sun", time = "18:00" }
 
+# What the dinner group is told at flat_deadline.
+[decision]
+# Post the cancellation when dinner does not take place: nobody confirmed, a /skip date, a week
+# dropped by a new dinner weekday, or a /hiatus without a hiatus template. false: the dinner group
+# only hears from ODIN when there is a dinner. A /cancel always posts the cancellation.
+cancellation = true
+
 # ODIN's Signal profile, applied by `odin setup`.
 [profile]
 name = "Odin 🍽️"

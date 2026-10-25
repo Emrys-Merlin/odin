@@ -69,7 +69,8 @@ silence means cancellation, not a second poll. It can be turned off (see
 [Pause the nudge](../how-to/chat/pause-nudge.md)).
 
 The **decision** on Wednesday evening leaves guests four days' notice either way. Without a 👍
-the dinner group gets a cancellation; with one it gets the announcement.
+the dinner group gets a cancellation; with one it gets the announcement. The cancellation can be
+turned off (see [below](#turning-the-cancellation-off)).
 
 The announcement asks guests to react 👍 if they are coming, **please by Fri 14:00** (we order
 food then) — not a hard deadline, reactions after it are fine. It states two times: **17:00** for
@@ -102,6 +103,41 @@ reactions are still welcome.
 All texts are templates in the config, so the flat can reword them without a release (see
 [Templates](../reference/templates.md) and [Edit a text](../how-to/chat/edit-a-text.md)).
 Which reactions count is explained in [Reactions](reactions.md).
+
+## Turning the cancellation off
+
+Not every flat wants the dinner group to hear "no dinner this week" every week without one: if
+dinner is off more often than on, the weekly cancellation is mostly noise. `/cancellation off`
+in the flat group (or `cancellation = false` under `[decision]` in the config) turns it off. The
+week is still decided the same way — without a 👍 there is no dinner and no tally — but the
+dinner group hears from ODIN only when there is a dinner.
+
+The switch covers every case in which ODIN would post the plain cancellation by itself:
+
+| The cancellation of … | While off |
+|---|---|
+| a week nobody confirmed | not posted |
+| a [skip date](#skipping-a-date-in-advance) | not posted |
+| a week [dropped by a dinner weekday change](weekday-change.md#dropped-weeks) | not posted while `weekday_change_cancellation` is not set; that text, if set, is posted: it tells guests about the new day |
+| the notice of a [hiatus](#taking-a-break) | not posted while `hiatus` is not set; that text, if set, is posted: it tells guests about the break |
+| a confirmed [`/cancel`](#cancelling-from-the-chat) | **posted** |
+| the running week, by a hiatus that starts after the flat ask | **posted**, as by `/cancel` |
+
+`/cancel` is the exception because someone explicitly asked for it, usually after an
+announcement that guests are counting on. For the same reason, while the switch is off `/cancel`
+also works in a skip-date week and in a dropped week, where it is otherwise refused because their
+cancellation goes out anyway. A message with its own template carries news beyond "no dinner", so
+the switch leaves it alone too.
+
+A cancellation that is not posted is still recorded for the week, as *silenced*, at the time it
+was due: nothing is sent later when the switch goes back on, `/status` shows it as not sent, and
+`/cancel` is refused for that week — dinner is off already, and if the guests should hear about
+it, the flat can tell them itself. The switch is read when the decision is due, so a change
+applies to the running week until its decision; `/cancellation reset` goes back to the config
+file.
+
+Steps: [Turn the cancellation off](../how-to/chat/turn-off-cancellation.md). Exact syntax:
+[Chat commands](../reference/chat-commands.md).
 
 ## Cancelling from the chat
 
@@ -155,7 +191,8 @@ A skipped week runs like a cancelled one, but on the usual schedule:
 
 - The flat ask and the nudge are not sent. Nobody needs to confirm a dinner that is not
   happening, so the flat group is not asked.
-- The cancellation goes to the dinner group at the usual decision time (Wed 18:00 by default),
+- The cancellation goes to the dinner group at the usual decision time (Wed 18:00 by default;
+  not at all while [the cancellation is off](#turning-the-cancellation-off)),
   not when the date is entered. Guests hear about every Sunday at the same point in the week, and
   the template's "this Sunday" stays true.
 - The tally is skipped, as after any cancellation.

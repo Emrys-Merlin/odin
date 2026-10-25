@@ -18,6 +18,12 @@ UNTRACKED = "{emoji} nicht zählbar"
 LAPSES = "Ohne {emoji} passiert nichts; die Anfrage verfällt, wenn das Essen beginnt ({dinner})."
 RESUME_HINT = "/resume beendet die Pause."
 
+# A setting changed via chat (/settime, /nudge, /cancellation …), and when it applies.
+SAVED = "Gespeichert ✅"
+RESET = "Zurückgesetzt ✅ (wieder wie in der Config)"
+THIS_WEEK = "Das gilt schon für diese Woche."
+FROM_NEXT_WEEK = "Das gilt ab nächster Woche."
+
 # Direct messages from a sender on `commands.direct_senders` (see `odin.commands.handle_direct`).
 DIRECT_NOT_A_COMMAND = "Hier verstehe ich nur Befehle – /help zeigt sie."
 DIRECT_GROUP_ONLY = (

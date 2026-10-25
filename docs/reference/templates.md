@@ -18,7 +18,7 @@ anything, and `hiatus`, which falls back to `cancellation`. The texts of `config
 | `flat_ask` | flat group | German | flat ask: does dinner take place? | yes |
 | `nudge` | flat group | German | nudge, only if nobody confirmed yet | yes |
 | `announcement` | dinner group | German, blank line, English | decision, if someone confirmed | yes |
-| `cancellation` | dinner group | German, blank line, English | decision, if nobody confirmed; also after `/cancel` | yes |
+| `cancellation` | dinner group | German, blank line, English | decision, if nobody confirmed, unless switched off (`decision.cancellation`, `/cancellation off`); also after `/cancel` | yes |
 | `weekday_change_cancellation` | dinner group | German, blank line, English | when a new dinner weekday takes over and drops a week (see [Changing the dinner weekday](../explanation/weekday-change.md#dropped-weeks)); optional, falls back to `cancellation` | yes |
 | `tally` | flat group | German | tally, only if dinner is on | yes |
 | `introduction` | dinner group | German, blank line, English | after a confirmed `/introduce`, any number of times; not part of the weekly cycle; optional, no fallback | yes |

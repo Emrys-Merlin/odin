@@ -17,7 +17,7 @@ from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError, TrackedReply
 from odin.config import WEEKDAYS_DE, Config
 from odin.cycle import TemplateName
-from odin.engine import dinner_week, hiatus_end
+from odin.engine import cancellation_silenced, dinner_week, hiatus_end
 from odin.store import Action, MessageKind, Outcome, Store
 
 USAGE = "So geht's: einfach /hiatus, ohne Zusatz."
@@ -32,6 +32,10 @@ CANCELS = (
 )
 NOTHING_TO_DINNER = (
     "Die Essensgruppe hat die Absage für das Essen am {day} schon; mehr schicke ich ihr nicht."
+)
+NOTHING_SILENCED = (
+    "Die Absage an die Essensgruppe ist aus (/cancellation), und es gibt keinen eigenen Text für "
+    "die Pause – der Essensgruppe schicke ich nichts."
 )
 NO_TEXT = "Es gibt noch keinen eigenen Text für die Pause; /settext hiatus legt einen an."
 TO_DINNER = "Das geht an die Essensgruppe:"
@@ -81,8 +85,10 @@ def run_hiatus(ctx: CommandContext, args: str) -> list[str]:
         lines.append(NO_TEXT)
     if texts:
         body = "\n".join([*lines, "", TO_DINNER]) + "\n\n" + "\n\n".join(texts)
-    else:
+    elif _notice_redundant(config, store, week, cancels):
         body = "\n".join([*lines, NOTHING_TO_DINNER.format(day=day)])
+    else:
+        body = "\n".join([*lines, NOTHING_SILENCED])
     store.request_hiatus(week, ctx.sender_name or ctx.sender, ctx.now)
     return [TrackedReply(body, week, MessageKind.HIATUS_REQUEST)]
 
@@ -118,14 +124,23 @@ def _cancels(store: Store, week: date) -> bool:
 
 def _dinner_texts(config: Config, store: Store, week: date, cancels: bool) -> list[str]:
     """What the dinner group would get, in order: the cancellation, then the hiatus notice —
-    unless the notice is the cancellation (its template is not set) and the week has that."""
+    unless the notice is the cancellation (its template is not set) and the week has that, or
+    the cancellation is switched off."""
     values = config.placeholder_values()
     cancellation = config.templates.cancellation.render(**values)
     texts = [cancellation] if cancels else []
-    cancelled = cancels or store.action_outcome(week, Action.CANCELLATION) is Outcome.SENT
-    if config.templates.is_set(TemplateName.HIATUS) or not cancelled:
+    if not (
+        _notice_redundant(config, store, week, cancels)
+        or cancellation_silenced(config, TemplateName.HIATUS)
+    ):
         texts.append(config.templates.get(TemplateName.HIATUS).render(**values))
     return texts
+
+
+def _notice_redundant(config: Config, store: Store, week: date, cancels: bool) -> bool:
+    """Whether the hiatus notice is the cancellation, and the dinner group has (or gets) that."""
+    cancelled = cancels or store.action_outcome(week, Action.CANCELLATION) is Outcome.SENT
+    return cancelled and not config.templates.is_set(TemplateName.HIATUS)
 
 
 def _local(config: Config, moment: datetime) -> str:

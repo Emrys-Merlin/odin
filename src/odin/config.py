@@ -524,6 +524,28 @@ def _parse_commands(raw: object) -> Commands:
     )
 
 
+# --- Decision -----------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Decision:
+    """What the dinner group is told at the decision (the flat deadline)."""
+
+    # Whether the dinner group gets the cancellation when dinner does not take place: no
+    # confirmation, a skip date, a dropped week or a hiatus without a template of their own.
+    # A cancellation via /cancel (or a hiatus that cancels the running week) is always posted.
+    cancellation: bool = True
+
+
+def _parse_decision(raw: object) -> Decision:
+    table = _table(raw, "decision")
+    _reject_unknown(table, {"cancellation"}, "decision")
+    cancellation = table.get("cancellation", True)
+    if not isinstance(cancellation, bool):
+        raise ConfigError(f"decision.cancellation: must be true or false, got {cancellation!r}")
+    return Decision(cancellation=cancellation)
+
+
 # --- Config -------------------------------------------------------------------------------------
 
 DEFAULT_TIMEZONE = "Europe/Berlin"
@@ -543,6 +565,7 @@ class Config:
     templates: Templates
     profile: Profile
     commands: Commands
+    decision: Decision
 
     def when(self, point: WeeklyTime, week: dt.date) -> dt.datetime:
         """When `point` happens in the dinner week whose dinner falls on `week`.
@@ -582,7 +605,16 @@ def parse_config(data: Mapping[str, Any], base_dir: Path | None = None) -> Confi
     (the config file's directory; default: the working directory)."""
     _reject_unknown(
         data,
-        {"timezone", "emoji", "catch_up_grace", "schedule", "templates", "profile", "commands"},
+        {
+            "timezone",
+            "emoji",
+            "catch_up_grace",
+            "schedule",
+            "decision",
+            "templates",
+            "profile",
+            "commands",
+        },
         "config",
     )
 
@@ -618,6 +650,7 @@ def parse_config(data: Mapping[str, Any], base_dir: Path | None = None) -> Confi
         templates=_parse_templates(data.get("templates")),
         profile=_parse_profile(data.get("profile"), base_dir or Path()),
         commands=_parse_commands(data.get("commands")),
+        decision=_parse_decision(data.get("decision")),
     )
 
 
