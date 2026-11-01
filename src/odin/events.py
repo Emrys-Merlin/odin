@@ -95,7 +95,7 @@ async def _answer(
     for reply in replies:
         timestamp = await _send(client.send_group_message(account.flat_group_id, reply), "reply")
         if timestamp is not None and isinstance(reply, TrackedReply):
-            _track(reply, timestamp, store, account)
+            _track(reply, timestamp, store, account, ctx.config)
 
 
 async def _answer_direct(
@@ -145,18 +145,31 @@ async def _send(send: Coroutine[Any, Any, int], what: str) -> int | None:
     return None
 
 
-def _track(reply: TrackedReply, timestamp: int, store: Store, account: Account) -> None:
+def _track(
+    reply: TrackedReply, timestamp: int, store: Store, account: Account, config: Config
+) -> None:
+    """Track `reply` with the emojis in effect (`config`), which its text asked for."""
+
+    def track() -> None:
+        store.track_message(
+            reply.week,
+            reply.kind,
+            account.flat_group_id,
+            account.number,
+            timestamp,
+            emoji=config.emoji,
+            cook_emoji=config.cook_emoji,
+        )
+
     if reply.kind is MessageKind.INTRODUCTION_REQUEST:
         # Replaces an earlier request, so a 👍 on an older preview posts nothing.
         with store.transaction():
             store.untrack_messages(reply.kind)
-            store.track_message(
-                reply.week, reply.kind, account.flat_group_id, account.number, timestamp
-            )
+            track()
         return
     # Checked after the send, with no await in between: two replies of the same kind sent at
     # once both pass the command's own check, and only the first one is kept.
     if store.tracked_message(reply.week, reply.kind) is not None:
         logger.warning("not tracking a second %s for week %s", reply.kind, reply.week)
         return
-    store.track_message(reply.week, reply.kind, account.flat_group_id, account.number, timestamp)
+    track()

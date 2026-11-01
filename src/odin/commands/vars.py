@@ -12,7 +12,8 @@ from odin.overrides import EDITABLE_TEMPLATES
 # Placeholder -> German description, in the order /vars lists them. A `_de` / `_en` pair shares
 # one description and is shown on one line.
 DESCRIPTIONS = {
-    "emoji": "Reaktion zum Bestätigen",
+    "emoji": "Reaktion zum Bestätigen (auf der Einladung: „ich komme“)",
+    "cook_emoji": "Reaktion auf der Einladung: „ich komme und helfe beim Kochen“",
     "flat_ask_day_de": "Frage an die WG (Wochentag)",
     "flat_ask_day_en": "Frage an die WG (Wochentag)",
     "deadline": "Entscheidung der WG (Uhrzeit)",
@@ -27,7 +28,8 @@ DESCRIPTIONS = {
     "dinner_time": "Essen (Uhrzeit)",
     "dinner_day_de": "Essen (Wochentag)",
     "dinner_day_en": "Essen (Wochentag)",
-    "count": "Anzahl Zusagen auf die Ankündigung",
+    "count": "Anzahl Zusagen auf die Ankündigung, mit beiden Reaktionen",
+    "cooks": "Davon: Anzahl, die beim Kochen helfen",
     "dropped_date": "Datum des Essens, das beim Wechsel des Wochentags ausfällt",
     "first_date": "Datum des ersten Essens am neuen Wochentag",
 }

@@ -21,7 +21,6 @@ from odin.commands.core import Command, CommandContext, CommandError, TrackedRep
 from odin.config import WEEKDAYS_DE, Config
 from odin.cycle import TemplateName
 from odin.engine import cancellation_silenced, dinner_week
-from odin.reactions import count_confirmations
 from odin.store import Action, MessageKind, Outcome, Store
 
 USAGE = "So geht's: einfach /cancel, ohne Zusatz."
@@ -29,7 +28,7 @@ CONFIRM = (
     "Das Essen am {day} absagen? Dann reagiert mit {emoji} auf diese Nachricht – "
     "ich schicke der Essensgruppe dann diese Absage:"
 )
-ALREADY_ANNOUNCED = "Die Einladung ist schon raus ({reactions}); die Absage kommt dann hinterher."
+ALREADY_ANNOUNCED = "Die Einladung ist schon raus – {reactions}; die Absage kommt dann hinterher."
 HIATUS = "Ich mache gerade Pause – es gibt nichts abzusagen. " + ui.RESUME_HINT
 HIATUS_WEEK = "Das Essen am {day} fällt wegen der Pause (/hiatus) aus – es gibt nichts abzusagen."
 ALREADY_CANCELLED = "Das Essen am {day} ist schon abgesagt (Absage gesendet {at})."
@@ -72,11 +71,7 @@ def run(ctx: CommandContext, args: str) -> list[str]:
     lines = [CONFIRM.format(day=day, emoji=config.emoji)]
     announcement = store.tracked_message(week, MessageKind.DINNER_ANNOUNCEMENT)
     if store.action_outcome(week, Action.ANNOUNCEMENT) is Outcome.SENT:
-        if announcement is None:
-            reactions = ui.UNTRACKED.format(emoji=config.emoji)
-        else:
-            count = count_confirmations(store, announcement, config.emoji)
-            reactions = f"{count}× {config.emoji}"
+        reactions = ui.guests(store, announcement, config)
         lines.append(ALREADY_ANNOUNCED.format(reactions=reactions))
     dinner = config.when(config.schedule.dinner, week)
     lines.append(ui.LAPSES.format(emoji=config.emoji, dinner=local(dinner)))

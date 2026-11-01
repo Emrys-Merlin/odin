@@ -48,7 +48,7 @@ def test_keys() -> None:
     assert schedule_key(SchedulePoint.FLAT_DEADLINE) == "schedule.flat_deadline"
     assert NUDGE_ENABLED_KEY == "schedule.nudge.enabled"
     assert CANCELLATION_ENABLED_KEY == "decision.cancellation.enabled"
-    assert len(KEYS) == len(EDITABLE_TEMPLATES) + len(SchedulePoint) + 2
+    assert len(KEYS) == len(EDITABLE_TEMPLATES) + len(SchedulePoint) + 4
     with pytest.raises(ValueError, match="hello"):
         template_key(TemplateName.HELLO)
 

@@ -66,16 +66,20 @@ def test_defaults() -> None:
 def test_example_config_loads_and_matches_defaults() -> None:
     c = load_config(EXAMPLE)
     defaults = parse_config(config())
-    assert (c.timezone, c.emoji, c.catch_up_grace, c.schedule) == (
+    assert (c.timezone, c.emoji, c.cook_emoji, c.catch_up_grace, c.schedule) == (
         defaults.timezone,
         defaults.emoji,
+        defaults.cook_emoji,
         defaults.catch_up_grace,
         defaults.schedule,
     )
     values = c.placeholder_values()
     for name in ("flat_ask", "nudge", "cancellation", "announcement"):
         assert getattr(c.templates, name).render(**values)
-    assert "7" in c.templates.tally.render(**values, count=7)
+    tally = c.templates.tally.render(**values, count=7, cooks=2)
+    assert "7" in tally
+    assert "2" in tally
+    assert "🍳" in c.templates.announcement.render(**values)
 
 
 def test_example_dinner_texts_are_bilingual() -> None:

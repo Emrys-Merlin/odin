@@ -20,7 +20,7 @@ ODIN does not cancel yet. It replies with the cancellation it would post and ask
 <div class="msg" markdown>
 <span class="sender">Odin 🍽️</span>
 Das Essen am Sonntag, 25.10. absagen? Dann reagiert mit 👍 auf diese Nachricht – ich schicke der Essensgruppe dann diese Absage:<br>
-Die Einladung ist schon raus (2× 👍); die Absage kommt dann hinterher.<br>
+Die Einladung ist schon raus – 2 kommen (2× 👍, 0× 🍳); die Absage kommt dann hinterher.<br>
 Ohne 👍 passiert nichts; die Anfrage verfällt, wenn das Essen beginnt (So 25.10. 18:00).
 
 Diesen Sonntag findet leider kein offenes Abendessen statt. Bis zum nächsten Mal!
@@ -65,7 +65,7 @@ If nobody reacts, nothing happens: the request lapses when the dinner starts.
 Sonntag, 25.10.<br>
 ✅ Frage an die WG gesendet (Di 18:00) – 1× 👍<br>
 ✅ Erinnerung gesendet (Mi 12:00)<br>
-✅ Einladung gesendet (Mi 18:00) – 2× 👍<br>
+✅ Einladung gesendet (Mi 18:00) – 2 kommen (2× 👍, 0× 🍳)<br>
 ❌ Absage gesendet (Fr 19:10) – per /cancel<br>
 ⏭️ Zählung: übersprungen (kein Essen)<br>
 Nächste Aktion: Frage an die WG, Di 18:00

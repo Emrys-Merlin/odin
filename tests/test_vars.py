@@ -55,7 +55,7 @@ def test_vars_lists_all_placeholders_with_current_values(store: Store) -> None:
     assert lines[0] == "Platzhalter für /settext:"
     for name in set().union(*(TEMPLATE_PLACEHOLDERS[t] for t in EDITABLE_TEMPLATES)):
         assert f"{{{name}}}" in reply
-    assert "{emoji} – Reaktion zum Bestätigen: 👍" in lines
+    assert "{emoji} – Reaktion zum Bestätigen (auf der Einladung: „ich komme“): 👍" in lines
     assert "{deadline} – Entscheidung der WG (Uhrzeit): 18:00" in lines
     assert (
         "{deadline_day_de} / {deadline_day_en} – Entscheidung der WG (Wochentag): "
@@ -65,7 +65,10 @@ def test_vars_lists_all_placeholders_with_current_values(store: Store) -> None:
     assert (
         "{flat_ask_day_de} / {flat_ask_day_en} – Frage an die WG (Wochentag): Dienstag / Tuesday"
     ) in lines
-    assert "{count} – Anzahl Zusagen auf die Ankündigung (nur in tally)" in lines
+    assert (
+        "{count} – Anzahl Zusagen auf die Ankündigung, mit beiden Reaktionen (nur in tally)"
+        in lines
+    )
     assert lines[-2:] == [
         "{{ und }} schreiben für eine wörtliche Klammer.",
         "Nur für eine Vorlage: /vars <name>",
@@ -100,7 +103,7 @@ def test_vars_for_one_template(store: Store) -> None:
     flat_ask = vars_reply(store, "/vars Flat_Ask")
     assert flat_ask.splitlines()[0] == "Platzhalter für flat_ask:"
     assert "{count}" not in flat_ask
-    assert "{emoji} – Reaktion zum Bestätigen: 👍" in flat_ask
+    assert "{emoji} – Reaktion zum Bestätigen (auf der Einladung: „ich komme“): 👍" in flat_ask
 
 
 @pytest.mark.parametrize("name", ["hello", "flat_test", "nope", "tally extra"])

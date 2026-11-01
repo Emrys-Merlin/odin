@@ -6,14 +6,21 @@ Which 👍 count, which don't, and why.
 
 ODIN asks for reactions instead of replies: a reaction is one tap, needs no wording, and can be
 counted without parsing text. The emoji is 👍 by default and configurable (`emoji` in the
-[configuration](../reference/configuration.md)); "👍" below means whatever is configured.
+[configuration](../reference/configuration.md)); "👍" below means whatever is configured. On
+the dinner announcement there is a second one, 🍳 by default (`cook_emoji`): "I'm coming and
+I'll help cook".
 
 ## The rules
 
 - A 👍 from **anyone** in the flat group counts. No member list.
 - Removing a reaction before the deadline withdraws it (this covers "reacted by mistake").
 - Reactions after the deadline, and other emojis, are ignored.
-- The tally counts the configured emoji on the dinner announcement at tally time.
+- The tally counts the people reacting to the dinner announcement at tally time: with 👍
+  (coming) or 🍳 (coming and helping cook). It also says how many of them reacted with 🍳.
+- 🍳 counts only on the dinner announcement. On the flat poll and on requests it is ignored like
+  any other emoji.
+- Each message counts the emojis that were set when ODIN sent it. A change via `/emoji` applies
+  from ODIN's next message on.
 - A `/cancel` request is confirmed by the configured emoji on ODIN's reply, from anyone in the
   flat group, until the week's dinner starts; removing it before ODIN's next tick withdraws it.
 - A `/hiatus` request is confirmed the same way as a `/cancel` request, until the week's dinner
@@ -43,6 +50,15 @@ a later 👍 cannot undo an announcement or a cancellation that went out. Ignori
 state ODIN acted on and the state it reports the same. Other emojis are ignored so that ❤️ or 😂
 can be used freely without voting.
 
+**🍳 means coming, too.** Signal allows one reaction per person on a message: a new one
+replaces the old. A guest who wants to help cook cannot add 🍳 next to 👍, so 🍳 says both. The
+head count is everyone with 👍 or 🍳; the flat also learns how many come early to cook, without
+anyone having to ask around on Sunday. Changing one's mind is just switching the reaction.
+
+**Only on the announcement.** Helping cook is an offer to guests, made in the announcement. On
+the flat poll a flatmate's 🍳 would be ambiguous — host, or only help? — so there only 👍
+decides. Names are not collected: the tally gives counts, as for 👍.
+
 **The tally is a snapshot.** It counts the 👍 on the announcement at tally time, because that is
 when food gets ordered. Guests may still react afterwards; the announcement asks for reactions
 "ideally by" the RSVP time, not strictly. Plus-ones are written as replies and counted by humans.
@@ -64,6 +80,18 @@ the same guard: the reply shows the exact text, and nothing is posted without a 
 `/cancel` it belongs to no dinner week, so it lapses after a fixed time instead of at dinner, and
 a newer request replaces an older one — after editing the text, you simply ask again and react to
 the new preview.
+
+## Changing the emojis
+
+`/emoji` shows both emojis; `/emoji attend 🙋` or `/emoji cook 🧑‍🍳` changes one, and
+`/emoji reset` goes back to the configuration (see [Change the emojis](../how-to/chat/change-emojis.md)).
+The two must differ, or ODIN could not tell coming from cooking.
+
+A message asks for particular emojis in its text, and people react with those. So ODIN records
+the emojis with every message it counts reactions on, and keeps counting those: a change on
+Thursday does not make Wednesday's 🍳 stop counting. The change applies from ODIN's next flat
+ask, announcement or request on. Texts that use the `{emoji}` and `{cook_emoji}` placeholders
+show the new emojis by themselves; a text that has the emoji written out needs `/settext`.
 
 If ODIN cannot tell which message a 👍 belongs to, it cannot count it at all; how it handles that
 is described in [Reliability](reliability.md#unreadable-send-responses).

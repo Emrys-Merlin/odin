@@ -12,6 +12,7 @@ from odin.commands import ui
 from odin.commands.cancel import CANCEL
 from odin.commands.cancellation import CANCELLATION
 from odin.commands.core import Command, CommandContext, CommandError, TrackedReply, parse
+from odin.commands.emoji import EMOJI
 from odin.commands.help import HELP
 from odin.commands.hiatus import HIATUS, RESUME
 from odin.commands.introduce import INTRODUCE
@@ -49,6 +50,7 @@ COMMANDS: list[Command] = [
     RESETTIME,
     NUDGE,
     CANCELLATION,
+    EMOJI,
     CANCEL,
     SKIP,
     UNSKIP,

@@ -2,7 +2,12 @@
 
 Only reactions on a tracked message (flat poll, dinner announcement) are stored. Every emoji is
 stored — one reaction per reactor, a new one replaces the old — and counting filters on the
-configured emoji. So "👍 by mistake, then removed" and "👍 switched to ❤️" both withdraw the vote.
+message's emojis: those in effect when it was sent (`TrackedMessage.emoji`), else the configured
+ones. So "👍 by mistake, then removed" and "👍 switched to ❤️" both withdraw the vote.
+
+On the dinner announcement, the cook emoji (🍳 by default) means "I'm coming and I'll help cook":
+Signal allows one reaction per person, so it counts as coming too (`count_guests`). Everywhere
+else only the plain emoji confirms (`count_confirmations`).
 
 On the flat poll, reactions sent at or after the flat deadline are ignored (adding as well as
 removing), so the vote the decision was based on stays as it was. Whether a reaction is late is
@@ -15,9 +20,10 @@ lapses `INTRODUCTION_LAPSE` after it was sent: reactions from then on are ignore
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from odin.config import Config
+from odin.config import Config, plain_emoji
 from odin.signal import ReactionEvent
 from odin.store import MessageKind, Store, TrackedMessage
 
@@ -64,17 +70,49 @@ def handle_reaction(
     return True
 
 
-# Skin-tone modifiers and emoji/text variation selectors: 👍🏽 and 👍️ count as 👍.
-_MODIFIERS = dict.fromkeys([*range(0x1F3FB, 0x1F400), 0xFE0E, 0xFE0F])
-
-
 def same_emoji(a: str, b: str) -> bool:
-    return a.translate(_MODIFIERS) == b.translate(_MODIFIERS)
+    """Whether two emojis are the same, ignoring skin tone and variation selector."""
+    return plain_emoji(a) == plain_emoji(b)
 
 
-def count_confirmations(store: Store, message: TrackedMessage, emoji: str) -> int:
-    """Number of distinct people currently reacting to ``message`` with ``emoji``.
+def confirm_emoji(message: TrackedMessage, config: Config) -> str:
+    """The emoji that confirms ``message`` (or says "I'm coming" on the announcement)."""
+    return message.emoji or config.emoji
+
+
+def cook_emoji(message: TrackedMessage, config: Config) -> str:
+    """The emoji that says "I'm coming and I'll help cook" on the announcement ``message``."""
+    return message.cook_emoji or config.cook_emoji
+
+
+def count_confirmations(store: Store, message: TrackedMessage, config: Config) -> int:
+    """Number of distinct people currently confirming ``message`` with its emoji.
 
     Skin-tone variants count as the plain emoji.
     """
+    emoji = confirm_emoji(message, config)
     return sum(1 for r in store.reactions_for(message) if same_emoji(r.emoji, emoji))
+
+
+@dataclass(frozen=True, slots=True)
+class Guests:
+    """The reactions on a dinner announcement."""
+
+    count: int  # people coming: the plain emoji or the cook emoji
+    cooks: int  # of them, people helping cook: the cook emoji
+
+
+NO_GUESTS = Guests(0, 0)
+
+
+def count_guests(store: Store, announcement: TrackedMessage, config: Config) -> Guests:
+    """Who is coming to dinner, by the reactions on ``announcement``."""
+    emoji = confirm_emoji(announcement, config)
+    cook = cook_emoji(announcement, config)
+    coming = cooks = 0
+    for reaction in store.reactions_for(announcement):
+        if same_emoji(reaction.emoji, cook):
+            coming, cooks = coming + 1, cooks + 1
+        elif same_emoji(reaction.emoji, emoji):
+            coming += 1
+    return Guests(coming, cooks)

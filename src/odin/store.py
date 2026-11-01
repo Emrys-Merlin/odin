@@ -90,6 +90,11 @@ class TrackedMessage:
     group_id: str
     author: str
     timestamp: int
+    # The reaction emojis in effect when the message was sent, which its text asked for; counted
+    # with these, so changing an emoji (`/emoji`) never reinterprets reactions on a message
+    # already out. None for a message tracked before they were recorded: the current ones apply.
+    emoji: str | None = None
+    cook_emoji: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -261,6 +266,10 @@ _MIGRATIONS: tuple[str, ...] = (
         until_day    TEXT
     );
     """,
+    """
+    ALTER TABLE messages ADD COLUMN emoji TEXT;
+    ALTER TABLE messages ADD COLUMN cook_emoji TEXT;
+    """,
 )
 
 SCHEMA_VERSION = len(_MIGRATIONS)
@@ -387,18 +396,28 @@ class Store:
     # Tracked messages
 
     def track_message(
-        self, week: date, kind: MessageKind, group_id: str, author: str, timestamp: int
+        self,
+        week: date,
+        kind: MessageKind,
+        group_id: str,
+        author: str,
+        timestamp: int,
+        *,
+        emoji: str | None = None,
+        cook_emoji: str | None = None,
     ) -> TrackedMessage:
-        """Start tracking a sent message. Each week has at most one message per kind."""
+        """Start tracking a sent message, with the reaction emojis its text asked for. Each week
+        has at most one message per kind."""
         self._conn.execute(
-            "INSERT INTO messages (week, kind, group_id, author, timestamp) VALUES (?, ?, ?, ?, ?)",
-            (week.isoformat(), kind.value, group_id, author, timestamp),
+            "INSERT INTO messages (week, kind, group_id, author, timestamp, emoji, cook_emoji)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (week.isoformat(), kind.value, group_id, author, timestamp, emoji, cook_emoji),
         )
-        return TrackedMessage(week, kind, group_id, author, timestamp)
+        return TrackedMessage(week, kind, group_id, author, timestamp, emoji, cook_emoji)
 
     def tracked_message(self, week: date, kind: MessageKind) -> TrackedMessage | None:
         row = self._conn.execute(
-            "SELECT week, kind, group_id, author, timestamp FROM messages"
+            "SELECT week, kind, group_id, author, timestamp, emoji, cook_emoji FROM messages"
             " WHERE week = ? AND kind = ?",
             (week.isoformat(), kind.value),
         ).fetchone()
@@ -407,7 +426,7 @@ class Store:
     def tracked_messages(self, kind: MessageKind) -> list[TrackedMessage]:
         """Every tracked message of ``kind``, of all weeks, oldest first."""
         rows = self._conn.execute(
-            "SELECT week, kind, group_id, author, timestamp FROM messages"
+            "SELECT week, kind, group_id, author, timestamp, emoji, cook_emoji FROM messages"
             " WHERE kind = ? ORDER BY timestamp",
             (kind.value,),
         ).fetchall()
@@ -420,7 +439,7 @@ class Store:
     def find_message(self, author: str, timestamp: int) -> TrackedMessage | None:
         """Look up a tracked message the way an incoming reaction refers to it."""
         row = self._conn.execute(
-            "SELECT week, kind, group_id, author, timestamp FROM messages"
+            "SELECT week, kind, group_id, author, timestamp, emoji, cook_emoji FROM messages"
             " WHERE author = ? AND timestamp = ?",
             (author, timestamp),
         ).fetchone()
@@ -747,9 +766,11 @@ class Store:
         return datetime.fromisoformat(_utc(now)) - beat < SETUP_LOCK_TTL
 
 
-def _message(row: tuple[str, str, str, str, int]) -> TrackedMessage:
-    week, kind, group_id, author, timestamp = row
-    return TrackedMessage(date.fromisoformat(week), MessageKind(kind), group_id, author, timestamp)
+def _message(row: tuple[str, str, str, str, int, str | None, str | None]) -> TrackedMessage:
+    week, kind, group_id, author, timestamp, emoji, cook_emoji = row
+    return TrackedMessage(
+        date.fromisoformat(week), MessageKind(kind), group_id, author, timestamp, emoji, cook_emoji
+    )
 
 
 def _skip_date(row: tuple[str, str, str]) -> SkipDate:

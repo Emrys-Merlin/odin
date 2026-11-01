@@ -2,7 +2,7 @@
 
 from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError
-from odin.commands.preview import SAMPLE_COUNT, render_preview
+from odin.commands.preview import SAMPLE_COOKS, SAMPLE_COUNT, render_preview
 from odin.config import TEMPLATE_FALLBACKS
 from odin.cycle import TemplateName
 from odin.overrides import EDITABLE_TEMPLATES, template_key
@@ -29,7 +29,10 @@ MISSING_NAME = "Welcher Text? " + VALID_NAMES + "\nZ. B. /text announcement"
 UNKNOWN_NAME = "Unbekannter Text „{name}“. " + VALID_NAMES
 PREVIEW = "Vorschau (diese Woche):"
 PREVIEW_COUNT = "Vorschau (diese Woche, aktuelle Zahl der Zusagen):"
-PREVIEW_SAMPLE = f"Vorschau (diese Woche, noch keine Ankündigung – Beispielzahl {SAMPLE_COUNT}):"
+PREVIEW_SAMPLE = (
+    "Vorschau (diese Woche, noch keine Ankündigung – Beispielzahlen "
+    f"{SAMPLE_COUNT} und {SAMPLE_COOKS}):"
+)
 PREVIEW_SAMPLE_DATES = "Vorschau (Beispiel: als fiele das nächste Essen aus):"
 # An optional template without a text of its own, in /texts and /text.
 FALLBACK = "nicht gesetzt, es gilt {fallback}"

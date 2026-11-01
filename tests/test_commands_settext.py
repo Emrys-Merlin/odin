@@ -120,7 +120,8 @@ def test_count_is_allowed_in_tally_only(store: Store) -> None:
 
     replies = run(store, "/settext tally\n{count} kommen.")
     assert replies == [
-        "Gespeichert ✅ So sieht tally jetzt aus:\n(Mit der Beispielzahl 3 für {count}.)",
+        "Gespeichert ✅ So sieht tally jetzt aus:\n"
+        "(Mit den Beispielzahlen 3 für {count} und 1 für {cooks}.)",
         "3 kommen.",
     ]
     assert stored(store) == {"templates.tally": "{count} kommen."}

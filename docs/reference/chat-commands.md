@@ -83,6 +83,10 @@ What the commands that change something do in detail is explained elsewhere:
   [The weekly cycle](../explanation/weekly-cycle.md#turning-the-cancellation-off). `on` and `off`
   override `decision.cancellation` from the [configuration](configuration.md#decision); `reset`
   goes back to it.
+- `/emoji`: [Reactions](../explanation/reactions.md#changing-the-emojis). `attend` and `cook`
+  override `emoji` and `cook_emoji` from the [configuration](configuration.md#top-level); `reset`
+  goes back to it, for one of them or (without a name) both. A change applies from ODIN's next
+  message on. The two emojis must differ.
 - `/cancel`: [Reactions](../explanation/reactions.md) and
   [The weekly cycle](../explanation/weekly-cycle.md).
 - `/introduce`: [Reactions](../explanation/reactions.md) and

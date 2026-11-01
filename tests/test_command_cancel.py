@@ -172,7 +172,7 @@ def test_after_the_announcement_it_says_so(store: Store) -> None:
     store.set_reaction(announcement, BEN, "👍", local(8, 9))
     [reply] = run_command(store, "/cancel", local(8, 10))
     assert reply.splitlines()[1] == (
-        "Die Einladung ist schon raus (1× 👍); die Absage kommt dann hinterher."
+        "Die Einladung ist schon raus – 1 kommen (1× 👍, 0× 🍳); die Absage kommt dann hinterher."
     )
 
 
@@ -427,7 +427,7 @@ def test_status_of_a_week_cancelled_after_the_announcement(world: World) -> None
         "Sonntag, 11.10.",
         "✅ Frage an die WG gesendet (Di 18:00) – 1× 👍",
         "⏭️ Erinnerung: übersprungen",
-        "✅ Einladung gesendet (Mi 18:00) – 0× 👍",
+        "✅ Einladung gesendet (Mi 18:00) – 0 kommen (0× 👍, 0× 🍳)",
         "❌ Absage gesendet (Do 09:15) – per /cancel",
         "– Zählung: entfällt (kein Essen)",
         "Nächste Aktion: Frage an die WG, Di 18:00",

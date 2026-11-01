@@ -495,9 +495,9 @@ def test_an_untracked_announcement_is_told_to_the_flat_group_once(bot: Bot) -> N
     assert notice.group == FLAT
     assert notice.text == (
         "⚠️ Die Einladung zum Essen am Sonntag ist in der Essensgruppe rausgegangen, aber ich "
-        "kann die 👍 darauf nicht zählen (Signal hat mir nicht gesagt, welche Nachricht es war). "
-        "Die Zählung am Freitag um 14:00 zeigt deshalb 0 – bitte zählt die 👍 unter der "
-        "Einladung selbst."
+        "kann die 👍 und 🍳 darauf nicht zählen (Signal hat mir nicht gesagt, welche Nachricht es "
+        "war). Die Zählung am Freitag um 14:00 zeigt deshalb 0 – bitte zählt die 👍 und 🍳 unter "
+        "der Einladung selbst."
     )
     bot.run(local(7, 18, 15), local(12, 0))
     assert bot.texts()[-1] == "TALLY 0 x 👍"

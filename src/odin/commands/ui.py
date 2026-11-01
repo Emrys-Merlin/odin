@@ -6,8 +6,10 @@ of the weekly cycle. Strings that a single command uses live in that command's m
 
 from datetime import date, datetime, tzinfo
 
-from odin.config import WeeklyTime
+from odin.config import Config, WeeklyTime
 from odin.cycle import TemplateName
+from odin.reactions import Guests, confirm_emoji, cook_emoji, count_guests
+from odin.store import Store, TrackedMessage
 
 HELP_HINT = "/help zeigt alle Befehle."
 UNKNOWN_COMMAND = "Unbekannter Befehl {command} – " + HELP_HINT
@@ -17,6 +19,8 @@ UNTRACKED = "{emoji} nicht zählbar"
 # A request confirmed by reaction (/cancel, /hiatus) that nobody confirmed.
 LAPSES = "Ohne {emoji} passiert nichts; die Anfrage verfällt, wenn das Essen beginnt ({dinner})."
 RESUME_HINT = "/resume beendet die Pause."
+# The reactions on the dinner announcement: who is coming, and who of them helps cook.
+GUESTS = "{count} kommen ({plain}× {emoji}, {cooks}× {cook_emoji})"
 
 # A setting changed via chat (/settime, /nudge, /cancellation …), and when it applies.
 SAVED = "Gespeichert ✅"
@@ -68,3 +72,18 @@ def short_date(day: date) -> str:
 def override_marker(changed_by: str, changed_at: datetime, timezone: tzinfo) -> str:
     """Marks a value changed via chat: ``✏️ 12.10. von Tim``, the date taken in ``timezone``."""
     return f"✏️ {changed_at.astimezone(timezone):%d.%m.} von {changed_by}"
+
+
+def guests(store: Store, announcement: TrackedMessage | None, config: Config) -> str:
+    """The guests' reactions on the announcement: ``9 kommen (6× 👍, 3× 🍳)``, or that they
+    cannot be counted (`announcement` is None: it was sent but is not tracked)."""
+    if announcement is None:
+        return UNTRACKED.format(emoji=f"{config.emoji}/{config.cook_emoji}")
+    counted: Guests = count_guests(store, announcement, config)
+    return GUESTS.format(
+        count=counted.count,
+        plain=counted.count - counted.cooks,
+        emoji=confirm_emoji(announcement, config),
+        cooks=counted.cooks,
+        cook_emoji=cook_emoji(announcement, config),
+    )
