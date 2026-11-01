@@ -122,7 +122,9 @@ def test_raw_reply_sent_by_odin_does_not_come_back_as_a_command(store: Store) ->
 def test_text_tally_without_announcement(store: Store) -> None:
     raw, preview = handle("/text tally", context(store))
     assert raw == "/settext tally\n{count} mal {emoji}"
-    assert preview == ("Vorschau (diese Woche, noch keine Ankündigung – Beispielzahl 3):\n3 mal 👍")
+    assert preview == (
+        "Vorschau (diese Woche, noch keine Ankündigung – Beispielzahlen 3 und 1):\n3 mal 👍"
+    )
 
 
 def test_text_tally_with_announcement(store: Store) -> None:

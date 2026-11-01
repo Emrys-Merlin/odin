@@ -6,7 +6,7 @@ TOML (placeholders, braces) before it is stored as an override; the reply shows 
 
 from odin.commands import ui
 from odin.commands.core import Command, CommandContext, CommandError
-from odin.commands.preview import render_preview
+from odin.commands.preview import SAMPLE_COOKS, SAMPLE_COUNT, render_preview
 from odin.config import (
     TEMPLATE_PLACEHOLDERS,
     Config,
@@ -46,7 +46,9 @@ SAVED = "Gespeichert ✅ So sieht {name} jetzt aus:"
 RESET = "Zurückgesetzt auf den Standardtext ✅ So sieht {name} jetzt aus:"
 RESET_UNSET = "Zurückgesetzt ✅ {name} ist jetzt nicht gesetzt."
 NOT_CHANGED = "{name} war nicht geändert."
-SAMPLE_NOTE = "(Mit der Beispielzahl 3 für {count}.)"
+SAMPLE_NOTE = (
+    f"(Mit den Beispielzahlen {SAMPLE_COUNT} für {{count}} und {SAMPLE_COOKS} für {{cooks}}.)"
+)
 SAMPLE_DATES_NOTE = "(Mit Beispieldaten: als fiele das nächste Essen aus.)"
 NEXT_WEEK = "Für diese Woche ist das schon gelaufen – der Text gilt ab nächster Woche."
 

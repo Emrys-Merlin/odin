@@ -37,7 +37,7 @@ are below, timezone `Europe/Berlin`.
 | Tue 18:00      | flat   | Ask whether dinner takes place this Sunday; react 👍 to confirm. Deadline: Wed 18:00. |
 | Wed 12:00      | flat   | *Nudge* — only if there is no 👍 yet: "nobody confirmed, dinner will be cancelled at 18:00". Can be disabled. |
 | Wed 18:00      | dinner | **No 👍** → bilingual cancellation. **≥1 👍** → bilingual announcement + RSVP request (see below). |
-| Fri 14:00      | flat   | Tally — only if dinner is on: number of 👍 reactions on the dinner announcement. |
+| Fri 14:00      | flat   | Tally — only if dinner is on: number of guests (👍 or 🍳) on the dinner announcement, and how many of them help cook (🍳). |
 
 ```mermaid
 flowchart LR
@@ -75,7 +75,9 @@ turned off (see [below](#turning-the-cancellation-off)).
 The announcement asks guests to react 👍 if they are coming, **please by Fri 14:00** (we order
 food then) — not a hard deadline, reactions after it are fine. It states two times: **17:00** for
 anyone who wants to help cook (explicitly optional — helping is absolutely no requirement) and
-**18:00** otherwise. Plus-ones are mentioned in a reply by the guest and counted by humans.
+**18:00** otherwise. Who comes at 17:00 to help reacts 🍳 instead of 👍: Signal allows one
+reaction per person, so 🍳 means "I'm coming and I'll help cook" (see [Reactions](reactions.md)).
+Plus-ones are mentioned in a reply by the guest and counted by humans.
 
 <div class="chat" data-group="Dinner group" markdown>
 <div class="msg" markdown>
@@ -84,21 +86,31 @@ Diesen Sonntag gibt es offenes Abendessen! 🍽️
 Essen gibt es um 18:00. Wer mag, kann schon um 17:00 kommen und beim Kochen helfen – das ist
 völlig freiwillig und überhaupt keine Voraussetzung.
 Wenn du kommst, reagiere bitte mit 👍 auf diese Nachricht, am besten bis Freitag 14:00 – dann
-bestellen wir das Essen. Bringst du jemanden mit? Dann schreib das bitte als Antwort auf diese
-Nachricht.
+bestellen wir das Essen. Hilfst du beim Kochen? Dann reagiere stattdessen mit 🍳. Bringst du
+jemanden mit? Dann schreib das bitte als Antwort auf diese Nachricht.
 
 Open dinner this Sunday! 🍽️
 Dinner is at 18:00. If you like, come at 17:00 and help cook – that is entirely optional and
 absolutely no requirement.
 If you are coming, please react with 👍 to this message, ideally by Friday 14:00 – that is when
-we order the food. Bringing someone? Please say so in a reply to this message.
-<span class="reactions">👍 7</span>
+we order the food. Helping cook? Then react with 🍳 instead. Bringing someone? Please say so in a
+reply to this message.
+<span class="reactions">👍 6 🍳 3</span>
 </div>
 </div>
 
-The **tally** on Friday afternoon tells the flat group how many 👍 the announcement has, which is
-when food gets ordered. It is a rough count on purpose: plus-ones stay in the replies, and late
-reactions are still welcome.
+The **tally** on Friday afternoon tells the flat group how many guests reacted to the
+announcement (👍 or 🍳), which is when food gets ordered, and how many of them come early to help
+cook. It is a rough count on purpose: plus-ones stay in the replies, and late reactions are still
+welcome.
+
+<div class="chat" data-group="Flat group" markdown>
+<div class="msg" markdown>
+<span class="sender">Odin 🍽️</span>
+Bisher haben 9 Personen auf die Ankündigung reagiert, davon wollen 3 ab 17:00 beim Kochen helfen
+(🍳). Plus-Ones stehen gegebenenfalls in den Antworten darauf.
+</div>
+</div>
 
 All texts are templates in the config, so the flat can reword them without a release (see
 [Templates](../reference/templates.md) and [Edit a text](../how-to/chat/edit-a-text.md)).

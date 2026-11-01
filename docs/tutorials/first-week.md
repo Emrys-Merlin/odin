@@ -58,16 +58,17 @@ German and English:
 <span class="sender">Odin 🍽️</span>
 Diesen Sonntag gibt es offenes Abendessen! 🍽️<br>
 Essen gibt es um 18:00. Wer mag, kann schon um 17:00 kommen und beim Kochen helfen – das ist völlig freiwillig und überhaupt keine Voraussetzung.<br>
-Wenn du kommst, reagiere bitte mit 👍 auf diese Nachricht, am besten bis Freitag 14:00 – dann bestellen wir das Essen. Bringst du jemanden mit? Dann schreib das bitte als Antwort auf diese Nachricht.
+Wenn du kommst, reagiere bitte mit 👍 auf diese Nachricht, am besten bis Freitag 14:00 – dann bestellen wir das Essen. Hilfst du beim Kochen? Dann reagiere stattdessen mit 🍳. Bringst du jemanden mit? Dann schreib das bitte als Antwort auf diese Nachricht.
 
 Open dinner this Sunday! 🍽️<br>
 Dinner is at 18:00. If you like, come at 17:00 and help cook – that is entirely optional and absolutely no requirement.<br>
-If you are coming, please react with 👍 to this message, ideally by Friday 14:00 – that is when we order the food. Bringing someone? Please say so in a reply to this message.
-<span class="reactions">👍 3</span>
+If you are coming, please react with 👍 to this message, ideally by Friday 14:00 – that is when we order the food. Helping cook? Then react with 🍳 instead. Bringing someone? Please say so in a reply to this message.
+<span class="reactions">👍 2 🍳 2</span>
 </div>
 </div>
 
-Guests react with 👍 if they come, and mention plus-ones in a reply.
+Guests react with 👍 if they come, or with 🍳 if they come and help cook at 17:00, and mention
+plus-ones in a reply.
 
 Without any 👍 on Tuesday's question, the dinner group would instead have got the cancellation:
 
@@ -82,12 +83,13 @@ Unfortunately, there is no open dinner this Sunday. See you next time!
 
 ## Friday 14:00 — the tally
 
-Time to order food. ODIN tells the flat group how many 👍 the announcement has:
+Time to order food. ODIN tells the flat group how many guests reacted to the announcement, and
+how many of them help cook:
 
 <div class="chat" data-group="Flat group" markdown>
 <div class="msg" markdown>
 <span class="sender">Odin 🍽️</span>
-Bisher haben 3 Personen mit 👍 auf die Ankündigung reagiert. Plus-Ones stehen gegebenenfalls in den Antworten darauf.
+Bisher haben 4 Personen auf die Ankündigung reagiert, davon wollen 2 ab 17:00 beim Kochen helfen (🍳). Plus-Ones stehen gegebenenfalls in den Antworten darauf.
 </div>
 </div>
 
@@ -155,7 +157,7 @@ Command names and their arguments are English; ODIN answers in German.
 Sonntag, 25.10.<br>
 ✅ Frage an die WG gesendet (Di 18:00) – 1× 👍<br>
 ✅ Erinnerung gesendet (Mi 12:00)<br>
-✅ Einladung gesendet (Mi 18:00) – 3× 👍<br>
+✅ Einladung gesendet (Mi 18:00) – 4 kommen (2× 👍, 2× 🍳)<br>
 ⏳ Zählung: Fr 14:00<br>
 Nächste Aktion: Zählung, Fr 14:00
 </div>

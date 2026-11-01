@@ -45,12 +45,12 @@ Ohne 👍 passiert nichts; die Anfrage verfällt am Do 22.10. 19:00 oder mit dem
 Hallo, ich bin Odin 🍽️, der Bot für das offene Abendessen am Sonntag!<br>
 Jeden Mittwoch um 18:00 schreibe ich hier, ob am Sonntag das Essen stattfindet – oder ob es diesmal ausfällt.<br>
 Wenn du kommst, reagiere bitte mit 👍 auf meine Ankündigung, am besten bis Freitag 14:00 – dann bestellen wir das Essen. Bringst du jemanden mit? Dann schreib das bitte als Antwort auf die Ankündigung.<br>
-Essen gibt es um 18:00. Wer mag, kann schon um 17:00 kommen und beim Kochen helfen – das ist völlig freiwillig. Fragen beantworten die Leute aus der WG gern.
+Essen gibt es um 18:00. Wer mag, kann schon um 17:00 kommen und beim Kochen helfen – das ist völlig freiwillig. Dann reagiere bitte mit 🍳 statt mit 👍. Fragen beantworten die Leute aus der WG gern.
 
 Hi, I'm Odin 🍽️, the bot for the open Sunday dinner!<br>
 Every Wednesday at 18:00 I post here whether dinner takes place on Sunday – or whether it is cancelled this time.<br>
 If you are coming, please react with 👍 to my announcement, ideally by Friday 14:00 – that is when we order the food. Bringing someone? Please say so in a reply to the announcement.<br>
-Dinner is at 18:00. If you like, come at 17:00 and help cook – that is entirely optional. The people from the flat are happy to answer any questions.
+Dinner is at 18:00. If you like, come at 17:00 and help cook – that is entirely optional. Then react with 🍳 instead of 👍. The people from the flat are happy to answer any questions.
 </div>
 </div>
 
@@ -72,12 +72,12 @@ to the dinner group — the text below the blank line of its reply:
 Hallo, ich bin Odin 🍽️, der Bot für das offene Abendessen am Sonntag!<br>
 Jeden Mittwoch um 18:00 schreibe ich hier, ob am Sonntag das Essen stattfindet – oder ob es diesmal ausfällt.<br>
 Wenn du kommst, reagiere bitte mit 👍 auf meine Ankündigung, am besten bis Freitag 14:00 – dann bestellen wir das Essen. Bringst du jemanden mit? Dann schreib das bitte als Antwort auf die Ankündigung.<br>
-Essen gibt es um 18:00. Wer mag, kann schon um 17:00 kommen und beim Kochen helfen – das ist völlig freiwillig. Fragen beantworten die Leute aus der WG gern.
+Essen gibt es um 18:00. Wer mag, kann schon um 17:00 kommen und beim Kochen helfen – das ist völlig freiwillig. Dann reagiere bitte mit 🍳 statt mit 👍. Fragen beantworten die Leute aus der WG gern.
 
 Hi, I'm Odin 🍽️, the bot for the open Sunday dinner!<br>
 Every Wednesday at 18:00 I post here whether dinner takes place on Sunday – or whether it is cancelled this time.<br>
 If you are coming, please react with 👍 to my announcement, ideally by Friday 14:00 – that is when we order the food. Bringing someone? Please say so in a reply to the announcement.<br>
-Dinner is at 18:00. If you like, come at 17:00 and help cook – that is entirely optional. The people from the flat are happy to answer any questions.
+Dinner is at 18:00. If you like, come at 17:00 and help cook – that is entirely optional. Then react with 🍳 instead of 👍. The people from the flat are happy to answer any questions.
 </div>
 </div>
 

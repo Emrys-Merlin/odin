@@ -9,6 +9,9 @@ effective config is always a valid one. Keys and values are strings:
 - ``schedule.nudge.enabled`` — ``"true"`` or ``"false"``.
 - ``decision.cancellation.enabled`` — ``"true"`` or ``"false"``: whether the dinner group gets the
   cancellation when dinner does not take place (see `odin.config.Decision`).
+- ``emoji.attend`` and ``emoji.cook`` (`EMOJI_KEYS`) — a reaction emoji, for `Config.emoji` and
+  `Config.cook_emoji`. A tracked message keeps counting the emojis it was sent with
+  (`odin.store.TrackedMessage.emoji`), so a change applies from the next message on.
 - ``schedule.dinner.next`` (`PENDING_DINNER_KEY`) — a new dinner time on another weekday, as for
   ``schedule.dinner``, that waits for the running dinner week to end. Its `Override.after_week`
   is that week; once its dinner starts, the value becomes the ``schedule.dinner`` override, and a
@@ -35,6 +38,8 @@ from odin.config import (
     _check_order,
     _parse_time,
     _parse_weekday,
+    check_emojis,
+    parse_emoji,
 )
 from odin.cycle import SchedulePoint, TemplateName
 from odin.engine import Transition, dinner_week, record_transition, transition
@@ -47,6 +52,10 @@ EDITABLE_TEMPLATES = tuple(name for name in TemplateName if name.editable)
 
 NUDGE_ENABLED_KEY = "schedule.nudge.enabled"
 CANCELLATION_ENABLED_KEY = "decision.cancellation.enabled"
+EMOJI_KEY = "emoji.attend"
+COOK_EMOJI_KEY = "emoji.cook"
+# Override key -> the `Config` field it sets.
+EMOJI_KEYS = {EMOJI_KEY: "emoji", COOK_EMOJI_KEY: "cook_emoji"}
 _BOOLS = {"true": True, "false": False}
 
 
@@ -75,7 +84,9 @@ def format_bool(value: bool) -> str:
 TEMPLATE_KEYS = {template_key(name): name for name in EDITABLE_TEMPLATES}
 SCHEDULE_KEYS = {schedule_key(point): point for point in SchedulePoint}
 # Every valid override key that `apply_overrides` takes.
-KEYS = frozenset({*TEMPLATE_KEYS, *SCHEDULE_KEYS, NUDGE_ENABLED_KEY, CANCELLATION_ENABLED_KEY})
+KEYS = frozenset(
+    {*TEMPLATE_KEYS, *SCHEDULE_KEYS, NUDGE_ENABLED_KEY, CANCELLATION_ENABLED_KEY, *EMOJI_KEYS}
+)
 DINNER_KEY = schedule_key(SchedulePoint.DINNER)
 PENDING_DINNER_KEY = "schedule.dinner.next"
 
@@ -97,6 +108,7 @@ def apply_overrides(base: Config, overrides: Mapping[str, str]) -> Config:
     templates: dict[str, Template] = {}
     schedule: dict[str, object] = {}
     decision: dict[str, object] = {}
+    emojis: dict[str, str] = {}
     for key, value in overrides.items():
         if key in TEMPLATE_KEYS:
             name = TEMPLATE_KEYS[key]
@@ -109,14 +121,18 @@ def apply_overrides(base: Config, overrides: Mapping[str, str]) -> Config:
             schedule["nudge_enabled"] = _parse_bool(key, value)
         elif key == CANCELLATION_ENABLED_KEY:
             decision["cancellation"] = _parse_bool(key, value)
+        elif key in EMOJI_KEYS:
+            emojis[EMOJI_KEYS[key]] = parse_emoji(value, key)
         else:
             raise ConfigError(f"unknown override {key!r}")
-    if not (templates or schedule or decision):
+    if not (templates or schedule or decision or emojis):
         return base
     new_schedule = dataclasses.replace(base.schedule, **schedule)
     _check_order(new_schedule)
+    new = dataclasses.replace(base, **emojis)
+    check_emojis(new.emoji, new.cook_emoji)
     return dataclasses.replace(
-        base,
+        new,
         schedule=new_schedule,
         templates=dataclasses.replace(base.templates, **templates),
         decision=dataclasses.replace(base.decision, **decision),

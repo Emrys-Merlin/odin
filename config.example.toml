@@ -11,6 +11,9 @@ timezone = "Europe/Berlin"
 
 # The reaction that counts: flatmates confirming dinner, guests saying they come.
 emoji = "👍"
+# The reaction on the announcement for "I'm coming and I'll help cook". Signal allows one reaction
+# per person, so it counts as coming too. Must differ from emoji.
+cook_emoji = "🍳"
 
 # How late a missed action (bot was down) may still be performed: "until_dinner" (until dinner
 # starts) or a number of minutes after its scheduled time.
@@ -59,7 +62,7 @@ direct_senders = []
 direct_notice = true
 
 # Message texts. Placeholders, in every template unless noted:
-#   {emoji}
+#   {emoji} {cook_emoji}
 #   {deadline} {rsvp_by} {cook_time} {dinner_time}   — times from [schedule], as HH:MM
 #                                                      (deadline = flat_deadline, cook_time = cook)
 #   {flat_ask_day_de} {deadline_day_de} {rsvp_by_day_de} {cook_day_de} {dinner_day_de}
@@ -68,7 +71,8 @@ direct_notice = true
 #                                                    — weekdays in English: Tuesday, Wednesday, …
 #                                                      (flat_ask_day = the day of flat_ask, which
 #                                                      has no time placeholder)
-#   {count}                                          — tally only
+#   {count} {cooks}                                  — tally only: people coming ({emoji} or
+#                                                      {cook_emoji}), and of them, helping cook
 #   {dropped_date} {first_date}                      — weekday_change_cancellation only: the
 #                                                      dropped dinner and the first one on the
 #                                                      new weekday, as DD.MM.
@@ -115,20 +119,22 @@ Diesen {dinner_day_de} gibt es offenes Abendessen! 🍽️
 Essen gibt es um {dinner_time}. Wer mag, kann schon um {cook_time} kommen und beim Kochen \
 helfen – das ist völlig freiwillig und überhaupt keine Voraussetzung.
 Wenn du kommst, reagiere bitte mit {emoji} auf diese Nachricht, am besten bis \
-{rsvp_by_day_de} {rsvp_by} – dann bestellen wir das Essen. Bringst du jemanden mit? Dann \
-schreib das bitte als Antwort auf diese Nachricht.
+{rsvp_by_day_de} {rsvp_by} – dann bestellen wir das Essen. Hilfst du beim Kochen? Dann \
+reagiere stattdessen mit {cook_emoji}. Bringst du jemanden mit? Dann schreib das bitte als \
+Antwort auf diese Nachricht.
 
 Open dinner this {dinner_day_en}! 🍽️
 Dinner is at {dinner_time}. If you like, come at {cook_time} and help cook – that is entirely \
 optional and absolutely no requirement.
 If you are coming, please react with {emoji} to this message, ideally by {rsvp_by_day_en} \
-{rsvp_by} – that is when we order the food. Bringing someone? Please say so in a reply to this \
-message.
+{rsvp_by} – that is when we order the food. Helping cook? Then react with {cook_emoji} instead. \
+Bringing someone? Please say so in a reply to this message.
 """
 
 tally = """
-Bisher haben {count} Personen mit {emoji} auf die Ankündigung reagiert. Plus-Ones stehen \
-gegebenenfalls in den Antworten darauf.
+Bisher haben {count} Personen auf die Ankündigung reagiert, davon wollen {cooks} ab \
+{cook_time} beim Kochen helfen ({cook_emoji}). Plus-Ones stehen gegebenenfalls in den Antworten \
+darauf.
 """
 
 # Optional: ODIN's introduction of itself, posted to the dinner group after a confirmed
@@ -142,7 +148,8 @@ Wenn du kommst, reagiere bitte mit {emoji} auf meine Ankündigung, am besten bis
 {rsvp_by_day_de} {rsvp_by} – dann bestellen wir das Essen. Bringst du jemanden mit? Dann \
 schreib das bitte als Antwort auf die Ankündigung.
 Essen gibt es um {dinner_time}. Wer mag, kann schon um {cook_time} kommen und beim Kochen \
-helfen – das ist völlig freiwillig. Fragen beantworten die Leute aus der WG gern.
+helfen – das ist völlig freiwillig. Dann reagiere bitte mit {cook_emoji} statt mit {emoji}. \
+Fragen beantworten die Leute aus der WG gern.
 
 Hi, I'm Odin 🍽️, the bot for the open {dinner_day_en} dinner!
 Every {deadline_day_en} at {deadline} I post here whether dinner takes place on \
@@ -151,7 +158,8 @@ If you are coming, please react with {emoji} to my announcement, ideally by {rsv
 {rsvp_by} – that is when we order the food. Bringing someone? Please say so in a reply to the \
 announcement.
 Dinner is at {dinner_time}. If you like, come at {cook_time} and help cook – that is entirely \
-optional. The people from the flat are happy to answer any questions.
+optional. Then react with {cook_emoji} instead of {emoji}. The people from the flat are happy \
+to answer any questions.
 """
 
 # Optional: posted once when the flat puts ODIN to sleep with /hiatus. Until /resume, the dinner

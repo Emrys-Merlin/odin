@@ -134,8 +134,9 @@ def _hiatus_request_line(config: Config, store: Store, week: date) -> str | None
     if request is None:
         return None
     at = datetime.fromtimestamp(request.timestamp / 1000, UTC)
-    confirmed = reactions.count_confirmations(store, request, config.emoji) > 0
-    state = HIATUS_CONFIRMED if confirmed else AWAITING.format(emoji=config.emoji)
+    confirmed = reactions.count_confirmations(store, request, config) > 0
+    emoji = reactions.confirm_emoji(request, config)
+    state = HIATUS_CONFIRMED if confirmed else AWAITING.format(emoji=emoji)
     return HIATUS_REQUESTED.format(at=_local_date(config, at), state=state)
 
 
@@ -308,17 +309,23 @@ class _WeekStatus:
         return f"{ui.WEEKDAYS_SHORT[local.weekday()]} {local:%H:%M}"
 
     def _reactions(self, kind: MessageKind) -> str:
-        """``2× 👍``, or that they cannot be counted: the message was sent but is not tracked."""
-        count = self._count(kind)
-        emoji = self.config.emoji
-        return ui.UNTRACKED.format(emoji=emoji) if count is None else f"{count}× {emoji}"
+        """``2× 👍``, or that they cannot be counted: the message was sent but is not tracked.
+
+        On the announcement, the guests coming and helping cook (`ui.guests`)."""
+        message = self.store.tracked_message(self.week, kind)
+        if kind is MessageKind.DINNER_ANNOUNCEMENT:
+            return ui.guests(self.store, message, self.config)
+        if message is None:
+            return ui.UNTRACKED.format(emoji=self.config.emoji)
+        count = reactions.count_confirmations(self.store, message, self.config)
+        return f"{count}× {reactions.confirm_emoji(message, self.config)}"
 
     def _count(self, kind: MessageKind) -> int | None:
         """The reactions on the week's message of `kind`; None if it is not tracked."""
         message = self.store.tracked_message(self.week, kind)
         if message is None:
             return None
-        return reactions.count_confirmations(self.store, message, self.config.emoji)
+        return reactions.count_confirmations(self.store, message, self.config)
 
 
 def _pending_line(pending: PendingDinner) -> str:

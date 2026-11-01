@@ -82,7 +82,7 @@ class World:
         asyncio.run(consume_events(self.client, self.store, CONFIG, ACCOUNT, self.clock))
 
     def count(self, message: TrackedMessage) -> int:
-        return count_confirmations(self.store, message, CONFIG.emoji)
+        return count_confirmations(self.store, message, CONFIG)
 
 
 @pytest.fixture

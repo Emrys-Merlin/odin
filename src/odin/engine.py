@@ -7,7 +7,8 @@ current dinner week, in schedule order:
 2. **nudge** (optional) — remind the flat group, only if nobody has confirmed yet.
 3. **decision** at the flat deadline — announcement (≥1 confirmation) or cancellation (none) to
    the dinner group.
-4. **tally** — only if dinner is on: how many reacted to the announcement.
+4. **tally** — only if dinner is on: how many reacted to the announcement, and how many of them
+   help cook (`odin.reactions.count_guests`).
 
 Every step ends up recorded exactly once per week, as sent or as skipped (too late, or not needed),
 so nothing is ever sent twice and a restart picks up where the last run stopped. A step is only
@@ -108,7 +109,7 @@ from odin import notices
 from odin.clock import to_utc
 from odin.config import Config, WeeklyTime, dropped_placeholder_values
 from odin.cycle import StepName, TemplateName
-from odin.reactions import count_confirmations
+from odin.reactions import NO_GUESTS, count_confirmations, count_guests
 from odin.signal import SendResponseUnreadable, SignalClient
 from odin.store import Action, Hiatus, MessageKind, Outcome, Store
 
@@ -360,7 +361,7 @@ def start_hiatus(config: Config, store: Store, current: date, now: datetime) -> 
     tracked = store.tracked_message(current, MessageKind.HIATUS_REQUEST)
     if request is None or tracked is None or store.active_hiatus() is not None:
         return None
-    if count_confirmations(store, tracked, config.emoji) == 0:
+    if count_confirmations(store, tracked, config) == 0:
         return None
     asked = store.action_outcome(current, Action.FLAT_ASK) is Outcome.SENT
     from_day = current + timedelta(days=1) if asked else current
@@ -489,7 +490,7 @@ async def _introduce(
     for request in store.tracked_messages(MessageKind.INTRODUCTION_REQUEST):
         if store.introduction_time(request) is not None:
             continue
-        if count_confirmations(store, request, config.emoji) == 0:
+        if count_confirmations(store, request, config) == 0:
             continue
         template = config.templates.find(TemplateName.INTRODUCTION)
         if template is None:  # its text was taken back (/resettext) after the request
@@ -661,12 +662,12 @@ class _Week:
             return False
         if due_now and self._on:
             announcement = self.store.tracked_message(self.week, MessageKind.DINNER_ANNOUNCEMENT)
-            count = (
-                0
+            guests = (
+                NO_GUESTS
                 if announcement is None
-                else count_confirmations(self.store, announcement, self.config.emoji)
+                else count_guests(self.store, announcement, self.config)
             )
-            await self._send(Action.TALLY, count=count)
+            await self._send(Action.TALLY, count=guests.count, cooks=guests.cooks)
         else:
             self._skip(Action.TALLY)
         return True
@@ -678,13 +679,13 @@ class _Week:
         request = self.store.tracked_message(self.week, MessageKind.CANCEL_REQUEST)
         if request is None:
             return False
-        return count_confirmations(self.store, request, self.config.emoji) > 0
+        return count_confirmations(self.store, request, self.config) > 0
 
     def _confirmations(self) -> int:
         poll = self.store.tracked_message(self.week, MessageKind.FLAT_POLL)
         if poll is None:
             return 0
-        return count_confirmations(self.store, poll, self.config.emoji)
+        return count_confirmations(self.store, poll, self.config)
 
     async def _send(
         self,
@@ -773,7 +774,15 @@ class _Week:
             else:
                 self.store.record_action(week, action, self.now)
             if track is not None and timestamp is not None:
-                self.store.track_message(week, track, group, self.account.number, timestamp)
+                self.store.track_message(
+                    week,
+                    track,
+                    group,
+                    self.account.number,
+                    timestamp,
+                    emoji=self.config.emoji,
+                    cook_emoji=self.config.cook_emoji,
+                )
         logger.info("sent %s for week %s", action, week)
         self.steps.append(Step(week, action, Outcome.SENT))
         return True

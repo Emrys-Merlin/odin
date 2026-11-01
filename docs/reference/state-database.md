@@ -27,7 +27,7 @@ Foreign keys are on (`PRAGMA foreign_keys = ON`); the only one is from `reaction
 
 ## Schema version
 
-The schema version is `PRAGMA user_version`; the current one is **10**. Every `odin` command that
+The schema version is `PRAGMA user_version`; the current one is **11**. Every `odin` command that
 opens the database applies the migrations from the stored version up to its own, each in one
 transaction; a new file starts at `0` and is migrated all the way. Migrations are only ever
 appended, never changed.
@@ -48,6 +48,7 @@ a [rollback](../how-to/operate/rollback.md) past a schema change.
 | 8 | `skip_dates` |
 | 9 | `introductions` |
 | 10 | `hiatuses` |
+| 11 | `messages.emoji`, `messages.cook_emoji` |
 
 ## Tables
 
@@ -91,13 +92,18 @@ message of each kind; (`author`, `timestamp`) is unique too.
 | `group_id` | `TEXT` | no | The group it was sent to (`group.…`). |
 | `author` | `TEXT` | no | ODIN's own number, as Signal reports it. |
 | `timestamp` | `INTEGER` | no | Signal timestamp of the message, in milliseconds. |
+| `emoji` | `TEXT` | yes | `emoji` when the message was sent: the reaction that confirms it, or says "I'm coming" on the invitation. `NULL` for a message tracked before schema version 11: the current `emoji` applies. |
+| `cook_emoji` | `TEXT` | yes | `cook_emoji` when the message was sent: the reaction that says "I'm coming and I'll help cook" on the invitation. `NULL` as for `emoji`. |
+
+Reactions are counted with the message's own emojis, so a change via `/emoji` applies from the
+next message on (see [Reactions](../explanation/reactions.md)).
 
 `kind` values:
 
 | Value | Message |
 |---|---|
 | `flat_poll` | The flat ask (or its retry); a reaction confirms dinner. |
-| `dinner_announcement` | The invitation; reactions are the guests. |
+| `dinner_announcement` | The invitation; reactions are the guests: `emoji` coming, `cook_emoji` coming and helping cook. |
 | `cancel_request` | ODIN's reply to `/cancel`; a reaction confirms it. |
 | `introduction_request` | ODIN's reply to `/introduce`; a reaction confirms it. Only the latest one counts. |
 | `hiatus_request` | ODIN's reply to `/hiatus`; a reaction confirms it. Deleted once the hiatus takes effect. |
@@ -162,6 +168,8 @@ Config values changed from the chat; they win over the config file until reset. 
 | `schedule.<point>` | `<weekday> <HH:MM>`, e.g. `wed 18:00`, for each schedule point (see [Configuration](configuration.md)). |
 | `schedule.nudge.enabled` | `true` or `false`. |
 | `decision.cancellation.enabled` | `true` or `false`; `decision.cancellation` (see [Configuration](configuration.md#decision)). |
+| `emoji.attend` | An emoji; `emoji` (see [Configuration](configuration.md)). Set by `/emoji attend`. |
+| `emoji.cook` | An emoji; `cook_emoji` (see [Configuration](configuration.md)). Set by `/emoji cook`. |
 | `schedule.dinner.next` | A dinner time on another weekday, as for `schedule.dinner`, waiting for the dinner of `after_week`; then it becomes the `schedule.dinner` override. See [Changing the dinner weekday](../explanation/weekday-change.md). |
 
 ### `dropped_weeks`

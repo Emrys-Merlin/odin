@@ -142,7 +142,7 @@ def test_after_an_announcement_with_reactions(store: Store) -> None:
         "Sonntag, 18.10.",
         "✅ Frage an die WG gesendet (Di 18:00) – 1× 👍",
         "⏭️ Erinnerung: übersprungen",
-        "✅ Einladung gesendet (Mi 18:00) – 3× 👍",
+        "✅ Einladung gesendet (Mi 18:00) – 3 kommen (3× 👍, 0× 🍳)",
         "⏳ Zählung: Fr 14:00",
         "Nächste Aktion: Zählung, Fr 14:00",
     ]
@@ -155,7 +155,7 @@ def test_after_the_tally(store: Store) -> None:
     store.record_action(WEEK, Action.TALLY, local(16, 14))
     lines = status(store, local(17, 12))
     assert lines[3:] == [
-        "✅ Einladung gesendet (Mi 18:00) – 2× 👍",
+        "✅ Einladung gesendet (Mi 18:00) – 2 kommen (2× 👍, 0× 🍳)",
         "✅ Zählung gesendet (Fr 14:00)",
         "Nächste Aktion: Frage an die WG, Di 18:00",
     ]
@@ -192,7 +192,9 @@ def test_an_untracked_announcement(store: Store) -> None:
     skip(store, Action.NUDGE, local(14, 12))
     store.record_action(WEEK, Action.ANNOUNCEMENT, local(14, 18))
     store.record_action(WEEK, Action.ANNOUNCEMENT_NOTICE, local(14, 18))
-    assert status(store, local(15, 10))[3] == "✅ Einladung gesendet (Mi 18:00) – 👍 nicht zählbar"
+    assert (
+        status(store, local(15, 10))[3] == "✅ Einladung gesendet (Mi 18:00) – 👍/🍳 nicht zählbar"
+    )
 
 
 def test_with_the_nudge_disabled(store: Store) -> None:
@@ -261,7 +263,7 @@ def test_no_pending_change_for_a_new_time_on_the_same_weekday(store: Store) -> N
         "Sonntag, 18.10.",
         "✅ Frage an die WG gesendet (Di 18:00) – 1× 👍",
         "⏭️ Erinnerung: übersprungen",
-        "✅ Einladung gesendet (Mi 18:00) – 2× 👍",
+        "✅ Einladung gesendet (Mi 18:00) – 2 kommen (2× 👍, 0× 🍳)",
         "⏳ Zählung: Fr 14:00",
         "Nächste Aktion: Zählung, Fr 14:00",
     ]
@@ -274,7 +276,7 @@ def test_a_pending_sun_to_sat_change(store: Store) -> None:
         "Sonntag, 18.10.",
         "✅ Frage an die WG gesendet (Di 18:00) – 1× 👍",
         "⏭️ Erinnerung: übersprungen",
-        "✅ Einladung gesendet (Mi 18:00) – 2× 👍",
+        "✅ Einladung gesendet (Mi 18:00) – 2 kommen (2× 👍, 0× 🍳)",
         "⏳ Zählung: Fr 14:00",
         "Ab Sa 24.10. ist das Essen samstags um 18:00.",
         "Nächste Aktion: Zählung, Fr 14:00",

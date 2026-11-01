@@ -4,7 +4,8 @@ In the order `/vars` lists them. The description is the German text `/vars` show
 
 | Placeholder | Description (as in `/vars`) | Example | Allowed in |
 |---|---|---|---|
-| `{emoji}` | Reaktion zum Bestätigen | `👍` | all templates |
+| `{emoji}` | Reaktion zum Bestätigen (auf der Einladung: „ich komme“) | `👍` | all templates |
+| `{cook_emoji}` | Reaktion auf der Einladung: „ich komme und helfe beim Kochen“ | `🍳` | all templates |
 | `{flat_ask_day_de}` | Frage an die WG (Wochentag) | `Dienstag` | all templates |
 | `{flat_ask_day_en}` | Frage an die WG (Wochentag) | `Tuesday` | all templates |
 | `{deadline}` | Entscheidung der WG (Uhrzeit) | `18:00` | all templates |
@@ -19,6 +20,7 @@ In the order `/vars` lists them. The description is the German text `/vars` show
 | `{dinner_time}` | Essen (Uhrzeit) | `18:00` | all templates |
 | `{dinner_day_de}` | Essen (Wochentag) | `Sonntag` | all templates |
 | `{dinner_day_en}` | Essen (Wochentag) | `Sunday` | all templates |
-| `{count}` | Anzahl Zusagen auf die Ankündigung | depends on the message | `tally` |
+| `{count}` | Anzahl Zusagen auf die Ankündigung, mit beiden Reaktionen | depends on the message | `tally` |
+| `{cooks}` | Davon: Anzahl, die beim Kochen helfen | depends on the message | `tally` |
 | `{dropped_date}` | Datum des Essens, das beim Wechsel des Wochentags ausfällt | depends on the message | `weekday_change_cancellation` |
 | `{first_date}` | Datum des ersten Essens am neuen Wochentag | depends on the message | `weekday_change_cancellation` |

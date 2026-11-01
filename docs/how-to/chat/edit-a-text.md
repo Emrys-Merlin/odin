@@ -44,12 +44,12 @@ with this week's values.
 <div class="msg" markdown>
 <span class="sender">Odin 🍽️</span>
 /settext tally<br>
-Bisher haben {count} Personen mit {emoji} auf die Ankündigung reagiert. Plus-Ones stehen gegebenenfalls in den Antworten darauf.
+Bisher haben {count} Personen auf die Ankündigung reagiert, davon wollen {cooks} ab {cook_time} beim Kochen helfen ({cook_emoji}). Plus-Ones stehen gegebenenfalls in den Antworten darauf.
 </div>
 <div class="msg" markdown>
 <span class="sender">Odin 🍽️</span>
-Vorschau (diese Woche, noch keine Ankündigung – Beispielzahl 3):<br>
-Bisher haben 3 Personen mit 👍 auf die Ankündigung reagiert. Plus-Ones stehen gegebenenfalls in den Antworten darauf.
+Vorschau (diese Woche, noch keine Ankündigung – Beispielzahlen 3 und 1):<br>
+Bisher haben 3 Personen auf die Ankündigung reagiert, davon wollen 1 ab 17:00 beim Kochen helfen (🍳). Plus-Ones stehen gegebenenfalls in den Antworten darauf.
 </div>
 </div>
 
@@ -64,7 +64,8 @@ The words in braces, like `{count}`, are placeholders that ODIN fills in when it
 <div class="msg" markdown>
 <span class="sender">Odin 🍽️</span>
 Platzhalter für tally:<br>
-{emoji} – Reaktion zum Bestätigen: 👍<br>
+{emoji} – Reaktion zum Bestätigen (auf der Einladung: „ich komme“): 👍<br>
+{cook_emoji} – Reaktion auf der Einladung: „ich komme und helfe beim Kochen“: 🍳<br>
 {flat_ask_day_de} / {flat_ask_day_en} – Frage an die WG (Wochentag): Dienstag / Tuesday<br>
 {deadline} – Entscheidung der WG (Uhrzeit): 18:00<br>
 {deadline_day_de} / {deadline_day_en} – Entscheidung der WG (Wochentag): Mittwoch / Wednesday<br>
@@ -74,7 +75,8 @@ Platzhalter für tally:<br>
 {cook_day_de} / {cook_day_en} – Mitkochen (Wochentag): Sonntag / Sunday<br>
 {dinner_time} – Essen (Uhrzeit): 18:00<br>
 {dinner_day_de} / {dinner_day_en} – Essen (Wochentag): Sonntag / Sunday<br>
-{count} – Anzahl Zusagen auf die Ankündigung (nur in tally)
+{count} – Anzahl Zusagen auf die Ankündigung, mit beiden Reaktionen (nur in tally)<br>
+{cooks} – Davon: Anzahl, die beim Kochen helfen (nur in tally)
 
 {{ und }} schreiben für eine wörtliche Klammer.
 </div>
@@ -93,16 +95,16 @@ first, a blank line, then English.
 <div class="chat" data-group="Flat group" markdown>
 <div class="msg me" markdown>
 /settext tally<br>
-Schon {count}× {emoji} auf die Einladung – Zeit zum Bestellen! Plus-Ones stehen in den Antworten.
+Schon {count} Zusagen auf die Einladung, {cooks} davon kochen mit – Zeit zum Bestellen! Plus-Ones stehen in den Antworten.
 </div>
 <div class="msg" markdown>
 <span class="sender">Odin 🍽️</span>
 Gespeichert ✅ So sieht tally jetzt aus:<br>
-(Mit der Beispielzahl 3 für {count}.)
+(Mit den Beispielzahlen 3 für {count} und 1 für {cooks}.)
 </div>
 <div class="msg" markdown>
 <span class="sender">Odin 🍽️</span>
-Schon 3× 👍 auf die Einladung – Zeit zum Bestellen! Plus-Ones stehen in den Antworten.
+Schon 3 Zusagen auf die Einladung, 1 davon kochen mit – Zeit zum Bestellen! Plus-Ones stehen in den Antworten.
 </div>
 </div>
 
@@ -119,7 +121,7 @@ Schon {anzahl}× {emoji}
 <div class="msg" markdown>
 <span class="sender">Odin 🍽️</span>
 Unbekannter Platzhalter {anzahl}. Welche Platzhalter es gibt, zeigt /vars tally.<br>
-(templates.tally: unknown placeholder {anzahl}; allowed: {cook_day_de}, {cook_day_en}, {cook_time}, {count}, {deadline}, {deadline_day_de}, {deadline_day_en}, {dinner_day_de}, {dinner_day_en}, {dinner_time}, {emoji}, {flat_ask_day_de}, {flat_ask_day_en}, {rsvp_by}, {rsvp_by_day_de}, {rsvp_by_day_en})
+(templates.tally: unknown placeholder {anzahl}; allowed: {cook_day_de}, {cook_day_en}, {cook_emoji}, {cook_time}, {cooks}, {count}, {deadline}, {deadline_day_de}, {deadline_day_en}, {dinner_day_de}, {dinner_day_en}, {dinner_time}, {emoji}, {flat_ask_day_de}, {flat_ask_day_en}, {rsvp_by}, {rsvp_by_day_de}, {rsvp_by_day_en})
 </div>
 </div>
 
@@ -137,11 +139,11 @@ Back to the text from the config file:
 <div class="msg" markdown>
 <span class="sender">Odin 🍽️</span>
 Zurückgesetzt auf den Standardtext ✅ So sieht tally jetzt aus:<br>
-(Mit der Beispielzahl 3 für {count}.)
+(Mit den Beispielzahlen 3 für {count} und 1 für {cooks}.)
 </div>
 <div class="msg" markdown>
 <span class="sender">Odin 🍽️</span>
-Bisher haben 3 Personen mit 👍 auf die Ankündigung reagiert. Plus-Ones stehen gegebenenfalls in den Antworten darauf.
+Bisher haben 3 Personen auf die Ankündigung reagiert, davon wollen 1 ab 17:00 beim Kochen helfen (🍳). Plus-Ones stehen gegebenenfalls in den Antworten darauf.
 </div>
 </div>
 

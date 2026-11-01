@@ -24,7 +24,8 @@ templates is optional; a missing key takes its default.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `timezone` | string, IANA name | `"Europe/Berlin"` | Timezone of every time in `[schedule]`. |
-| `emoji` | string, non-empty | `"👍"` | The reaction that counts: flatmates confirming dinner, guests saying they come, the confirmation of a `/cancel` request. Also the `{emoji}` placeholder. |
+| `emoji` | string, one emoji | `"👍"` | The reaction that counts: flatmates confirming dinner, guests saying they come, the confirmation of a `/cancel`, `/hiatus` or `/introduce` request. Also the `{emoji}` placeholder. |
+| `cook_emoji` | string, one emoji | `"🍳"` | The reaction on the announcement that says "I'm coming and I'll help cook". It counts as coming too (Signal allows one reaction per person); see [Reactions](../explanation/reactions.md). Must differ from `emoji`, skin tones aside. Also the `{cook_emoji}` placeholder. |
 | `catch_up_grace` | `"until_dinner"` or integer > 0 | `"until_dinner"` | How late a missed action may still be performed: until the week's dinner starts, or this many minutes after its scheduled time. Later it is skipped. See [Reliability](../explanation/reliability.md). |
 
 ### `[schedule]`
@@ -152,9 +153,10 @@ variables come from the env file `~/odin/odin.env`.
 | Chat-editable templates (`flat_ask`, `nudge`, `announcement`, `cancellation`, `weekday_change_cancellation`, `tally`, `introduction`, `hiatus`) | change via chat (`/settext`) | config file; for `weekday_change_cancellation` and `hiatus` then `cancellation`; for `introduction` then not set |
 | Schedule points and `nudge.enabled` | change via chat (`/settime`, `/nudge`) | config file |
 | `decision.cancellation` | change via chat (`/cancellation`) | config file |
+| `emoji`, `cook_emoji` | change via chat (`/emoji`) | config file |
 | Group IDs | `FLAT_GROUP_ID` / `DINNER_GROUP_ID` env vars | IDs stored in the database by `odin setup` |
 
 A change via chat is stored in the database and lasts until it is reset (`/resettext`,
-`/resettime`, `/cancellation reset`); see [Chat commands](chat-commands.md). `timezone`, `emoji`, `catch_up_grace`,
+`/resettime`, `/cancellation reset`, `/emoji reset`); see [Chat commands](chat-commands.md). `timezone`, `catch_up_grace`,
 `[profile]`, `[commands]`, `hello` and `flat_test` can only be changed in the config file. A changed config
 file takes effect when ODIN restarts.

@@ -24,9 +24,9 @@ FLAT_ASK_RETRY = (
 )
 ANNOUNCEMENT_NOTICE = (
     "⚠️ Die Einladung zum Essen am {dinner_day_de} ist in der Essensgruppe rausgegangen, aber "
-    "ich kann die {emoji} darauf nicht zählen (Signal hat mir nicht gesagt, welche Nachricht es "
-    "war). Die Zählung am {tally} zeigt deshalb 0 – bitte zählt die {emoji} unter der Einladung "
-    "selbst."
+    "ich kann die {emoji} und {cook_emoji} darauf nicht zählen (Signal hat mir nicht gesagt, "
+    "welche Nachricht es war). Die Zählung am {tally} zeigt deshalb 0 – bitte zählt die {emoji} "
+    "und {cook_emoji} unter der Einladung selbst."
 )
 
 

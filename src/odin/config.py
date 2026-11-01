@@ -275,6 +275,7 @@ WEEKDAYS_EN = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday
 COMMON_PLACEHOLDERS = frozenset(
     {
         "emoji",
+        "cook_emoji",
         "flat_ask_day_de",
         "flat_ask_day_en",
         "deadline",
@@ -304,7 +305,7 @@ TEMPLATE_PLACEHOLDERS: dict[TemplateName, frozenset[str]] = {
     # dinner group, bilingual; the cancellation of a week dropped by a dinner weekday change
     TemplateName.WEEKDAY_CHANGE_CANCELLATION: COMMON_PLACEHOLDERS | DROPPED_PLACEHOLDERS,
     TemplateName.ANNOUNCEMENT: COMMON_PLACEHOLDERS,  # dinner group, bilingual
-    TemplateName.TALLY: COMMON_PLACEHOLDERS | {"count"},  # flat group, German
+    TemplateName.TALLY: COMMON_PLACEHOLDERS | {"count", "cooks"},  # flat group, German
     TemplateName.INTRODUCTION: COMMON_PLACEHOLDERS,  # dinner group, bilingual; via /introduce
     # dinner group, bilingual; once when a /hiatus takes effect
     TemplateName.HIATUS: COMMON_PLACEHOLDERS,
@@ -550,6 +551,38 @@ def _parse_decision(raw: object) -> Decision:
 
 DEFAULT_TIMEZONE = "Europe/Berlin"
 DEFAULT_EMOJI = "👍"
+DEFAULT_COOK_EMOJI = "🍳"
+# The longest emoji value accepted: a family emoji with skin tones is about a dozen code points.
+_MAX_EMOJI_LENGTH = 16
+# Skin-tone modifiers and emoji/text variation selectors: 👍🏽 and 👍️ count as 👍.
+_EMOJI_MODIFIERS = dict.fromkeys([*range(0x1F3FB, 0x1F400), 0xFE0E, 0xFE0F])
+
+
+def plain_emoji(emoji: str) -> str:
+    """``emoji`` without skin tone and variation selector, for comparing reactions."""
+    return emoji.translate(_EMOJI_MODIFIERS)
+
+
+def parse_emoji(value: object, where: str) -> str:
+    """A reaction emoji from the config or a chat override, surrounding whitespace stripped.
+
+    Signal reactions are single emojis, so a value with whitespace, without any non-ASCII
+    character (``+1``, ``ok``) or longer than `_MAX_EMOJI_LENGTH` could never match one.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError(f"{where}: must be a non-empty string, got {value!r}")
+    emoji = value.strip()
+    if any(c.isspace() for c in emoji) or emoji.isascii() or len(emoji) > _MAX_EMOJI_LENGTH:
+        raise ConfigError(f"{where}: must be a single emoji, got {value!r}")
+    return emoji
+
+
+def check_emojis(emoji: str, cook_emoji: str) -> None:
+    """Both reaction emojis must differ, or a reaction could not tell coming from cooking."""
+    if plain_emoji(emoji) == plain_emoji(cook_emoji):
+        raise ConfigError(f"cook_emoji: must differ from emoji, both are {emoji!r}")
+
+
 UNTIL_DINNER = "until_dinner"
 
 
@@ -558,7 +591,8 @@ class Config:
     """Behaviour from the TOML config file."""
 
     timezone: ZoneInfo
-    emoji: str
+    emoji: str  # confirms; on the dinner announcement: "I'm coming"
+    cook_emoji: str  # on the dinner announcement: "I'm coming and I'll help cook"
     # How late a missed action may still be performed. None: until dinner starts.
     catch_up_grace: dt.timedelta | None
     schedule: Schedule
@@ -583,6 +617,7 @@ class Config:
         s = self.schedule
         return {
             "emoji": self.emoji,
+            "cook_emoji": self.cook_emoji,
             "flat_ask_day_de": WEEKDAYS_DE[s.flat_ask.weekday],
             "flat_ask_day_en": WEEKDAYS_EN[s.flat_ask.weekday],
             "deadline": f"{s.flat_deadline.time:%H:%M}",
@@ -608,6 +643,7 @@ def parse_config(data: Mapping[str, Any], base_dir: Path | None = None) -> Confi
         {
             "timezone",
             "emoji",
+            "cook_emoji",
             "catch_up_grace",
             "schedule",
             "decision",
@@ -626,9 +662,9 @@ def parse_config(data: Mapping[str, Any], base_dir: Path | None = None) -> Confi
     except ValueError, ZoneInfoNotFoundError:
         raise ConfigError(f"timezone: unknown timezone {tz_name!r}") from None
 
-    emoji = data.get("emoji", DEFAULT_EMOJI)
-    if not isinstance(emoji, str) or not emoji.strip():
-        raise ConfigError(f"emoji: must be a non-empty string, got {emoji!r}")
+    emoji = parse_emoji(data.get("emoji", DEFAULT_EMOJI), "emoji")
+    cook_emoji = parse_emoji(data.get("cook_emoji", DEFAULT_COOK_EMOJI), "cook_emoji")
+    check_emojis(emoji, cook_emoji)
 
     grace = data.get("catch_up_grace", UNTIL_DINNER)
     catch_up_grace: dt.timedelta | None
@@ -644,7 +680,8 @@ def parse_config(data: Mapping[str, Any], base_dir: Path | None = None) -> Confi
 
     return Config(
         timezone=timezone,
-        emoji=emoji.strip(),
+        emoji=emoji,
+        cook_emoji=cook_emoji,
         catch_up_grace=catch_up_grace,
         schedule=_parse_schedule(data.get("schedule")),
         templates=_parse_templates(data.get("templates")),
